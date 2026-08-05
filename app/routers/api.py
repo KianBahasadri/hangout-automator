@@ -8,8 +8,6 @@ from app.models import Allergy, Hangout, HangoutInvite, HangoutStatus, Profile, 
 from app.schemas import (
     AllergyCreate,
     AllergyOut,
-    AppSettingsOut,
-    AppSettingsUpdate,
     HangoutCreate,
     HangoutOut,
     HangoutUpdate,
@@ -25,7 +23,6 @@ from app.services import (
     CONFIRM_GOAL_OPTIONS,
     INTERVAL_HOUR_OPTIONS,
     clamp_choice,
-    get_or_create_app_settings,
     load_allergies_by_ids,
     load_hangout,
     load_tags_by_ids,
@@ -203,9 +200,7 @@ def create_hangout(payload: HangoutCreate, db: Session = Depends(get_db)) -> Han
             raise HTTPException(400, "Organizer profile not found")
     org_phone = org_profile.phone if org_profile else None
     if payload.notify_enabled and not org_phone:
-        settings = get_or_create_app_settings(db)
-        if not settings.organizer_phone:
-            raise HTTPException(400, "Organizer profile required when notifications are enabled")
+        raise HTTPException(400, "Organizer profile required when notifications are enabled")
     hangout = Hangout(
         day_date=payload.day_date or None,
         time=payload.time or None,
@@ -314,22 +309,3 @@ def close_hangout(hangout_id: int, db: Session = Depends(get_db)) -> Hangout:
     hangout.status = HangoutStatus.closed
     db.commit()
     return load_hangout(db, hangout_id)  # type: ignore[return-value]
-
-
-# --- App settings ---
-
-
-@router.get("/settings", response_model=AppSettingsOut)
-def get_settings_endpoint(db: Session = Depends(get_db)) -> AppSettingsOut:
-    row = get_or_create_app_settings(db)
-    return AppSettingsOut(organizer_phone=row.organizer_phone)
-
-
-@router.put("/settings", response_model=AppSettingsOut)
-def update_settings(payload: AppSettingsUpdate, db: Session = Depends(get_db)) -> AppSettingsOut:
-    row = get_or_create_app_settings(db)
-    if payload.organizer_phone is not None:
-        row.organizer_phone = normalize_phone(payload.organizer_phone) if payload.organizer_phone else None
-    db.commit()
-    db.refresh(row)
-    return AppSettingsOut(organizer_phone=row.organizer_phone)

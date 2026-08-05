@@ -2,25 +2,16 @@
 {% block title %}Settings · Hangout Automator{% endblock %}
 {% block content %}
 <h1>Settings</h1>
-<p class="lead">Defaults and shared lists used across hangouts.</p>
-
-<form method="post" action="/settings" class="card">
-  <label for="organizer_phone">Default organizer phone</label>
-  <input id="organizer_phone" name="organizer_phone" type="tel" value="{{ organizer_phone }}" placeholder="+15559876543" />
-  <p class="hint">Used as a fallback when a hangout enables notifications but has no per-hangout number.</p>
-  <button class="btn" type="submit">Save</button>
-</form>
 
 <div class="card tag-manager">
   <h2 style="margin-top:0;">Food allergies</h2>
-  <p class="hint" style="margin-top:0;">Options available when editing profiles. Add ones you care about (peanuts, dairy, gluten…).</p>
   {% if allergies %}
   <div class="tag-list">
     {% for a in allergies %}
     <span class="tag-list-item">
       {{ a.name }}
       <form method="post" action="/allergies/{{ a.id }}/delete" onsubmit="return confirm('Delete allergy {{ a.name }}?');">
-        <button class="btn btn-danger btn-sm" type="submit" title="Delete allergy">×</button>
+        <button class="tag-remove" type="submit" title="Delete allergy" aria-label="Delete allergy">×</button>
       </form>
     </span>
     {% endfor %}
@@ -39,10 +30,8 @@
 
 <div class="card">
   <h2 style="margin-top:0;">SMS webhook</h2>
-  <p class="muted">Point Twilio's inbound SMS webhook to:</p>
   <code style="display:block;background:var(--surface2);padding:0.75rem;border-radius:6px;word-break:break-all;">
     POST /webhooks/sms
   </code>
-  <p class="muted" style="margin-top:0.75rem;">Local mock SMS prints messages to the server console. Set <code>SMS_PROVIDER=twilio</code> for real sends.</p>
 </div>
 {% endblock %}

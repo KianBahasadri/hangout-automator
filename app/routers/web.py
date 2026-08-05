@@ -23,7 +23,6 @@ from app.services import (
     CONFIRM_GOAL_OPTIONS,
     INTERVAL_HOUR_OPTIONS,
     clamp_choice,
-    get_or_create_app_settings,
     load_allergies_by_ids,
     load_hangout,
     load_tags_by_ids,
@@ -31,10 +30,11 @@ from app.services import (
     normalize_tag_name,
     setup_hangout,
 )
-from app.sms import normalize_phone
+from app.sms import format_phone, normalize_phone
 
 router = APIRouter(tags=["web"])
 templates = Jinja2Templates(directory="app/templates")
+templates.env.filters["phone"] = format_phone
 
 
 def _optional_enum_form(value: str | None, enum_cls):  # type: ignore[no-untyped-def]
@@ -205,11 +205,9 @@ def hangout_create(
         except ValueError:
             org_profile = None
     notify = notify_enabled is not None
-    # Notifications require an organizer with a phone — silently disable if missing
+    # Notifications require an organizer profile with a phone
     if notify and not (org_profile and org_profile.phone):
-        settings = get_or_create_app_settings(db)
-        if not settings.organizer_phone:
-            notify = False
+        notify = False
     interval_on = notify and notify_interval is not None
     threshold_on = notify and notify_threshold is not None
     hangout = Hangout(
@@ -301,26 +299,11 @@ def hangout_close(hangout_id: int, db: Session = Depends(get_db)) -> RedirectRes
 
 @router.get("/settings", response_class=HTMLResponse)
 def settings_page(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
-    row = get_or_create_app_settings(db)
     return templates.TemplateResponse(
         request,
         "settings.html",
-        {
-            "organizer_phone": row.organizer_phone or "",
-            "allergies": _all_allergies(db),
-        },
+        {"allergies": _all_allergies(db)},
     )
-
-
-@router.post("/settings")
-def settings_save(
-    organizer_phone: str = Form(""),
-    db: Session = Depends(get_db),
-) -> RedirectResponse:
-    row = get_or_create_app_settings(db)
-    row.organizer_phone = normalize_phone(organizer_phone) if organizer_phone.strip() else None
-    db.commit()
-    return RedirectResponse("/settings", status_code=303)
 
 
 @router.post("/allergies")

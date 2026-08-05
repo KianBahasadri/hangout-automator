@@ -153,15 +153,5 @@ class HangoutOut(BaseModel):
     invites: list[InviteOut] = Field(default_factory=list)
 
 
-class AppSettingsOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    organizer_phone: Optional[str]
-
-
-class AppSettingsUpdate(BaseModel):
-    organizer_phone: Optional[str] = None
-
-
 class SetupHangoutRequest(BaseModel):
     profile_ids: list[int] = Field(default_factory=list)

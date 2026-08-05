@@ -21,8 +21,10 @@
     );
   }
 
-  function collectAllergyIds(el) {
-    return Array.from(el.selectedOptions || []).map((opt) => Number(opt.value));
+  function collectAllergyIds(editor) {
+    return Array.from(editor.querySelectorAll('[data-field="allergy_ids"] input[type="checkbox"]:checked')).map(
+      (cb) => Number(cb.value)
+    );
   }
 
   async function patchProfile(editor, body) {
@@ -65,7 +67,13 @@
   function syncDataset(editor, saved) {
     if (!saved) return;
     if (saved.name != null) editor.dataset.name = String(saved.name).toLowerCase();
-    if (saved.phone != null) editor.dataset.phone = String(saved.phone);
+    if (saved.phone != null) {
+      editor.dataset.phone = String(saved.phone);
+      const phoneInput = editor.querySelector('[data-field="phone"]');
+      if (phoneInput && window.HangoutPhone) {
+        phoneInput.value = window.HangoutPhone.format(saved.phone);
+      }
+    }
     editor.dataset.drinks = saved.drinks || "";
     editor.dataset.smokes = saved.smokes || "";
     editor.dataset.drive = saved.drive || "";
@@ -104,7 +112,7 @@
 
       if (field === "allergy_ids") {
         el.addEventListener("change", () => {
-          queueSave(editor, { allergy_ids: collectAllergyIds(el) }, true);
+          queueSave(editor, { allergy_ids: collectAllergyIds(editor) }, true);
         });
         return;
       }

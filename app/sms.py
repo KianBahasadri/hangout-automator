@@ -48,11 +48,37 @@ def get_sms_provider(settings: Settings | None = None) -> SmsProvider:
 
 
 def normalize_phone(phone: str) -> str:
-    """Light normalization: strip spaces/dashes; keep leading +."""
+    """Normalize to E.164-ish: digits with leading +. Bare 10-digit US → +1…"""
     cleaned = "".join(ch for ch in phone.strip() if ch.isdigit() or ch == "+")
+    # Drop duplicate leading pluses / keep digits after first +
+    if "+" in cleaned:
+        digits = "".join(ch for ch in cleaned if ch.isdigit())
+        cleaned = "+" + digits if digits else ""
     if cleaned and not cleaned.startswith("+") and len(cleaned) == 10:
-        # Assume US if 10 digits without country code
         cleaned = "+1" + cleaned
     elif cleaned and not cleaned.startswith("+"):
         cleaned = "+" + cleaned
     return cleaned
+
+
+def format_phone(phone: str | None) -> str:
+    """Pretty display form. NANP → +1 (XXX) XXX-XXXX; otherwise +digits."""
+    if phone is None:
+        return ""
+    raw = str(phone).strip()
+    if not raw:
+        return ""
+    digits = "".join(ch for ch in raw if ch.isdigit())
+    if not digits:
+        return ""
+
+    # North American Numbering Plan
+    if len(digits) == 10:
+        a, b, c = digits[0:3], digits[3:6], digits[6:10]
+        return f"+1 ({a}) {b}-{c}"
+    if len(digits) == 11 and digits[0] == "1":
+        a, b, c = digits[1:4], digits[4:7], digits[7:11]
+        return f"+1 ({a}) {b}-{c}"
+
+    # International / other: keep + and group remaining digits in threes
+    return "+" + " ".join(digits[i : i + 3] for i in range(0, len(digits), 3))

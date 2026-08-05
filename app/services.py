@@ -14,7 +14,6 @@ from app.messages import (
     parse_reply_intent,
 )
 from app.models import (
-    AppSettings,
     Hangout,
     HangoutInvite,
     HangoutStatus,
@@ -30,16 +29,6 @@ logger = logging.getLogger(__name__)
 
 def utcnow() -> datetime:
     return datetime.now(timezone.utc)
-
-
-def get_or_create_app_settings(db: Session) -> AppSettings:
-    row = db.get(AppSettings, 1)
-    if row is None:
-        row = AppSettings(id=1)
-        db.add(row)
-        db.commit()
-        db.refresh(row)
-    return row
 
 
 def normalize_tag_name(name: str) -> str:
@@ -77,14 +66,14 @@ def profile_allergies_label(profile: Profile) -> str | None:
 
 
 def resolve_organizer_phone(db: Session, hangout: Hangout) -> str | None:
-    """Phone for organizer SMS: selected profile, then legacy hangout phone, then app default."""
+    """Phone for organizer SMS: selected profile, then legacy hangout phone."""
     if hangout.organizer_profile_id:
         profile = hangout.organizer if hangout.organizer is not None else db.get(Profile, hangout.organizer_profile_id)
         if profile and profile.phone:
             return profile.phone
     if hangout.organizer_phone:
         return hangout.organizer_phone
-    return get_or_create_app_settings(db).organizer_phone
+    return None
 
 
 INTERVAL_HOUR_OPTIONS = (1, 2, 3, 4, 6, 8, 12, 24)

@@ -52,7 +52,7 @@
   {% include "_invitee_picker.html" %}
   {% endwith %}
   {% else %}
-  <p class="empty">No profiles yet. <a href="/profiles">Add some first</a>.</p>
+  <p class="empty">No profiles yet.</p>
   {% endif %}
 
   <h2>Organizer SMS</h2>
@@ -77,9 +77,9 @@
         class="combobox-option"
         role="option"
         data-value="{{ p.id }}"
-        data-label="{{ p.name }} ({{ p.phone }})"
-        data-search="{{ p.name|lower }} {{ p.phone }}"
-      >{{ p.name }} <span class="muted">({{ p.phone }})</span></li>
+        data-label="{{ p.name }} ({{ p.phone|phone }})"
+        data-search="{{ p.name|lower }} {{ p.phone }} {{ p.phone|phone }}"
+      >{{ p.name }} <span class="muted">({{ p.phone|phone }})</span></li>
       {% endfor %}
     </ul>
   </div>
@@ -111,7 +111,6 @@
             <input type="checkbox" name="notify_interval_only_if_changed" checked />
             Skip digest if nothing changed since last SMS
           </label>
-          <p class="hint">Periodic RSVP summary while the hangout is active.</p>
         </div>
       </fieldset>
 
@@ -150,7 +149,6 @@
             </option>
             {% endfor %}
           </select>
-          <p class="hint">Cooldown only applies to routine confirm/decline alerts. Allergy, ride, and milestone alerts always send.</p>
         </div>
       </fieldset>
     </div>
@@ -161,6 +159,8 @@
     <button class="btn" type="submit" name="action" value="setup">Set up hangout (send invites)</button>
   </div>
 </form>
+{% endblock %}
+{% block scripts %}
 <script src="/static/notify_panel.js"></script>
 <script src="/static/combobox.js"></script>
 {% endblock %}

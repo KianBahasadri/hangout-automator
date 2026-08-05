@@ -62,7 +62,6 @@ Twilio inbound webhook: `POST /webhooks/sms`
 - `GET/POST /api/profiles`
 - `GET/POST /api/hangouts`
 - `POST /api/hangouts/{id}/setup`
-- `GET/PUT /api/settings`
 - `POST /webhooks/sms`
 
 ## Azure deploy (Terraform)

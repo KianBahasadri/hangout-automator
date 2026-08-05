@@ -50,7 +50,7 @@
         {% if p.id in checked %}checked{% endif %} />
       <span class="invitee-meta">
         <span class="invitee-name">{{ p.name }}</span>
-        <span class="muted invitee-phone">({{ p.phone }})</span>
+        <span class="muted invitee-phone">({{ p.phone|phone }})</span>
         {% if p.tags %}
         <span class="invitee-tag-badges">
           {% for t in p.tags %}<span class="tag-badge">{{ t.name }}</span>{% endfor %}

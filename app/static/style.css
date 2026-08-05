@@ -156,21 +156,6 @@ textarea {
   resize: vertical;
 }
 
-select[multiple] {
-  min-height: 5.5rem;
-  padding: 0.35rem;
-}
-
-select[multiple] option {
-  padding: 0.3rem 0.45rem;
-  border-radius: 4px;
-}
-
-select[multiple] option:checked {
-  background: linear-gradient(0deg, var(--accent) 0%, var(--accent) 100%);
-  color: var(--bg);
-}
-
 /* Custom checkboxes */
 input[type="checkbox"] {
   appearance: none;
@@ -663,6 +648,31 @@ th {
   margin: 0;
 }
 
+.tag-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.35rem;
+  height: 1.35rem;
+  padding: 0;
+  margin: 0;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 0.12s ease, background-color 0.12s ease;
+}
+
+.tag-remove:hover {
+  color: var(--bad);
+  background: rgba(196, 92, 92, 0.15);
+}
+
 .tag-checkboxes {
   display: flex;
   flex-wrap: wrap;
@@ -867,6 +877,19 @@ th {
 
 .profile-editor .field-row {
   margin-bottom: 0;
+}
+
+.field-row.prefs-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.55rem;
+  flex-wrap: nowrap;
+}
+
+.field-row.prefs-row > * {
+  min-width: 0;
+  flex: none;
+  width: auto;
 }
 
 .profile-editor label {

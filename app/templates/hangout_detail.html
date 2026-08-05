@@ -51,7 +51,7 @@
         <span class="muted">(notifications off)</span>
       {% endif %}
     {% elif hangout.organizer_phone %}
-      <br />Organizer SMS: {{ hangout.organizer_phone }}
+      <br />Organizer SMS: {{ hangout.organizer_phone|phone }}
       {% if hangout.notify_enabled %}(enabled){% else %}(notifications off){% endif %}
     {% endif %}
   </div>
@@ -86,7 +86,7 @@
       <tr>
         <td>
           <strong>{{ inv.profile.name }}</strong><br />
-          <span class="muted">{{ inv.profile.phone }}</span>
+          <span class="muted">{{ inv.profile.phone|phone }}</span>
         </td>
         <td><span class="badge badge-{{ inv.status.value }}">{{ inv.status.value }}</span></td>
         <td class="muted">
@@ -119,7 +119,7 @@
       {% if hangout.status.value == 'draft' %}Set up hangout (send invites){% else %}Send / update invites{% endif %}
     </button>
     {% else %}
-    <p class="empty">No profiles. <a href="/profiles">Add profiles</a> first.</p>
+    <p class="empty">No profiles.</p>
     {% endif %}
   </form>
 </div>
