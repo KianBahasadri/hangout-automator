@@ -1,0 +1,109 @@
+#cloud-config
+package_update: true
+packages:
+  - python3
+  - python3-venv
+  - python3-pip
+  - git
+  - nginx
+  - curl
+
+write_files:
+  - path: /etc/hangout-automator.env
+    owner: root:root
+    permissions: "0600"
+    content: |
+      APP_HOST=127.0.0.1
+      APP_PORT=8000
+      DATABASE_URL=sqlite:////var/lib/hangout-automator/app.db
+      PUBLIC_BASE_URL=http://${public_ip}
+      SMS_PROVIDER=${sms_provider}
+      TWILIO_ACCOUNT_SID=${twilio_account_sid}
+      TWILIO_AUTH_TOKEN=${twilio_auth_token}
+      TWILIO_FROM_NUMBER=${twilio_from_number}
+      FOLLOWUP_HOURS=${followup_hours}
+      ORGANIZER_INTERVAL_HOURS=${organizer_interval_hours}
+
+  - path: /etc/systemd/system/hangout-automator.service
+    owner: root:root
+    permissions: "0644"
+    content: |
+      [Unit]
+      Description=Hangout Automator FastAPI
+      After=network.target
+
+      [Service]
+      Type=simple
+      User=${admin_username}
+      Group=${admin_username}
+      WorkingDirectory=/opt/hangout-automator
+      EnvironmentFile=/etc/hangout-automator.env
+      ExecStart=/opt/hangout-automator/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
+      Restart=always
+      RestartSec=5
+
+      [Install]
+      WantedBy=multi-user.target
+
+  - path: /etc/nginx/sites-available/hangout-automator
+    owner: root:root
+    permissions: "0644"
+    content: |
+      server {
+          listen 80 default_server;
+          listen [::]:80 default_server;
+          server_name _;
+
+          client_max_body_size 2M;
+
+          location / {
+              proxy_pass http://127.0.0.1:8000;
+              proxy_set_header Host $host;
+              proxy_set_header X-Real-IP $remote_addr;
+              proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+              proxy_set_header X-Forwarded-Proto $scheme;
+          }
+      }
+
+  - path: /usr/local/bin/hangout-bootstrap.sh
+    owner: root:root
+    permissions: "0755"
+    content: |
+      #!/bin/bash
+      set -euo pipefail
+      APP_DIR=/opt/hangout-automator
+      DATA_DIR=/var/lib/hangout-automator
+      mkdir -p "$DATA_DIR"
+      chown ${admin_username}:${admin_username} "$DATA_DIR"
+
+      if [ ! -d "$APP_DIR/.git" ]; then
+        if [ -n "${git_repo_url}" ]; then
+          git clone --branch "${git_branch}" "${git_repo_url}" "$APP_DIR"
+        else
+          mkdir -p "$APP_DIR"
+          echo "No git_repo_url set — place app code in $APP_DIR and re-run bootstrap" > "$APP_DIR/README.DEPLOY"
+        fi
+      else
+        cd "$APP_DIR"
+        git fetch --all
+        git checkout "${git_branch}"
+        git pull --ff-only origin "${git_branch}" || true
+      fi
+
+      if [ -f "$APP_DIR/requirements.txt" ]; then
+        cd "$APP_DIR"
+        python3 -m venv .venv
+        .venv/bin/pip install --upgrade pip
+        .venv/bin/pip install -r requirements.txt
+        chown -R ${admin_username}:${admin_username} "$APP_DIR"
+      fi
+
+      ln -sfn /etc/nginx/sites-available/hangout-automator /etc/nginx/sites-enabled/hangout-automator
+      rm -f /etc/nginx/sites-enabled/default
+      nginx -t
+      systemctl enable nginx hangout-automator
+      systemctl restart nginx
+      systemctl restart hangout-automator || true
+
+runcmd:
+  - /usr/local/bin/hangout-bootstrap.sh

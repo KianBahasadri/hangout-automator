@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+{% block title %}New hangout · Hangout Automator{% endblock %}
+{% block content %}
+<h1>New hangout</h1>
+<form method="post" action="/hangouts/new" class="card">
+  <h2 style="margin-top:0;">Details</h2>
+  <div class="field-row">
+    <div>
+      <label for="day_date">Day / date</label>
+      <input id="day_date" name="day_date" type="date" />
+    </div>
+    <div>
+      <label for="time">Time</label>
+      <input id="time" name="time" type="time" />
+    </div>
+    <div>
+      <label for="duration">Estimated duration (hours)</label>
+      <input id="duration" name="duration" type="number" min="0" step="0.5" placeholder="3" />
+    </div>
+  </div>
+
+  <label for="motive">Motive / purpose</label>
+  <input id="motive" name="motive" type="text" placeholder="Dinner, game night, beach…" />
+
+  <div class="field-row">
+    <div>
+      <label for="alcohol_involved">Alcohol involved?</label>
+      <select id="alcohol_involved" name="alcohol_involved">
+        <option value=""></option>
+        {% for o in alcohol_opts %}
+        <option value="{{ o.value }}">{{ o.value }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="weed_involved">Weed involved?</label>
+      <select id="weed_involved" name="weed_involved">
+        <option value=""></option>
+        {% for o in weed_opts %}
+        <option value="{{ o.value }}">{{ o.value }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+
+  <label for="notes">Notes</label>
+  <textarea id="notes" name="notes" placeholder="Anything else…"></textarea>
+
+  <h2>Invitees</h2>
+  {% if profiles %}
+  {% with checked_ids=[], already_label=false %}
+  {% include "_invitee_picker.html" %}
+  {% endwith %}
+  {% else %}
+  <p class="empty">No profiles yet. <a href="/profiles">Add some first</a>.</p>
+  {% endif %}
+
+  <h2>Organizer SMS</h2>
+  <label for="organizer_search">Organizer</label>
+  <div class="combobox" id="organizer-combobox" data-empty-label="— none —">
+    <input type="hidden" name="organizer_profile_id" id="organizer_profile_id" value="" />
+    <input
+      id="organizer_search"
+      class="combobox-input"
+      type="text"
+      role="combobox"
+      aria-autocomplete="list"
+      aria-expanded="false"
+      aria-controls="organizer-options"
+      autocomplete="off"
+      placeholder="Type a name or phone…"
+    />
+    <ul class="combobox-list" id="organizer-options" role="listbox" hidden>
+      <li class="combobox-option" role="option" data-value="" data-label="— none —">— none —</li>
+      {% for p in profiles %}
+      <li
+        class="combobox-option"
+        role="option"
+        data-value="{{ p.id }}"
+        data-label="{{ p.name }} ({{ p.phone }})"
+        data-search="{{ p.name|lower }} {{ p.phone }}"
+      >{{ p.name }} <span class="muted">({{ p.phone }})</span></li>
+      {% endfor %}
+    </ul>
+  </div>
+
+  <div class="notify-panel" id="notify-panel">
+    <label class="notify-master">
+      <input type="checkbox" name="notify_enabled" id="notify_enabled" />
+      Enable organizer SMS updates
+    </label>
+
+    <div class="notify-sections" id="notify-sections" hidden>
+      <fieldset class="notify-block">
+        <legend>
+          <label>
+            <input type="checkbox" name="notify_interval" id="notify_interval" />
+            Interval digests
+          </label>
+        </legend>
+        <div class="notify-block-body" id="notify-interval-opts" hidden>
+          <label for="notify_interval_hours">How often</label>
+          <select id="notify_interval_hours" name="notify_interval_hours">
+            {% for h in interval_hour_opts %}
+            <option value="{{ h }}" {% if h == 6 %}selected{% endif %}>
+              Every {{ h }} hour{% if h != 1 %}s{% endif %}
+            </option>
+            {% endfor %}
+          </select>
+          <label class="inline-check">
+            <input type="checkbox" name="notify_interval_only_if_changed" checked />
+            Skip digest if nothing changed since last SMS
+          </label>
+          <p class="hint">Periodic RSVP summary while the hangout is active.</p>
+        </div>
+      </fieldset>
+
+      <fieldset class="notify-block">
+        <legend>
+          <label>
+            <input type="checkbox" name="notify_threshold" id="notify_threshold" />
+            Threshold alerts
+          </label>
+        </legend>
+        <div class="notify-block-body" id="notify-threshold-opts" hidden>
+          <p class="chip-label" style="margin:0 0 0.35rem;">Alert me when</p>
+          <div class="checkbox-list" style="margin-bottom:0.75rem;">
+            <label><input type="checkbox" name="notify_on_new_confirm" checked /> Someone newly confirms</label>
+            <label><input type="checkbox" name="notify_on_decline" /> Someone declines</label>
+            <label><input type="checkbox" name="notify_on_allergy" checked /> A confirmer has food allergies</label>
+            <label><input type="checkbox" name="notify_on_ride_needed" checked /> A confirmer needs a ride</label>
+          </div>
+
+          <label for="notify_confirm_goal">Confirmed-count milestone</label>
+          <select id="notify_confirm_goal" name="notify_confirm_goal">
+            {% for g in confirm_goal_opts %}
+            <option value="{{ g }}">
+              {% if g == 0 %}Off{% else %}Alert once when {{ g }} people have confirmed{% endif %}
+            </option>
+            {% endfor %}
+          </select>
+
+          <label for="notify_threshold_cooldown_minutes">Cooldown between routine alerts</label>
+          <select id="notify_threshold_cooldown_minutes" name="notify_threshold_cooldown_minutes">
+            {% for m in cooldown_minute_opts %}
+            <option value="{{ m }}">
+              {% if m == 0 %}No limit (send immediately)
+              {% elif m < 60 %}{{ m }} minutes
+              {% else %}{{ (m / 60)|int }} hour{% endif %}
+            </option>
+            {% endfor %}
+          </select>
+          <p class="hint">Cooldown only applies to routine confirm/decline alerts. Allergy, ride, and milestone alerts always send.</p>
+        </div>
+      </fieldset>
+    </div>
+  </div>
+
+  <div class="actions">
+    <button class="btn btn-secondary" type="submit" name="action" value="draft">Save draft</button>
+    <button class="btn" type="submit" name="action" value="setup">Set up hangout (send invites)</button>
+  </div>
+</form>
+<script src="/static/notify_panel.js"></script>
+<script src="/static/combobox.js"></script>
+{% endblock %}
+

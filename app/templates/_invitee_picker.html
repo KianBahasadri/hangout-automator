@@ -1,0 +1,82 @@
+{# Expects: profiles, tags, checked_ids (optional set/list of profile ids) #}
+{% set checked = checked_ids|default([]) %}
+<div class="invitee-picker">
+  <div class="invitee-toolbar">
+    <input class="invitee-search" type="search" placeholder="Filter by name, phone, or tag…" autocomplete="off" />
+    <div class="invitee-toolbar-actions">
+      <span class="invitee-count"><strong data-selected-count>0</strong> selected</span>
+      <button type="button" class="btn btn-secondary btn-sm" data-action="select-all">Select all</button>
+      <button type="button" class="btn btn-secondary btn-sm" data-action="invert">Invert</button>
+      <button type="button" class="btn btn-secondary btn-sm" data-action="clear">Clear</button>
+    </div>
+  </div>
+
+  {% if tags %}
+  <div class="invitee-chips">
+    <span class="chip-label">Tags</span>
+    {% for t in tags %}
+    <button type="button" class="chip" data-toggle-tag="{{ t.id }}" title="Toggle everyone tagged {{ t.name }}">{{ t.name }}</button>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <div class="invitee-chips">
+    <span class="chip-label">By field</span>
+    <button type="button" class="chip" data-toggle-filter='{"drinks":"yes"}'>Drinks</button>
+    <button type="button" class="chip" data-toggle-filter='{"drinks":"no"}'>Doesn't drink</button>
+    <button type="button" class="chip" data-toggle-filter='{"smokes":"yes"}'>Smokes</button>
+    <button type="button" class="chip" data-toggle-filter='{"smokes":"no"}'>Doesn't smoke</button>
+    <button type="button" class="chip" data-toggle-filter='{"drive":"yes"}'>Drives</button>
+    <button type="button" class="chip" data-toggle-filter='{"drive":"maybe"}'>Maybe drives</button>
+    <button type="button" class="chip" data-toggle-filter='{"drive":"no"}'>Needs ride</button>
+    <button type="button" class="chip" data-toggle-filter='{"allergies":"yes"}'>Has allergies</button>
+    <button type="button" class="chip" data-toggle-filter='{"allergies":"no"}'>No allergies noted</button>
+  </div>
+
+  <div class="invitee-grid" role="group" aria-label="Invitees">
+    {% for p in profiles %}
+    <label
+      class="invitee-row"
+      data-name="{{ p.name|lower }}"
+      data-phone="{{ p.phone }}"
+      data-drinks="{{ p.drinks.value if p.drinks else '' }}"
+      data-smokes="{{ p.smokes.value if p.smokes else '' }}"
+      data-drive="{{ p.drive.value if p.drive else '' }}"
+      data-allergies="{% if p.has_allergies %}1{% else %}0{% endif %}"
+      data-tags="{% for t in p.tags %}{{ t.id }}{% if not loop.last %},{% endif %}{% endfor %}"
+      data-tag-names="{% for t in p.tags %}{{ t.name|lower }}{% if not loop.last %} {% endif %}{% endfor %}"
+    >
+      <input type="checkbox" name="profile_ids" value="{{ p.id }}"
+        {% if p.id in checked %}checked{% endif %} />
+      <span class="invitee-meta">
+        <span class="invitee-name">{{ p.name }}</span>
+        <span class="muted invitee-phone">({{ p.phone }})</span>
+        {% if p.tags %}
+        <span class="invitee-tag-badges">
+          {% for t in p.tags %}<span class="tag-badge">{{ t.name }}</span>{% endfor %}
+        </span>
+        {% endif %}
+        <span class="invitee-attrs muted">
+          {% if p.drinks %}drinks: {{ p.drinks.value }}{% endif %}
+          {% if p.smokes %}{% if p.drinks %} · {% endif %}smokes: {{ p.smokes.value }}{% endif %}
+          {% if p.drive %}{% if p.drinks or p.smokes %} · {% endif %}drive: {{ p.drive.value }}{% endif %}
+          {% if p.has_allergies %} · allergies{% endif %}
+        </span>
+        {% if p.id in checked and already_label|default(false) %}
+        <span class="muted">· already on list</span>
+        {% endif %}
+      </span>
+    </label>
+    {% endfor %}
+  </div>
+
+  <div class="invitee-pager" data-pager hidden>
+    <button type="button" class="btn btn-secondary btn-sm" data-page="prev" aria-label="Previous page">← Prev</button>
+    <span class="invitee-page-status muted">
+      <span data-page-current>1</span> / <span data-page-total>1</span>
+      <span class="invitee-page-count">(<span data-match-count>0</span>)</span>
+    </span>
+    <button type="button" class="btn btn-secondary btn-sm" data-page="next" aria-label="Next page">Next →</button>
+  </div>
+</div>
+<script src="/static/invitee_picker.js"></script>

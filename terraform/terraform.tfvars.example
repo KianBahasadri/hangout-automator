@@ -1,0 +1,20 @@
+# Copy to terraform.tfvars and fill in.
+
+prefix   = "hangout"
+location = "eastus"
+vm_size  = "Standard_B1s"
+
+admin_username = "hangout"
+ssh_public_key = "ssh-ed25519 AAAA... your-key"
+
+# Deploy from git (recommended). Leave empty to provision VM only and scp code later.
+git_repo_url = "https://github.com/YOUR_USER/hangout-automator.git"
+git_branch   = "main"
+
+# SMS
+sms_provider       = "mock"
+twilio_account_sid = ""
+twilio_auth_token  = ""
+twilio_from_number = ""
+
+allowed_ssh_cidr = "0.0.0.0/0"

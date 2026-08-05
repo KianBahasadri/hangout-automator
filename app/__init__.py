@@ -1,0 +1,1 @@
+"""Hangout Automator MVP."""

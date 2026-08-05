@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% block title %}Hangout #{{ hangout.id }} · Hangout Automator{% endblock %}
+{% block content %}
+{% if error == 'need_profiles' %}
+<div class="alert">Select at least one profile before setting up the hangout.</div>
+{% endif %}
+
+<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:1rem;flex-wrap:wrap;">
+  <div>
+    <h1>
+      {% if hangout.motive %}{{ hangout.motive }}{% else %}Hangout #{{ hangout.id }}{% endif %}
+    </h1>
+    <p class="lead" style="margin-bottom:0.25rem;">
+      {% if hangout.day_date %}{{ hangout.day_date }}{% endif %}
+      {% if hangout.time %} · {{ hangout.time }}{% endif %}
+      {% if hangout.duration %} · {{ hangout.duration }}{% endif %}
+      {% if not hangout.day_date and not hangout.time %}<span class="muted">No date/time set</span>{% endif %}
+    </p>
+  </div>
+  <span class="badge badge-{{ hangout.status.value }}">{{ hangout.status.value }}</span>
+</div>
+
+<div class="card" style="margin-top:1rem;">
+  <div class="muted">
+    {% if hangout.alcohol_involved %}Alcohol: {{ hangout.alcohol_involved.value }}{% endif %}
+    {% if hangout.weed_involved %}{% if hangout.alcohol_involved %} · {% endif %}Weed: {{ hangout.weed_involved.value }}{% endif %}
+    {% if hangout.notes %}<br />Notes: {{ hangout.notes }}{% endif %}
+    {% if hangout.organizer %}
+      <br />Organizer: {{ hangout.organizer.name }}
+      {% if hangout.notify_enabled %}
+        <div class="notify-summary">
+          SMS on
+          {% if hangout.notify_interval %}
+            · digests every {{ hangout.notify_interval_hours }}h
+            {% if hangout.notify_interval_only_if_changed %}(skip if unchanged){% endif %}
+          {% endif %}
+          {% if hangout.notify_threshold %}
+            · alerts:
+            {% if hangout.notify_on_new_confirm %}confirm {% endif %}
+            {% if hangout.notify_on_decline %}decline {% endif %}
+            {% if hangout.notify_on_allergy %}allergy {% endif %}
+            {% if hangout.notify_on_ride_needed %}ride {% endif %}
+            {% if hangout.notify_confirm_goal %}· goal {{ hangout.notify_confirm_goal }}{% if hangout.notify_confirm_goal_sent %} (hit){% endif %}{% endif %}
+            {% if hangout.notify_threshold_cooldown_minutes %}· {{ hangout.notify_threshold_cooldown_minutes }}m cooldown{% endif %}
+          {% endif %}
+          {% if not hangout.notify_interval and not hangout.notify_threshold %}
+            · (no digests or alerts selected)
+          {% endif %}
+        </div>
+      {% else %}
+        <span class="muted">(notifications off)</span>
+      {% endif %}
+    {% elif hangout.organizer_phone %}
+      <br />Organizer SMS: {{ hangout.organizer_phone }}
+      {% if hangout.notify_enabled %}(enabled){% else %}(notifications off){% endif %}
+    {% endif %}
+  </div>
+</div>
+
+{% set confirmed = hangout.invites|selectattr('status.value', 'equalto', 'confirmed')|list %}
+{% set pending = hangout.invites|selectattr('status.value', 'equalto', 'pending')|list %}
+{% set declined = hangout.invites|selectattr('status.value', 'equalto', 'declined')|list %}
+{% set noresp = hangout.invites|selectattr('status.value', 'equalto', 'no_response')|list %}
+
+<div class="stat-grid">
+  <div class="stat"><div class="n">{{ confirmed|length }}</div><div class="l">Coming</div></div>
+  <div class="stat"><div class="n">{{ pending|length }}</div><div class="l">Pending</div></div>
+  <div class="stat"><div class="n">{{ declined|length }}</div><div class="l">Declined</div></div>
+  <div class="stat"><div class="n">{{ noresp|length }}</div><div class="l">No response</div></div>
+</div>
+
+<div class="card">
+  <h2 style="margin-top:0;">Invitees</h2>
+  {% if hangout.invites %}
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Status</th>
+        <th>Logistics</th>
+        <th>Follow-ups</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for inv in hangout.invites %}
+      <tr>
+        <td>
+          <strong>{{ inv.profile.name }}</strong><br />
+          <span class="muted">{{ inv.profile.phone }}</span>
+        </td>
+        <td><span class="badge badge-{{ inv.status.value }}">{{ inv.status.value }}</span></td>
+        <td class="muted">
+          {% if inv.profile.drive %}drive: {{ inv.profile.drive.value }}{% endif %}
+          {% if inv.profile.food_allergies_label %}<br />allergies: {{ inv.profile.food_allergies_label }}{% endif %}
+          {% if inv.profile.drinks %}<br />drinks: {{ inv.profile.drinks.value }}{% endif %}
+          {% if inv.profile.smokes %}<br />smokes: {{ inv.profile.smokes.value }}{% endif %}
+        </td>
+        <td class="muted">{{ inv.followups_sent }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty">No invitees yet.</p>
+  {% endif %}
+</div>
+
+{% if hangout.status.value != 'closed' %}
+<div class="card">
+  <h2 style="margin-top:0;">
+    {% if hangout.status.value == 'draft' %}Set up hangout{% else %}Add / re-send invites{% endif %}
+  </h2>
+  <form method="post" action="/hangouts/{{ hangout.id }}/setup">
+    {% if all_profiles %}
+    {% with profiles=all_profiles, checked_ids=invited_ids, already_label=true %}
+    {% include "_invitee_picker.html" %}
+    {% endwith %}
+    <button class="btn" type="submit">
+      {% if hangout.status.value == 'draft' %}Set up hangout (send invites){% else %}Send / update invites{% endif %}
+    </button>
+    {% else %}
+    <p class="empty">No profiles. <a href="/profiles">Add profiles</a> first.</p>
+    {% endif %}
+  </form>
+</div>
+
+<form method="post" action="/hangouts/{{ hangout.id }}/close" class="actions">
+  <button class="btn btn-secondary" type="submit">Close hangout</button>
+</form>
+{% endif %}
+
+<p style="margin-top:1.5rem;"><a href="/">← All hangouts</a></p>
+{% endblock %}

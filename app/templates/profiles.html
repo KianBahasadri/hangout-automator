@@ -1,0 +1,236 @@
+{% extends "base.html" %}
+{% block title %}Profiles · Hangout Automator{% endblock %}
+{% block content %}
+<h1>Profiles</h1>
+<p class="lead">Add people before you can invite them. Edits save automatically.</p>
+
+<div class="card tag-manager">
+  <h2 style="margin-top:0;">Tags</h2>
+  {% if tags %}
+  <div class="tag-list">
+    {% for t in tags %}
+    <span class="tag-list-item">
+      {{ t.name }}
+      <form method="post" action="/tags/{{ t.id }}/delete" onsubmit="return confirm('Delete tag {{ t.name }}?');">
+        <button class="btn btn-danger btn-sm" type="submit" title="Delete tag">×</button>
+      </form>
+    </span>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="muted" style="margin-top:0;">No tags yet. Create some (e.g. friends, coworkers, roommates).</p>
+  {% endif %}
+  <form method="post" action="/tags" class="field-row" style="align-items:flex-end;">
+    <div style="flex:2;">
+      <label for="tag_name">New tag</label>
+      <input id="tag_name" name="name" type="text" required maxlength="64" placeholder="friends" style="margin-bottom:0;" />
+    </div>
+    <button class="btn" type="submit">Add tag</button>
+  </form>
+</div>
+
+<div class="card">
+  <h2 style="margin-top:0;">Add profile</h2>
+  <form method="post" action="/profiles">
+    <div class="field-row">
+      <div>
+        <label for="name">Name *</label>
+        <input id="name" name="name" type="text" required placeholder="Alex" />
+      </div>
+      <div>
+        <label for="phone">Phone *</label>
+        <input id="phone" name="phone" type="tel" required placeholder="+15551234567" />
+      </div>
+    </div>
+    <p class="hint">E.164 preferred (+1…). 10-digit US numbers get +1 automatically.</p>
+
+    <div class="field-row">
+      <div>
+        <label for="drinks">Drinks?</label>
+        <select id="drinks" name="drinks">
+          <option value=""></option>
+          {% for o in drinks_opts %}
+          <option value="{{ o.value }}">{{ o.value }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label for="smokes">Smokes?</label>
+        <select id="smokes" name="smokes">
+          <option value=""></option>
+          {% for o in smokes_opts %}
+          <option value="{{ o.value }}">{{ o.value }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label for="drive">Drive?</label>
+        <select id="drive" name="drive">
+          <option value=""></option>
+          {% for o in drive_opts %}
+          <option value="{{ o.value }}">{{ o.value }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+
+    <label for="food_allergies">Food allergies</label>
+    {% if allergies %}
+    <select id="food_allergies" name="allergy_ids" multiple size="{% if allergies|length < 4 %}{{ allergies|length }}{% else %}4{% endif %}">
+      {% for a in allergies %}
+      <option value="{{ a.id }}">{{ a.name }}</option>
+      {% endfor %}
+    </select>
+    <p class="hint">Hold Ctrl/Cmd to select multiple. Manage the list in <a href="/settings">Settings</a>.</p>
+    {% else %}
+    <p class="muted" style="margin-top:0;">No allergies defined yet. <a href="/settings">Add some in Settings</a>.</p>
+    {% endif %}
+
+    {% if tags %}
+    <label>Tags</label>
+    <div class="tag-checkboxes">
+      {% for t in tags %}
+      <label><input type="checkbox" name="tag_ids" value="{{ t.id }}" /> {{ t.name }}</label>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <button class="btn" type="submit">Add profile</button>
+  </form>
+</div>
+
+<div class="profiles-list" id="profiles-browser">
+  <div class="profiles-list-header">
+    <h2 style="margin:0;">All profiles (<span data-visible-count>{{ profiles|length }}</span>/{{ profiles|length }})</h2>
+  </div>
+
+  {% if profiles %}
+  <div class="invitee-toolbar profiles-filter-toolbar">
+    <input class="invitee-search profiles-search" type="search" placeholder="Filter by name, phone, or tag…" autocomplete="off" />
+    <div class="invitee-toolbar-actions">
+      <button type="button" class="btn btn-secondary btn-sm" data-action="clear-filters">Clear filters</button>
+    </div>
+  </div>
+
+  {% if tags %}
+  <div class="invitee-chips">
+    <span class="chip-label">Tags</span>
+    {% for t in tags %}
+    <button type="button" class="chip" data-filter-tag="{{ t.id }}" title="Show profiles tagged {{ t.name }}">{{ t.name }}</button>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <div class="invitee-chips">
+    <span class="chip-label">By field</span>
+    <button type="button" class="chip" data-filter-field='{"drinks":"yes"}'>Drinks</button>
+    <button type="button" class="chip" data-filter-field='{"drinks":"no"}'>Doesn't drink</button>
+    <button type="button" class="chip" data-filter-field='{"smokes":"yes"}'>Smokes</button>
+    <button type="button" class="chip" data-filter-field='{"smokes":"no"}'>Doesn't smoke</button>
+    <button type="button" class="chip" data-filter-field='{"drive":"yes"}'>Drives</button>
+    <button type="button" class="chip" data-filter-field='{"drive":"maybe"}'>Maybe drives</button>
+    <button type="button" class="chip" data-filter-field='{"drive":"no"}'>Needs ride</button>
+    <button type="button" class="chip" data-filter-field='{"allergies":"yes"}'>Has allergies</button>
+    <button type="button" class="chip" data-filter-field='{"allergies":"no"}'>No allergies noted</button>
+  </div>
+
+  <div class="profiles-grid">
+    {% for p in profiles %}
+    {% set profile_tag_ids = p.tags|map(attribute='id')|list %}
+    <div
+      class="card profile-editor"
+      data-profile-id="{{ p.id }}"
+      data-name="{{ p.name|lower }}"
+      data-phone="{{ p.phone }}"
+      data-drinks="{{ p.drinks.value if p.drinks else '' }}"
+      data-smokes="{{ p.smokes.value if p.smokes else '' }}"
+      data-drive="{{ p.drive.value if p.drive else '' }}"
+      data-allergies="{% if p.has_allergies %}1{% else %}0{% endif %}"
+      data-tags="{% for t in p.tags %}{{ t.id }}{% if not loop.last %},{% endif %}{% endfor %}"
+      data-tag-names="{% for t in p.tags %}{{ t.name|lower }}{% if not loop.last %} {% endif %}{% endfor %}"
+    >
+      <div class="profile-editor-top">
+        <div class="field-row" style="flex:1; margin:0;">
+          <div>
+            <label>Name</label>
+            <input type="text" data-field="name" value="{{ p.name }}" required />
+          </div>
+          <div>
+            <label>Phone</label>
+            <input type="tel" data-field="phone" value="{{ p.phone }}" required />
+          </div>
+        </div>
+        <div class="profile-editor-actions">
+          <span class="save-status muted" aria-live="polite"></span>
+          <form method="post" action="/profiles/{{ p.id }}/delete" onsubmit="return confirm('Delete {{ p.name }}?');">
+            <button class="btn btn-danger btn-sm" type="submit">Delete</button>
+          </form>
+        </div>
+      </div>
+
+      <div class="field-row">
+        <div>
+          <label>Drinks?</label>
+          <select data-field="drinks">
+            <option value="" {% if not p.drinks %}selected{% endif %}></option>
+            {% for o in drinks_opts %}
+            <option value="{{ o.value }}" {% if p.drinks and p.drinks.value == o.value %}selected{% endif %}>{{ o.value }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label>Smokes?</label>
+          <select data-field="smokes">
+            <option value="" {% if not p.smokes %}selected{% endif %}></option>
+            {% for o in smokes_opts %}
+            <option value="{{ o.value }}" {% if p.smokes and p.smokes.value == o.value %}selected{% endif %}>{{ o.value }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label>Drive?</label>
+          <select data-field="drive">
+            <option value="" {% if not p.drive %}selected{% endif %}></option>
+            {% for o in drive_opts %}
+            <option value="{{ o.value }}" {% if p.drive and p.drive.value == o.value %}selected{% endif %}>{{ o.value }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <label>Food allergies</label>
+      {% if allergies %}
+      {% set profile_allergy_ids = p.allergies|map(attribute='id')|list %}
+      <select data-field="allergy_ids" multiple size="{% if allergies|length < 4 %}{{ allergies|length }}{% else %}4{% endif %}">
+        {% for a in allergies %}
+        <option value="{{ a.id }}" {% if a.id in profile_allergy_ids %}selected{% endif %}>{{ a.name }}</option>
+        {% endfor %}
+      </select>
+      {% else %}
+      <p class="muted" style="margin-top:0;">No allergies defined yet. <a href="/settings">Add some in Settings</a>.</p>
+      {% endif %}
+
+      <label>Tags</label>
+      {% if tags %}
+      <div class="tag-checkboxes" data-field="tag_ids">
+        {% for t in tags %}
+        <label>
+          <input type="checkbox" value="{{ t.id }}" data-tag-name="{{ t.name|lower }}" {% if t.id in profile_tag_ids %}checked{% endif %} />
+          {{ t.name }}
+        </label>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="muted" style="margin-top:0;">No tags defined yet.</p>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="empty">No profiles yet.</p>
+  {% endif %}
+</div>
+
+<script src="/static/profiles_autosave.js"></script>
+<script src="/static/profiles_filter.js"></script>
+{% endblock %}

@@ -1,0 +1,343 @@
+from __future__ import annotations
+
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, Form, Request
+from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.templating import Jinja2Templates
+from sqlalchemy.orm import Session, joinedload
+
+from app.database import get_db
+from app.models import (
+    Allergy,
+    Drive,
+    Hangout,
+    HangoutInvite,
+    HangoutStatus,
+    Profile,
+    Tag,
+    YesNo,
+)
+from app.services import (
+    COOLDOWN_MINUTE_OPTIONS,
+    CONFIRM_GOAL_OPTIONS,
+    INTERVAL_HOUR_OPTIONS,
+    clamp_choice,
+    get_or_create_app_settings,
+    load_allergies_by_ids,
+    load_hangout,
+    load_tags_by_ids,
+    normalize_allergy_name,
+    normalize_tag_name,
+    setup_hangout,
+)
+from app.sms import normalize_phone
+
+router = APIRouter(tags=["web"])
+templates = Jinja2Templates(directory="app/templates")
+
+
+def _optional_enum_form(value: str | None, enum_cls):  # type: ignore[no-untyped-def]
+    if not value or not str(value).strip():
+        return None
+    try:
+        return enum_cls(value.strip())
+    except ValueError:
+        return None
+
+
+def _profiles_with_tags(db: Session) -> list[Profile]:
+    return (
+        db.query(Profile)
+        .options(joinedload(Profile.tags), joinedload(Profile.allergies))
+        .order_by(Profile.name)
+        .all()
+    )
+
+
+def _all_tags(db: Session) -> list[Tag]:
+    return db.query(Tag).order_by(Tag.name).all()
+
+
+def _all_allergies(db: Session) -> list[Allergy]:
+    return db.query(Allergy).order_by(Allergy.name).all()
+
+
+@router.get("/", response_class=HTMLResponse)
+def home(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
+    hangouts = (
+        db.query(Hangout)
+        .options(joinedload(Hangout.invites).joinedload(HangoutInvite.profile))
+        .order_by(Hangout.id.desc())
+        .all()
+    )
+    profiles = db.query(Profile).order_by(Profile.name).all()
+    return templates.TemplateResponse(
+        request,
+        "index.html",
+        {"hangouts": hangouts, "profiles": profiles, "profile_count": len(profiles)},
+    )
+
+
+@router.get("/profiles", response_class=HTMLResponse)
+def profiles_page(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
+    return templates.TemplateResponse(
+        request,
+        "profiles.html",
+        {
+            "profiles": _profiles_with_tags(db),
+            "tags": _all_tags(db),
+            "allergies": _all_allergies(db),
+            "drinks_opts": list(YesNo),
+            "smokes_opts": list(YesNo),
+            "drive_opts": list(Drive),
+        },
+    )
+
+
+@router.post("/tags")
+def tags_create(name: str = Form(...), db: Session = Depends(get_db)) -> RedirectResponse:
+    cleaned = normalize_tag_name(name)
+    if cleaned:
+        existing = (
+            db.query(Tag)
+            .filter(Tag.name.ilike(cleaned))
+            .first()
+        )
+        if not existing:
+            db.add(Tag(name=cleaned))
+            db.commit()
+    return RedirectResponse("/profiles", status_code=303)
+
+
+@router.post("/tags/{tag_id}/delete")
+def tags_delete(tag_id: int, db: Session = Depends(get_db)) -> RedirectResponse:
+    tag = db.get(Tag, tag_id)
+    if tag:
+        db.delete(tag)
+        db.commit()
+    return RedirectResponse("/profiles", status_code=303)
+
+
+@router.post("/profiles")
+def profiles_create(
+    name: str = Form(...),
+    phone: str = Form(...),
+    drinks: str = Form(""),
+    smokes: str = Form(""),
+    drive: str = Form(""),
+    tag_ids: Annotated[list[int], Form()] = [],
+    allergy_ids: Annotated[list[int], Form()] = [],
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    phone_n = normalize_phone(phone)
+    if not db.query(Profile).filter(Profile.phone == phone_n).first():
+        profile = Profile(
+            name=name.strip(),
+            phone=phone_n,
+            drinks=_optional_enum_form(drinks, YesNo),
+            smokes=_optional_enum_form(smokes, YesNo),
+            drive=_optional_enum_form(drive, Drive),
+        )
+        profile.tags = load_tags_by_ids(db, tag_ids or [])
+        profile.allergies = load_allergies_by_ids(db, allergy_ids or [])
+        db.add(profile)
+        db.commit()
+    return RedirectResponse("/profiles", status_code=303)
+
+
+@router.post("/profiles/{profile_id}/delete")
+def profiles_delete(profile_id: int, db: Session = Depends(get_db)) -> RedirectResponse:
+    profile = db.get(Profile, profile_id)
+    if profile:
+        db.delete(profile)
+        db.commit()
+    return RedirectResponse("/profiles", status_code=303)
+
+
+@router.get("/hangouts/new", response_class=HTMLResponse)
+def hangout_new(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
+    return templates.TemplateResponse(
+        request,
+        "hangout_new.html",
+        {
+            "profiles": _profiles_with_tags(db),
+            "tags": _all_tags(db),
+            "alcohol_opts": list(YesNo),
+            "weed_opts": list(YesNo),
+            "interval_hour_opts": INTERVAL_HOUR_OPTIONS,
+            "cooldown_minute_opts": COOLDOWN_MINUTE_OPTIONS,
+            "confirm_goal_opts": CONFIRM_GOAL_OPTIONS,
+        },
+    )
+
+
+@router.post("/hangouts/new")
+def hangout_create(
+    day_date: str = Form(""),
+    time: str = Form(""),
+    duration: str = Form(""),
+    motive: str = Form(""),
+    alcohol_involved: str = Form(""),
+    weed_involved: str = Form(""),
+    notes: str = Form(""),
+    organizer_profile_id: str = Form(""),
+    notify_enabled: str | None = Form(None),
+    notify_interval: str | None = Form(None),
+    notify_threshold: str | None = Form(None),
+    notify_interval_hours: str = Form("6"),
+    notify_interval_only_if_changed: str | None = Form(None),
+    notify_on_new_confirm: str | None = Form(None),
+    notify_on_decline: str | None = Form(None),
+    notify_on_allergy: str | None = Form(None),
+    notify_on_ride_needed: str | None = Form(None),
+    notify_confirm_goal: str = Form("0"),
+    notify_threshold_cooldown_minutes: str = Form("0"),
+    profile_ids: Annotated[list[int], Form()] = [],
+    action: str = Form("draft"),
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    ids = profile_ids or []
+    org_profile = None
+    if organizer_profile_id.strip():
+        try:
+            org_profile = db.get(Profile, int(organizer_profile_id))
+        except ValueError:
+            org_profile = None
+    notify = notify_enabled is not None
+    # Notifications require an organizer with a phone — silently disable if missing
+    if notify and not (org_profile and org_profile.phone):
+        settings = get_or_create_app_settings(db)
+        if not settings.organizer_phone:
+            notify = False
+    interval_on = notify and notify_interval is not None
+    threshold_on = notify and notify_threshold is not None
+    hangout = Hangout(
+        day_date=day_date.strip() or None,
+        time=time.strip() or None,
+        duration=duration.strip() or None,
+        motive=motive.strip() or None,
+        alcohol_involved=_optional_enum_form(alcohol_involved, YesNo),
+        weed_involved=_optional_enum_form(weed_involved, YesNo),
+        notes=notes.strip() or None,
+        status=HangoutStatus.draft,
+        organizer_profile_id=org_profile.id if org_profile else None,
+        organizer_phone=org_profile.phone if org_profile else None,
+        notify_enabled=notify,
+        notify_interval=interval_on,
+        notify_threshold=threshold_on,
+        notify_interval_hours=clamp_choice(notify_interval_hours, INTERVAL_HOUR_OPTIONS, 6),
+        notify_interval_only_if_changed=notify_interval_only_if_changed is not None,
+        notify_on_new_confirm=notify_on_new_confirm is not None,
+        notify_on_decline=notify_on_decline is not None,
+        notify_on_allergy=notify_on_allergy is not None,
+        notify_on_ride_needed=notify_on_ride_needed is not None,
+        notify_confirm_goal=clamp_choice(notify_confirm_goal, CONFIRM_GOAL_OPTIONS, 0),
+        notify_threshold_cooldown_minutes=clamp_choice(
+            notify_threshold_cooldown_minutes, COOLDOWN_MINUTE_OPTIONS, 0
+        ),
+    )
+    db.add(hangout)
+    db.flush()
+    for pid in ids:
+        if db.get(Profile, int(pid)):
+            db.add(HangoutInvite(hangout_id=hangout.id, profile_id=int(pid)))
+    db.commit()
+
+    if action == "setup":
+        hangout = load_hangout(db, hangout.id)  # type: ignore[assignment]
+        try:
+            setup_hangout(db, hangout, [int(p) for p in ids])
+        except ValueError:
+            return RedirectResponse(f"/hangouts/{hangout.id}?error=need_profiles", status_code=303)
+
+    return RedirectResponse(f"/hangouts/{hangout.id}", status_code=303)
+
+
+@router.get("/hangouts/{hangout_id}", response_class=HTMLResponse)
+def hangout_detail(request: Request, hangout_id: int, db: Session = Depends(get_db)) -> HTMLResponse:
+    hangout = load_hangout(db, hangout_id)
+    if not hangout:
+        return RedirectResponse("/", status_code=303)
+    invited_ids = {i.profile_id for i in hangout.invites}
+    return templates.TemplateResponse(
+        request,
+        "hangout_detail.html",
+        {
+            "hangout": hangout,
+            "all_profiles": _profiles_with_tags(db),
+            "tags": _all_tags(db),
+            "invited_ids": invited_ids,
+            "error": request.query_params.get("error"),
+        },
+    )
+
+
+@router.post("/hangouts/{hangout_id}/setup")
+def hangout_setup(
+    hangout_id: int,
+    profile_ids: Annotated[list[int], Form()] = [],
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    hangout = load_hangout(db, hangout_id)
+    if not hangout:
+        return RedirectResponse("/", status_code=303)
+    ids = list(profile_ids or [])
+    try:
+        setup_hangout(db, hangout, ids if ids else None)
+    except ValueError:
+        return RedirectResponse(f"/hangouts/{hangout_id}?error=need_profiles", status_code=303)
+    return RedirectResponse(f"/hangouts/{hangout_id}", status_code=303)
+
+
+@router.post("/hangouts/{hangout_id}/close")
+def hangout_close(hangout_id: int, db: Session = Depends(get_db)) -> RedirectResponse:
+    hangout = db.get(Hangout, hangout_id)
+    if hangout:
+        hangout.status = HangoutStatus.closed
+        db.commit()
+    return RedirectResponse(f"/hangouts/{hangout_id}", status_code=303)
+
+
+@router.get("/settings", response_class=HTMLResponse)
+def settings_page(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
+    row = get_or_create_app_settings(db)
+    return templates.TemplateResponse(
+        request,
+        "settings.html",
+        {
+            "organizer_phone": row.organizer_phone or "",
+            "allergies": _all_allergies(db),
+        },
+    )
+
+
+@router.post("/settings")
+def settings_save(
+    organizer_phone: str = Form(""),
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    row = get_or_create_app_settings(db)
+    row.organizer_phone = normalize_phone(organizer_phone) if organizer_phone.strip() else None
+    db.commit()
+    return RedirectResponse("/settings", status_code=303)
+
+
+@router.post("/allergies")
+def allergies_create(name: str = Form(...), db: Session = Depends(get_db)) -> RedirectResponse:
+    cleaned = normalize_allergy_name(name)
+    if cleaned:
+        existing = db.query(Allergy).filter(Allergy.name.ilike(cleaned)).first()
+        if not existing:
+            db.add(Allergy(name=cleaned))
+            db.commit()
+    return RedirectResponse("/settings", status_code=303)
+
+
+@router.post("/allergies/{allergy_id}/delete")
+def allergies_delete(allergy_id: int, db: Session = Depends(get_db)) -> RedirectResponse:
+    allergy = db.get(Allergy, allergy_id)
+    if allergy:
+        db.delete(allergy)
+        db.commit()
+    return RedirectResponse("/settings", status_code=303)
