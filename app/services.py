@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timedelta, timezone
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from app.config import get_settings
@@ -11,6 +12,7 @@ from app.messages import (
     craft_invite_message,
     craft_organizer_digest,
     craft_reminder_message,
+    is_opt_out,
     parse_reply_intent,
 )
 from app.models import (
@@ -79,6 +81,9 @@ def resolve_organizer_phone(db: Session, hangout: Hangout) -> str | None:
 INTERVAL_HOUR_OPTIONS = (1, 2, 3, 4, 6, 8, 12, 24)
 COOLDOWN_MINUTE_OPTIONS = (0, 5, 15, 30, 60)
 CONFIRM_GOAL_OPTIONS = (0, 2, 3, 4, 5, 6, 8, 10)
+
+# Total failed sends logged against one invite after which follow-ups stop.
+FOLLOWUP_FAILURE_LIMIT = 3
 
 
 def clamp_choice(value: int | str | None, allowed: tuple[int, ...], default: int) -> int:
@@ -268,6 +273,17 @@ def setup_hangout(db: Session, hangout: Hangout, profile_ids: list[int] | None =
     existing = {inv.profile_id: inv for inv in hangout.invites}
     now = utcnow()
 
+    if profile_ids is not None:
+        # Rows for people left out of an explicit selection who have never been
+        # messaged were never really invited. Drop them, otherwise they sit in
+        # "pending" forever: process_followups has no clock to measure them
+        # against, so they are never texted, chased, or resolved.
+        wanted = set(ids)
+        for pid, inv in list(existing.items()):
+            if pid not in wanted and inv.last_outbound_at is None:
+                db.delete(inv)
+                del existing[pid]
+
     for pid in ids:
         profile = db.get(Profile, pid)
         if profile is None:
@@ -310,12 +326,27 @@ def setup_hangout(db: Session, hangout: Hangout, profile_ids: list[int] | None =
 
 
 def process_inbound_sms(db: Session, from_phone: str, body: str) -> str:
-    """Handle invitee reply. Returns auto-response text."""
+    """Handle invitee reply. Returns auto-response text; "" means reply with nothing."""
+    reply = _handle_inbound_sms(db, from_phone, body)
+    if is_opt_out(body):
+        # The carrier and Twilio have already blocked this number and send their
+        # own opt-out confirmation. Anything we reply is undeliverable (Twilio
+        # error 21610), so record the decline and stay quiet.
+        return ""
+    return reply
+
+
+def _handle_inbound_sms(db: Session, from_phone: str, body: str) -> str:
     phone = normalize_phone(from_phone)
     log_message(db, phone=phone, body=body, direction=MessageDirection.inbound, success=True)
 
     intent = parse_reply_intent(body)
-    # Find most recent active invite for this phone.
+    # A reply is almost always about the last text this person received, so rank
+    # by most recent outbound before falling back to newest invite.
+    recency = (
+        HangoutInvite.last_outbound_at.desc().nullslast(),
+        HangoutInvite.id.desc(),
+    )
     invite = (
         db.query(HangoutInvite)
         .join(HangoutInvite.profile)
@@ -323,7 +354,7 @@ def process_inbound_sms(db: Session, from_phone: str, body: str) -> str:
         .options(joinedload(HangoutInvite.profile), joinedload(HangoutInvite.hangout))
         .filter(Profile.phone == phone)
         .filter(Hangout.status == HangoutStatus.active)
-        .order_by(HangoutInvite.id.desc())
+        .order_by(*recency)
         .first()
     )
 
@@ -336,7 +367,7 @@ def process_inbound_sms(db: Session, from_phone: str, body: str) -> str:
             .join(HangoutInvite.hangout)
             .options(joinedload(HangoutInvite.profile), joinedload(HangoutInvite.hangout))
             .filter(Hangout.status == HangoutStatus.active)
-            .order_by(HangoutInvite.id.desc())
+            .order_by(*recency)
             .all()
         )
         for inv in candidates:
@@ -393,10 +424,32 @@ def process_inbound_sms(db: Session, from_phone: str, body: str) -> str:
     return reply
 
 
+def _failed_send_count(db: Session, invite_id: int) -> int:
+    """Failed outbound sends *since the last successful one* for this invite.
+
+    Counting every failure the invite ever logged would let a transient outage
+    months ago combine with one fresh failure to retire a working number, so a
+    successful send resets the streak. (The session has autoflush off.)
+    """
+    db.flush()
+    outbound = (MessageLog.invite_id == invite_id, MessageLog.direction == MessageDirection.outbound)
+    last_ok = (
+        db.query(func.max(MessageLog.id))
+        .filter(*outbound)
+        .filter(MessageLog.success.is_(True))
+        .scalar()
+    )
+    query = db.query(func.count(MessageLog.id)).filter(*outbound).filter(MessageLog.success.is_(False))
+    if last_ok is not None:
+        query = query.filter(MessageLog.id > last_ok)
+    return query.scalar() or 0
+
+
 def process_followups(db: Session) -> int:
     """Send due follow-up SMS. Returns count sent."""
     settings = get_settings()
     delays = settings.followup_hour_list
+    budget = min(settings.max_followups, len(delays))
     now = utcnow()
     sent = 0
 
@@ -410,19 +463,22 @@ def process_followups(db: Session) -> int:
     )
 
     for inv in invites:
-        if inv.status not in (InviteStatus.pending, InviteStatus.remind):
-            continue
-        # confirmed/declined skip; remind still gets followups only if never confirmed
-        if inv.followups_sent >= settings.max_followups or inv.followups_sent >= len(delays):
-            if inv.followups_sent >= settings.max_followups:
-                inv.status = InviteStatus.no_response
-            continue
+        # Nothing has gone out yet, so there is no clock to measure against.
         if inv.last_outbound_at is None:
             continue
-
         last = inv.last_outbound_at
         if last.tzinfo is None:
             last = last.replace(tzinfo=timezone.utc)
+
+        if inv.followups_sent >= budget:
+            # Budget spent. Give the final follow-up its own delay window to be
+            # answered before declaring no response, so nobody is marked
+            # no_response in the same pass that texted them.
+            grace = delays[-1] if delays else 24.0
+            if now >= last + timedelta(hours=grace):
+                inv.status = InviteStatus.no_response
+            continue
+
         next_delay = delays[inv.followups_sent]
         due_at = last + timedelta(hours=next_delay)
         # For sequential follow-ups after first, measure from last outbound
@@ -431,28 +487,23 @@ def process_followups(db: Session) -> int:
 
         attempt = inv.followups_sent + 1
         body = craft_followup_message(inv.hangout, inv.profile, attempt)
-        ok, _ = send_sms(db, to=inv.profile.phone, body=body, invite_id=inv.id, hangout_id=inv.hangout_id)
+        ok, err = send_sms(db, to=inv.profile.phone, body=body, invite_id=inv.id, hangout_id=inv.hangout_id)
+        # Always advance the clock: a number that permanently rejects SMS (an
+        # opt-out, say) must not be retried on every scheduler tick.
+        inv.last_outbound_at = now
         if ok:
             # Only advance the follow-up budget on a successful send, otherwise
             # an outage would burn the budget and mark invitees no_response
-            inv.last_outbound_at = now
             inv.followups_sent = attempt
             sent += 1
+        elif _failed_send_count(db, inv.id) >= FOLLOWUP_FAILURE_LIMIT:
+            # Retried across several delay windows and still failing — stop and
+            # surface it instead of texting into the void forever.
+            inv.status = InviteStatus.failed_send
+            logger.warning(
+                "Giving up on follow-ups for invite %s after repeated failures: %s", inv.id, err
+            )
 
-    db.commit()
-
-    # Mark exhausted invites as no_response
-    exhausted = (
-        db.query(HangoutInvite)
-        .join(Hangout)
-        .filter(Hangout.status == HangoutStatus.active)
-        .filter(HangoutInvite.status.in_([InviteStatus.pending, InviteStatus.remind]))
-        .filter(HangoutInvite.followups_sent >= settings.max_followups)
-        .all()
-    )
-    for inv in exhausted:
-        # Only after the last follow-up's delay has also "aged" — simple: mark after max sent
-        inv.status = InviteStatus.no_response
     db.commit()
     return sent
 

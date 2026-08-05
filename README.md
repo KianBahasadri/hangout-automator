@@ -2,12 +2,12 @@
 
 MVP website that plans hangouts and invites people by SMS.
 
-- **No authentication** — open the URL and use it
+- **No authentication** — open the URL and use it. Anyone who reaches the site can read every profile and send SMS, so read the release security gate in [docs/deploy.md](docs/deploy.md) before going public
 - **No multi-tenancy** — one shared dataset for the whole app
 - **FastAPI** web UI + JSON API
 - **SQLite** on disk
 - **SMS** via Twilio or mock (console log)
-- **Terraform** deploys a cheap Azure Linux VM (B1s) with nginx + systemd
+- **Terraform** deploys a cheap Azure Linux VM (B1s) with no public IP, reached through a Cloudflare Tunnel
 
 See [docs/functional-specification.md](docs/functional-specification.md) for product requirements.
 
@@ -53,6 +53,7 @@ Copy `.env.example` to `.env` or export env vars:
 | `FOLLOWUP_HOURS` | `24,48` | Delays for follow-up 1 and 2 |
 | `ORGANIZER_INTERVAL_HOURS` | `6` | Digest spacing |
 | `PUBLIC_BASE_URL` | `http://localhost:9000` | Canonical public URL; must match the Twilio console webhook URL when `SMS_PROVIDER=twilio` (signature validation) |
+| `ENABLE_API_DOCS` | `true` | Serves `/docs`, `/redoc`, `/openapi.json`. Deployments set it to `false` |
 
 Twilio inbound webhook: `POST /webhooks/sms`
 
@@ -70,43 +71,28 @@ uv run --group dev pytest
 - `POST /api/hangouts/{id}/setup`
 - `POST /webhooks/sms`
 
-## Azure deploy (Terraform)
+## Deploy
 
-Prerequisites: Azure CLI logged in (`az login`), Terraform ≥ 1.5, an SSH key pair.
-
-```bash
-cd terraform
-cp terraform.tfvars.example terraform.tfvars
-# Edit terraform.tfvars: ssh_public_key, git_repo_url, optional Twilio secrets
-
-terraform init
-terraform apply
-```
-
-Outputs include `app_url`, `ssh_command`, and `sms_webhook_url`.
-
-Cloud-init on the VM:
-
-1. Installs Python, nginx, git  
-2. Clones `git_repo_url` into `/opt/hangout-automator`  
-3. Creates a venv and installs requirements  
-4. Runs uvicorn under systemd; nginx proxies port 80 → 8000  
-
-If you prefer not to clone from git, leave `git_repo_url` empty and push code with:
+Terraform provisions an Azure VM with **no public IP**, reached only through a
+Cloudflare Tunnel. State lives in a remote Azure Storage backend, and both
+Azure and Cloudflare inputs come from the ignored `.env` via a wrapper script:
 
 ```bash
-./scripts/deploy_rsync.sh hangout@YOUR_PUBLIC_IP
+./scripts/bootstrap_state.sh apply   # once: creates the remote state backend
+./scripts/terraform.sh init
+./scripts/terraform.sh plan
+./scripts/terraform.sh apply
 ```
 
-(First boot still needs the service unit from cloud-init; rsync only updates app files.)
+Do not run bare `terraform apply` — it has neither the Cloudflare credentials
+nor the remote state. **[docs/deploy.md](docs/deploy.md) is the full and
+authoritative deployment guide**, including the go-live checklist, secret
+handling, and the security gate to clear before switching `SMS_PROVIDER` to
+`twilio`.
 
-### Cost note
-
-`Standard_B1s` is a low-cost burstable SKU. You still pay for the public IP, disk, and bandwidth. Destroy when unused:
-
-```bash
-cd terraform && terraform destroy
-```
+Cost: `Standard_B1s` is a low-cost burstable SKU; you still pay for the NAT
+gateway public IP, disks, and bandwidth. `./scripts/terraform.sh destroy` when
+unused (the data disk is `prevent_destroy`).
 
 ## Project layout
 
@@ -117,7 +103,7 @@ app/                 FastAPI application
   services.py        SMS invites, RSVP, follow-ups, organizer digests
   routers/           API, web UI, webhooks
   templates/         Jinja HTML
-terraform/           Azure VM + networking + cloud-init
-docs/                Functional specification
-scripts/             Local run + rsync deploy
+terraform/           Azure VM + Cloudflare Tunnel + cloud-init
+docs/                Topic docs (start at docs/README.md) + functional spec
+scripts/             Local run, Terraform wrapper, state bootstrap
 ```

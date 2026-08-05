@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Form, Request
@@ -30,10 +31,11 @@ from app.services import (
     normalize_tag_name,
     setup_hangout,
 )
-from app.sms import format_phone, normalize_phone
+from app.sms import format_phone, is_valid_phone, normalize_phone
 
 router = APIRouter(tags=["web"])
-templates = Jinja2Templates(directory="app/templates")
+# Resolved from this file so the app does not depend on the working directory.
+templates = Jinja2Templates(directory=str(Path(__file__).resolve().parents[1] / "templates"))
 templates.env.filters["phone"] = format_phone
 
 
@@ -79,6 +81,13 @@ def home(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
     )
 
 
+PROFILE_ERRORS = {
+    "bad_phone": "That phone number isn't usable — enter a full number like +1 (555) 123-4567.",
+    "duplicate_phone": "A profile with that phone number already exists.",
+    "missing_name": "Name is required.",
+}
+
+
 @router.get("/profiles", response_class=HTMLResponse)
 def profiles_page(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
     return templates.TemplateResponse(
@@ -91,6 +100,7 @@ def profiles_page(request: Request, db: Session = Depends(get_db)) -> HTMLRespon
             "drinks_opts": list(YesNo),
             "smokes_opts": list(YesNo),
             "drive_opts": list(Drive),
+            "error": PROFILE_ERRORS.get(request.query_params.get("error", "")),
         },
     )
 
@@ -130,19 +140,24 @@ def profiles_create(
     allergy_ids: Annotated[list[int], Form()] = [],
     db: Session = Depends(get_db),
 ) -> RedirectResponse:
+    if not name.strip():
+        return RedirectResponse("/profiles?error=missing_name", status_code=303)
     phone_n = normalize_phone(phone)
-    if not db.query(Profile).filter(Profile.phone == phone_n).first():
-        profile = Profile(
-            name=name.strip(),
-            phone=phone_n,
-            drinks=_optional_enum_form(drinks, YesNo),
-            smokes=_optional_enum_form(smokes, YesNo),
-            drive=_optional_enum_form(drive, Drive),
-        )
-        profile.tags = load_tags_by_ids(db, tag_ids or [])
-        profile.allergies = load_allergies_by_ids(db, allergy_ids or [])
-        db.add(profile)
-        db.commit()
+    if not is_valid_phone(phone_n):
+        return RedirectResponse("/profiles?error=bad_phone", status_code=303)
+    if db.query(Profile).filter(Profile.phone == phone_n).first():
+        return RedirectResponse("/profiles?error=duplicate_phone", status_code=303)
+    profile = Profile(
+        name=name.strip(),
+        phone=phone_n,
+        drinks=_optional_enum_form(drinks, YesNo),
+        smokes=_optional_enum_form(smokes, YesNo),
+        drive=_optional_enum_form(drive, Drive),
+    )
+    profile.tags = load_tags_by_ids(db, tag_ids or [])
+    profile.allergies = load_allergies_by_ids(db, allergy_ids or [])
+    db.add(profile)
+    db.commit()
     return RedirectResponse("/profiles", status_code=303)
 
 

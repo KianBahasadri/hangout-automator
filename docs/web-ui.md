@@ -32,6 +32,7 @@ Blank optional enums from forms are parsed to `None` via `_optional_enum_form`.
 
 - Tag catalog manager (pill list + × remove + add form)
 - Add-profile form: name/phone required; drinks/smokes/drive selects; allergy and tag **pill checkboxes** (`.tag-checkboxes`)
+- Create validates server-side and redirects to `/profiles?error=…` (`bad_phone`, `duplicate_phone`, `missing_name`), rendered as an alert above the page. A phone that normalizes to fewer than 8 digits is rejected rather than silently stored — see [sms-and-rsvp.md](./sms-and-rsvp.md) for normalization
 - Existing profiles: 3-column card grid (responsive 2/1 columns)
 - **Autosave** (`profiles_autosave.js`): `PATCH /api/profiles/{id}`; text fields debounce 450ms; selects/tags/allergies save immediately
 - **Filters** (`profiles_filter.js`): search name/phone/tag; tag chips (OR); field chips AND (drinks/smokes/drive/allergies); clear filters; visible count

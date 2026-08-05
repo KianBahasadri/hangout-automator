@@ -16,6 +16,10 @@ router = APIRouter(prefix="/webhooks", tags=["webhooks"])
 
 
 def _twiml(message: str) -> Response:
+    if not message:
+        # Empty response: acknowledge the webhook without sending an SMS back.
+        xml = '<?xml version="1.0" encoding="UTF-8"?><Response></Response>'
+        return Response(content=xml, media_type="application/xml")
     # Escape minimal XML special chars
     safe = (
         message.replace("&", "&amp;")
@@ -50,6 +54,11 @@ def _valid_twilio_request(request: Request, params: dict | str) -> bool:
 
     signature = request.headers.get("X-Twilio-Signature")
     if not signature:
+        return False
+    if isinstance(params, str) and "bodySHA256" not in request.query_params:
+        # Twilio always appends bodySHA256 when it signs a raw (JSON) body.
+        # Without it the validator would try to treat the body string as a
+        # params mapping and raise, so reject before calling it.
         return False
     return RequestValidator(settings.twilio_auth_token).validate(
         _canonical_webhook_url(request), params, signature

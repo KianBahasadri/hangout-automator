@@ -39,12 +39,26 @@ class TwilioSmsProvider(SmsProvider):
             return False, str(exc)
 
 
+# Provider instances are reused so a Twilio Client is not rebuilt per message.
+# Keyed on the credentials so a settings change still yields a fresh client.
+_provider_cache: dict[tuple[str, str, str, str], SmsProvider] = {}
+
+
 def get_sms_provider(settings: Settings | None = None) -> SmsProvider:
     settings = settings or get_settings()
     provider = (settings.sms_provider or "mock").lower().strip()
-    if provider == "twilio":
-        return TwilioSmsProvider(settings)
-    return MockSmsProvider()
+    key = (
+        provider,
+        settings.twilio_account_sid,
+        settings.twilio_auth_token,
+        settings.twilio_from_number,
+    )
+    cached = _provider_cache.get(key)
+    if cached is not None:
+        return cached
+    instance: SmsProvider = TwilioSmsProvider(settings) if provider == "twilio" else MockSmsProvider()
+    _provider_cache[key] = instance
+    return instance
 
 
 def normalize_phone(phone: str) -> str:
@@ -59,6 +73,16 @@ def normalize_phone(phone: str) -> str:
     elif cleaned and not cleaned.startswith("+"):
         cleaned = "+" + cleaned
     return cleaned
+
+
+def is_valid_phone(phone: str) -> bool:
+    """True when an already-normalized phone looks dialable (E.164: 8-15 digits).
+
+    `normalize_phone` strips non-digits, so unusable input such as "abc" or a
+    blank field arrives here as "" and is rejected rather than stored.
+    """
+    digits = "".join(ch for ch in phone if ch.isdigit())
+    return phone.startswith("+") and 8 <= len(digits) <= 15
 
 
 def format_phone(phone: str | None) -> str:

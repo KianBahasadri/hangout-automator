@@ -54,11 +54,16 @@ async def lifespan(_app: FastAPI):
     scheduler.shutdown(wait=False)
 
 
+_docs_enabled = get_settings().enable_api_docs
+
 app = FastAPI(
     title="Hangout Automator",
     description="MVP: plan hangouts and invite people via SMS (no auth).",
     version="0.1.0",
     lifespan=lifespan,
+    docs_url="/docs" if _docs_enabled else None,
+    redoc_url="/redoc" if _docs_enabled else None,
+    openapi_url="/openapi.json" if _docs_enabled else None,
 )
 
 static_dir = Path(__file__).resolve().parent / "static"

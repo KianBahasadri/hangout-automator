@@ -95,7 +95,7 @@ variable "cloudflare_account_id" {
 }
 
 variable "cloudflare_zone_id" {
-  description = "Cloudflare zone ID for the bahasadri.com DNS record."
+  description = "Cloudflare zone ID that owns the app's DNS record."
   type        = string
 
   validation {
@@ -105,9 +105,8 @@ variable "cloudflare_zone_id" {
 }
 
 variable "cloudflare_hostname" {
-  description = "Public hostname routed through the Cloudflare Tunnel."
+  description = "Public hostname routed through the Cloudflare Tunnel. Supplied from the ignored .env by scripts/terraform.sh; no default, so the deployed hostname is not published in this repo."
   type        = string
-  default     = "hangout.bahasadri.com"
 
   validation {
     condition     = can(regex("^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$", var.cloudflare_hostname))

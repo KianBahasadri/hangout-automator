@@ -167,8 +167,11 @@ def _ensure_sqlite_columns() -> None:
                 )
             )
 
-        _rebuild_profiles_if_needed(conn)
+    # Deliberately outside the block above: the rebuild has to run with foreign
+    # keys off, which SQLite only honours when no transaction is open.
+    rebuilt = _rebuild_profiles_if_needed()
 
+    with engine.begin() as conn:
         # Prefer blank (NULL) over legacy "unknown"
         for table, cols in (
             ("profiles", ("drinks", "smokes")),
@@ -183,82 +186,102 @@ def _ensure_sqlite_columns() -> None:
                 except Exception:
                     pass
 
+    if rebuilt:
+        # Belt and braces: no pooled connection should survive a rebuild without
+        # having run the connect-time PRAGMAs.
+        engine.dispose()
 
-def _rebuild_profiles_if_needed(conn) -> None:  # type: ignore[no-untyped-def]
-    """Recreate profiles so optional enum columns are nullable (SQLite can't ALTER nullability)."""
-    rows = conn.execute(text("PRAGMA table_info(profiles)")).fetchall()
-    if not rows:
-        return
-    # row: (cid, name, type, notnull, dflt_value, pk)
-    by_name = {row[1]: row for row in rows}
-    needs_rebuild = False
-    for col in ("drinks", "smokes"):
-        info = by_name.get(col)
-        if info and info[3] == 1:  # notnull
+
+def _rebuild_profiles_if_needed() -> bool:
+    """Recreate profiles so optional enum columns are nullable (SQLite can't ALTER nullability).
+
+    Runs on its own autocommit connection because `PRAGMA foreign_keys` is a
+    silent no-op inside a transaction. With enforcement left on, `DROP TABLE
+    profiles` performs an implicit `DELETE FROM` that cascades into invites,
+    tag links, and allergy links — deleting the data this migration exists to
+    preserve. The swap still gets an explicit transaction of its own so a crash
+    mid-rebuild cannot leave the database without a profiles table.
+
+    Returns True when the table was actually rebuilt.
+    """
+    with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
+        rows = conn.exec_driver_sql("PRAGMA table_info(profiles)").fetchall()
+        if not rows:
+            return False
+        # row: (cid, name, type, notnull, dflt_value, pk)
+        by_name = {row[1]: row for row in rows}
+        needs_rebuild = False
+        for col in ("drinks", "smokes"):
+            info = by_name.get(col)
+            if info and info[3] == 1:  # notnull
+                needs_rebuild = True
+        if "car_access" in by_name:
             needs_rebuild = True
-    if "car_access" in by_name:
-        needs_rebuild = True
-    if not needs_rebuild:
-        return
+        if not needs_rebuild:
+            return False
 
-    has_car = "car_access" in by_name
-    has_drive = "drive" in by_name
-    if has_car and has_drive:
-        drive_expr = """COALESCE(
-            NULLIF(drive, ''),
-            CASE car_access
+        has_car = "car_access" in by_name
+        has_drive = "drive" in by_name
+        if has_car and has_drive:
+            drive_expr = """COALESCE(
+                NULLIF(drive, ''),
+                CASE car_access
+                    WHEN 'can_drive' THEN 'yes'
+                    WHEN 'cannot' THEN 'no'
+                    WHEN 'maybe' THEN 'maybe'
+                    ELSE NULL
+                END
+            )"""
+        elif has_drive:
+            drive_expr = "NULLIF(drive, '')"
+        elif has_car:
+            drive_expr = """CASE car_access
                 WHEN 'can_drive' THEN 'yes'
                 WHEN 'cannot' THEN 'no'
                 WHEN 'maybe' THEN 'maybe'
                 ELSE NULL
-            END
-        )"""
-    elif has_drive:
-        drive_expr = "NULLIF(drive, '')"
-    elif has_car:
-        drive_expr = """CASE car_access
-            WHEN 'can_drive' THEN 'yes'
-            WHEN 'cannot' THEN 'no'
-            WHEN 'maybe' THEN 'maybe'
-            ELSE NULL
-        END"""
-    else:
-        drive_expr = "NULL"
+            END"""
+        else:
+            drive_expr = "NULL"
 
-    conn.execute(text("PRAGMA foreign_keys=OFF"))
-    conn.execute(
-        text(
-            """
-            CREATE TABLE profiles_new (
-                id INTEGER NOT NULL PRIMARY KEY,
-                name VARCHAR(120) NOT NULL,
-                phone VARCHAR(32) NOT NULL UNIQUE,
-                drinks VARCHAR(16),
-                smokes VARCHAR(16),
-                food_allergies TEXT,
-                drive VARCHAR(16),
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL
+        conn.exec_driver_sql("PRAGMA foreign_keys=OFF")
+        try:
+            conn.exec_driver_sql("BEGIN")
+            conn.exec_driver_sql(
+                """
+                CREATE TABLE profiles_new (
+                    id INTEGER NOT NULL PRIMARY KEY,
+                    name VARCHAR(120) NOT NULL,
+                    phone VARCHAR(32) NOT NULL UNIQUE,
+                    drinks VARCHAR(16),
+                    smokes VARCHAR(16),
+                    food_allergies TEXT,
+                    drive VARCHAR(16),
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL
+                )
+                """
             )
-            """
-        )
-    )
-    conn.execute(
-        text(
-            f"""
-            INSERT INTO profiles_new (id, name, phone, drinks, smokes, food_allergies, drive, created_at)
-            SELECT
-                id,
-                name,
-                phone,
-                CASE WHEN drinks IN ('', 'unknown') THEN NULL ELSE drinks END,
-                CASE WHEN smokes IN ('', 'unknown') THEN NULL ELSE smokes END,
-                food_allergies,
-                {drive_expr},
-                created_at
-            FROM profiles
-            """
-        )
-    )
-    conn.execute(text("DROP TABLE profiles"))
-    conn.execute(text("ALTER TABLE profiles_new RENAME TO profiles"))
-    conn.execute(text("PRAGMA foreign_keys=ON"))
+            conn.exec_driver_sql(
+                f"""
+                INSERT INTO profiles_new (id, name, phone, drinks, smokes, food_allergies, drive, created_at)
+                SELECT
+                    id,
+                    name,
+                    phone,
+                    CASE WHEN drinks IN ('', 'unknown') THEN NULL ELSE drinks END,
+                    CASE WHEN smokes IN ('', 'unknown') THEN NULL ELSE smokes END,
+                    food_allergies,
+                    {drive_expr},
+                    created_at
+                FROM profiles
+                """
+            )
+            conn.exec_driver_sql("DROP TABLE profiles")
+            conn.exec_driver_sql("ALTER TABLE profiles_new RENAME TO profiles")
+            conn.exec_driver_sql("COMMIT")
+        except Exception:
+            conn.exec_driver_sql("ROLLBACK")
+            raise
+        finally:
+            conn.exec_driver_sql("PRAGMA foreign_keys=ON")
+    return True

@@ -117,6 +117,63 @@ def test_reply_to_inactive_hangout_is_unmatched(db):
     assert "couldn't match" in reply
 
 
+def test_opt_out_keyword_is_treated_as_decline(db):
+    invitee = _profile(db, "Sam", "+15551112222")
+    _, invite = _active_hangout_with_invite(db, invitee)
+    db.commit()
+
+    process_inbound_sms(db, "+15551112222", "STOP")
+
+    db.refresh(invite)
+    assert invite.status == InviteStatus.declined
+
+
+def test_opt_out_gets_no_reply(db):
+    """Twilio blocks the number on STOP and sends its own confirmation; ours would bounce."""
+    invitee = _profile(db, "Sam", "+15551112222")
+    _active_hangout_with_invite(db, invitee)
+    db.commit()
+
+    assert process_inbound_sms(db, "+15551112222", "STOP") == ""
+
+
+def test_opt_out_from_unknown_number_gets_no_reply(db):
+    assert process_inbound_sms(db, "+19998887777", "unsubscribe") == ""
+
+
+def test_opt_out_webhook_returns_twiml_without_a_message(db, client):
+    invitee = _profile(db, "Sam", "+15551112222")
+    _active_hangout_with_invite(db, invitee)
+    db.commit()
+
+    response = client.post("/webhooks/sms", json={"From": "+15551112222", "Body": "STOP"})
+
+    assert response.status_code == 200
+    assert "<Message>" not in response.text
+
+
+def test_reply_applies_to_most_recently_messaged_invite(db):
+    from datetime import timedelta
+
+    from app.services import utcnow
+
+    invitee = _profile(db, "Sam", "+15551112222")
+    older_hangout, older_invite = _active_hangout_with_invite(db, invitee)
+    newer_hangout, newer_invite = _active_hangout_with_invite(db, invitee)
+    # The older hangout is the one that just texted them.
+    older_invite.last_outbound_at = utcnow()
+    newer_invite.last_outbound_at = utcnow() - timedelta(days=3)
+    db.commit()
+
+    reply = process_inbound_sms(db, "+15551112222", "confirm")
+
+    assert f"#{older_hangout.id}" in reply
+    db.refresh(older_invite)
+    db.refresh(newer_invite)
+    assert older_invite.status == InviteStatus.confirmed
+    assert newer_invite.status == InviteStatus.pending
+
+
 def test_confirm_triggers_organizer_threshold_sms(db):
     invitee = _profile(db, "Sam", "+15551112222")
     organizer = _profile(db, "Lee", "+15553334444")

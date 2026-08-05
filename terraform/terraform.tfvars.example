@@ -6,9 +6,11 @@ location = "eastus"
 vm_size  = "Standard_B1s"
 data_disk_size_gb = 32
 
-cloudflare_account_id  = "3d463c39c94a3084cea36fc6ffde8931"
-cloudflare_zone_id     = "be69bba16896a53bf407f8745b9b179d"
-cloudflare_hostname    = "hangout.bahasadri.com"
+# Account and zone IDs are 32-char hex values from the Cloudflare dashboard.
+# The wrapper normally reads them from the ignored .env instead.
+cloudflare_account_id  = "00000000000000000000000000000000"
+cloudflare_zone_id     = "00000000000000000000000000000000"
+cloudflare_hostname    = "hangout.example.com"
 cloudflare_tunnel_name = "hangout-automator"
 
 admin_username = "hangout"
@@ -26,5 +28,5 @@ twilio_account_sid = ""
 twilio_auth_token  = ""
 twilio_from_number = ""
 
-# Canonical public URL for Twilio signatures. Defaults to https://hangout.bahasadri.com.
-# public_base_url = "https://hangout.bahasadri.com"
+# Canonical public URL for Twilio signatures. Defaults to https://<cloudflare_hostname>.
+# public_base_url = "https://hangout.example.com"

@@ -42,7 +42,7 @@ resource "cloudflare_dns_record" "app" {
   lifecycle {
     precondition {
       condition     = data.cloudflare_zone.app.status == "active"
-      error_message = "The bahasadri.com Cloudflare zone must be active before creating the Tunnel hostname record."
+      error_message = "The target Cloudflare zone must be active before creating the Tunnel hostname record."
     }
   }
 }

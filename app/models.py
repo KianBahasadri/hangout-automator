@@ -261,15 +261,3 @@ class MessageLog(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     invite: Mapped[HangoutInvite | None] = relationship(back_populates="messages")
-
-
-class AppSettings(Base):
-    """Singleton row for optional global organizer defaults."""
-
-    __tablename__ = "app_settings"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
-    organizer_phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
-    )

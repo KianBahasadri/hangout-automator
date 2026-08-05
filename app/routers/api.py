@@ -31,7 +31,7 @@ from app.services import (
     resolve_organizer_phone,
     setup_hangout,
 )
-from app.sms import normalize_phone
+from app.sms import is_valid_phone, normalize_phone
 
 router = APIRouter(prefix="/api", tags=["api"])
 
@@ -123,6 +123,8 @@ def list_profiles(db: Session = Depends(get_db)) -> list[Profile]:
 @router.post("/profiles", response_model=ProfileOut, status_code=201)
 def create_profile(payload: ProfileCreate, db: Session = Depends(get_db)) -> Profile:
     phone = normalize_phone(payload.phone)
+    if not is_valid_phone(phone):
+        raise HTTPException(400, "Phone number is not usable")
     if db.query(Profile).filter(Profile.phone == phone).first():
         raise HTTPException(400, "A profile with this phone already exists")
     profile = Profile(
@@ -151,6 +153,8 @@ def update_profile(profile_id: int, payload: ProfileUpdate, db: Session = Depend
         if not data["phone"] or not str(data["phone"]).strip():
             raise HTTPException(400, "Phone is required")
         data["phone"] = normalize_phone(data["phone"])
+        if not is_valid_phone(data["phone"]):
+            raise HTTPException(400, "Phone number is not usable")
         clash = db.query(Profile).filter(Profile.phone == data["phone"], Profile.id != profile_id).first()
         if clash:
             raise HTTPException(400, "A profile with this phone already exists")

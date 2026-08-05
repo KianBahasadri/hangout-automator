@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.models import Hangout, HangoutInvite, InviteStatus, Profile, YesNo
+from app.models import Hangout, InviteStatus, Profile, YesNo
 
 
 def _yn(value: YesNo | None) -> str | None:
@@ -97,6 +97,19 @@ def craft_organizer_digest(hangout: Hangout) -> str:
     return "\n".join(lines)
 
 
+# Twilio's carrier opt-out keywords. The number is blocked at the provider the
+# moment one of these arrives, so they count as a decline (an answer, not a
+# reason to keep retrying) and nothing may be sent back — see is_opt_out.
+OPT_OUT_WORDS = {"stop", "stopall", "unsubscribe", "cancel", "end", "quit"}
+
+
+def is_opt_out(body: str) -> bool:
+    """True when an inbound SMS is a carrier opt-out keyword."""
+    text = (body or "").strip().lower()
+    token = text.replace(",", " ").split()[0] if text.split() else ""
+    return token in OPT_OUT_WORDS or text in OPT_OUT_WORDS
+
+
 def parse_reply_intent(body: str) -> str | None:
     """Map free-text SMS to confirm | remind | decline | None."""
     text = (body or "").strip().lower()
@@ -104,7 +117,7 @@ def parse_reply_intent(body: str) -> str | None:
     token = text.replace(",", " ").split()[0] if text.split() else ""
     confirm_words = {"confirm", "yes", "y", "in", "attending", "coming"}
     remind_words = {"remind", "reminder", "later"}
-    decline_words = {"no", "n", "decline", "can't", "cant", "out", "nope"}
+    decline_words = {"no", "n", "decline", "can't", "cant", "out", "nope"} | OPT_OUT_WORDS
     if token in confirm_words or text in confirm_words:
         return "confirm"
     if token in remind_words or text in remind_words:

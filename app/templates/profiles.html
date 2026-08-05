@@ -3,6 +3,10 @@
 {% block content %}
 <h1>Profiles</h1>
 
+{% if error %}
+<div class="alert">{{ error }}</div>
+{% endif %}
+
 <div class="card tag-manager">
   <h2 style="margin-top:0;">Tags</h2>
   {% if tags %}

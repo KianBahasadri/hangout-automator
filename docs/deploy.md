@@ -9,17 +9,22 @@ the ignored `.env` is loaded and dotenv values are mapped to Terraform inputs.
 Provisions roughly: resource group, VNet `10.20.0.0/16`, private subnet
 `10.20.1.0/24`, an NSG with no inbound allow rules, an Ubuntu 24.04 LTS Gen2
 VM (default size `Standard_B1s`, admin user `hangout`), a remotely managed
-Cloudflare Tunnel, its hostname route, and the `hangout.bahasadri.com` CNAME.
+Cloudflare Tunnel, its hostname route, and the app hostname's CNAME.
 The VM has no public IP; an Azure NAT Gateway supplies outbound-only access for
 first-boot package installation and `cloudflared`, and a separate managed disk
 holds the SQLite database.
 
 Notable variables (`variables.tf` / `terraform.tfvars.example`): `prefix`,
-`location` (default `eastus`), required `ssh_public_key`, Cloudflare account and
-zone IDs, `cloudflare_hostname` (default `hangout.bahasadri.com`), optional
-`git_repo_url` / `git_branch` (default `main`), optional pinned `git_revision`,
-SMS/Twilio settings, `public_base_url`, `followup_hours`, and
-`organizer_interval_hours`.
+`location` (default `eastus`), required `ssh_public_key`, required Cloudflare
+account id, zone id, and `cloudflare_hostname`, optional `git_repo_url` /
+`git_branch` (default `main`), optional pinned `git_revision`, SMS/Twilio
+settings, `public_base_url`, `followup_hours`, and `organizer_interval_hours`.
+
+`cloudflare_hostname` deliberately has **no default** and the example tfvars
+carries placeholders: the deployed hostname is the only thing standing between
+an unauthenticated app and the open internet, so it stays in the ignored `.env`
+rather than in this public repository. `scripts/terraform.sh` supplies it from
+`CLOUDFLARE_TUNNEL_HOSTNAME`.
 
 Validation (fails at plan/apply, before anything is created):
 
@@ -40,15 +45,15 @@ keeps the Azure VM as the compute layer and puts Cloudflare in front of it.
 ### Target path: Cloudflare Tunnel + Azure compute (no VM public IP)
 
 The selected scope is deliberately narrow: Cloudflare manages the
-`bahasadri.com` zone and one Tunnel only. It is not the application runtime,
+app's zone and one Tunnel only. It is not the application runtime,
 database, Workers/Pages host, WAF, or identity layer. Terraform should own the
 complete boundary:
 
 - Azure VM, NAT-backed private connectivity, network security group, systemd,
   and the persistent application disk
 - a Cloudflare Tunnel from the VM to `http://127.0.0.1:8000`
-- the Tunnel hostname route and DNS record for `bahasadri.com` (or an agreed
-  subdomain)
+- the Tunnel hostname route and DNS record for the configured zone and
+  subdomain
 - the canonical `PUBLIC_BASE_URL` passed to the app so Twilio signatures match
   the public URL
 
@@ -138,10 +143,10 @@ only through environment variables or a secret manager:
 
 | Area | Input used by this deployment |
 |------|-------------------------------|
-| Cloudflare | Zone `bahasadri.com`, hostname `hangout.bahasadri.com`, account ID, and zone ID in the ignored `.env` |
+| Cloudflare | Zone, app hostname, account ID, and zone ID — all in the ignored `.env`, never in this repo |
 | Cloudflare | API token exported as `CLOUDFLARE_API_TOKEN`; it needs Tunnel Edit and DNS Edit permissions |
 | Compute | Azure CLI login, region/VM size, repository URL/branch, and an SSH public key for the VM administrator (not direct public access) |
-| Public URL | `https://hangout.bahasadri.com`, written to `PUBLIC_BASE_URL` for webhook signature validation |
+| Public URL | `https://<app hostname>`, written to `PUBLIC_BASE_URL` for webhook signature validation |
 | SMS | `mock` by default; Twilio SID/token/number must be injected through secret environment variables before selecting `twilio` |
 | State | A locked remote Terraform backend should be configured before production apply |
 
@@ -159,21 +164,25 @@ needed for the default configuration.
 ### PUBLIC_BASE_URL and webhook signatures
 
 `PUBLIC_BASE_URL` (Terraform `public_base_url`, default
-`https://hangout.bahasadri.com` when empty) is written into
+`https://<cloudflare_hostname>` when empty) is written into
 `/etc/hangout-automator.env` and used by the app to validate Twilio webhook
 signatures (see [sms-and-rsvp.md](./sms-and-rsvp.md)). Cloudflare terminates
 public HTTPS and the Tunnel sends HTTP to the local Uvicorn process. Set the
-Twilio webhook to the exact `https://hangout.bahasadri.com/webhooks/sms` URL.
+Twilio webhook to the exact `https://<app hostname>/webhooks/sms` URL.
 
 ### cloud-init
 
 Template `cloud-init.yaml.tftpl`:
 
 - Installs Python, git, and `cloudflared` from Cloudflare's apt repo
-- Writes `/etc/hangout-automator.env` (app on `127.0.0.1:8000`, DB `sqlite:////var/lib/hangout-automator/app.db`, SMS settings from Terraform)
-- systemd unit `hangout-automator.service` running Uvicorn
+- Writes `/etc/hangout-automator.env` (app on `127.0.0.1:8000`, DB `sqlite:////var/lib/hangout-automator/app.db`, `ENABLE_API_DOCS=false`, SMS settings from Terraform)
+- systemd unit `hangout-automator.service` running Uvicorn, with
+  `RequiresMountsFor=/var/lib/hangout-automator` so the app refuses to start
+  without the data disk instead of silently creating an empty SQLite file on
+  the OS disk (the fstab entry is `nofail`, so the VM itself still boots)
 - systemd unit `cloudflared.service` using the Terraform-created Tunnel token
-- Bootstrap: wait for and mount the persistent data disk, clone `git_repo_url`, create venv, `pip install -r requirements.txt`, and enable/restart the app service
+- `hangout-backup.service` + `.timer` (see Backups below)
+- Bootstrap: wait for and mount the persistent data disk, clone `git_repo_url`, create venv, `pip install -r requirements.txt`, enable/restart the app service, and enable the backup timer
 
 The cloudflared service token and SMS secrets are rendered into root-readable
 machine configuration and Terraform state; use a remote encrypted backend and
@@ -183,19 +192,60 @@ or private keys.
 ### Release security gate
 
 Cloudflare Tunnel provides transport and origin hiding, not user
-authentication. This repository's FastAPI app currently has no application
-authentication or rate limiting. Because the requested Cloudflare scope is
-DNS plus Tunnel only (no Access policy), the hostname is public once applied.
-Keep `SMS_PROVIDER=mock` until an application-level auth/rate-limit decision is
-made and tested; enabling Twilio would otherwise expose contact data and an
-SMS-sending action to anyone who discovers the hostname.
+authentication. This repository's FastAPI app **still has no application
+authentication or rate limiting**, and the requested Cloudflare scope is DNS
+plus Tunnel only (no Access policy), so every route — including the
+profile list and the invite-sending actions — is reachable by anyone who
+knows the hostname. Because hangout `motive` and `notes` become the body of
+the outgoing SMS, an unauthenticated visitor could send text of their own
+choosing from your Twilio number to your contacts.
+
+Keep `SMS_PROVIDER=mock` until that decision is made and tested. The interim
+hardening below reduces exposure but is **not** a substitute:
+
+- `ENABLE_API_DOCS=false` on the VM, so `/docs`, `/redoc`, and `/openapi.json`
+  do not publish a map of the state-changing endpoints
+- the deployed hostname is not committed to this public repository
+  (`cloudflare_hostname` has no default)
+
+The intended fix is a Cloudflare Access policy on the hostname, with a bypass
+or service-token policy for `/webhooks/sms` so Twilio can still deliver inbound
+replies.
+
+### Backups
+
+`hangout-backup.timer` runs `/usr/local/bin/hangout-backup.sh` daily
+(`Persistent=true`, so a missed run fires after boot). It writes a gzipped
+snapshot to `/var/lib/hangout-automator/backups/app-<UTC timestamp>.db.gz` and
+keeps the newest 7.
+
+It uses `sqlite3 .backup` rather than copying the file: the database runs in WAL
+mode, so committed rows can still live in the `-wal` sidecar and a plain `cp`
+can capture a database that is missing them.
+
+Scope: this protects against application-level corruption, a bad migration, or
+deleting rows by accident. It is **not** off-site — the snapshots sit on the
+same managed disk as `app.db`, so restoring after losing that disk needs a
+separate copy (Azure disk snapshot, or pulling the `.gz` off the VM).
+
+Restore: stop `hangout-automator`, `gunzip -c backups/app-<stamp>.db.gz >
+/var/lib/hangout-automator/app.db`, remove any stale `app.db-wal` / `app.db-shm`,
+then start the service.
+
+### Tearing down
+
+`terraform destroy` fails while the data disk carries `prevent_destroy = true`.
+That is deliberate — it is the only copy of the database. To intentionally
+destroy the environment, take a backup first, then drop the disk from state
+(`terraform state rm azurerm_managed_disk.data`) and destroy; the disk survives
+in Azure and must be deleted by hand once you are sure.
 
 ## Production go-live checklist (external prerequisites)
 
 The normal Azure/Cloudflare resources are automated by Terraform. These are the
 remaining external or operator-controlled steps:
 
-1. **Twilio**: provision an SMS-capable phone number; set the messaging webhook to `https://hangout.bahasadri.com/webhooks/sms` (HTTP POST); inject the three Twilio credentials and select `SMS_PROVIDER=twilio`.
+1. **Twilio**: provision an SMS-capable phone number; set the messaging webhook to `https://<app hostname>/webhooks/sms` (HTTP POST); inject the three Twilio credentials and select `SMS_PROVIDER=twilio`.
 2. **State**: initialize the chosen remote backend before the first production apply.
 3. **Azure**: `az login`, then review `./scripts/terraform.sh plan` and run `./scripts/terraform.sh apply`.
 
@@ -205,3 +255,7 @@ remaining external or operator-controlled steps:
 usable for this private-VM topology. Initial code and service setup come from
 Terraform-rendered cloud-init; a future release pipeline should use Azure Run
 Command or another private management path for updates.
+
+It excludes `.env`, `terraform.tfvars`, `backend.hcl`, state files, and all
+`*.db*` files, so running it cannot copy local secrets or a development
+database onto a VM.

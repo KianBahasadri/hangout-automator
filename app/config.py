@@ -15,6 +15,11 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./hangout.db"
     public_base_url: str = "http://localhost:9000"
 
+    # Interactive OpenAPI UI (/docs, /redoc, /openapi.json). The app has no
+    # authentication, so deployments turn this off to avoid publishing a map of
+    # the state-changing endpoints.
+    enable_api_docs: bool = True
+
     sms_provider: str = "mock"  # mock | twilio
     twilio_account_sid: str = ""
     twilio_auth_token: str = ""

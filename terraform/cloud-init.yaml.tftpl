@@ -6,6 +6,7 @@ packages:
   - python3-pip
   - git
   - curl
+  - sqlite3
 
 write_files:
   - path: /etc/hangout-automator.env
@@ -16,6 +17,7 @@ write_files:
       APP_PORT=8000
       DATABASE_URL=sqlite:////var/lib/hangout-automator/app.db
       PUBLIC_BASE_URL=${public_base_url}
+      ENABLE_API_DOCS=false
       SMS_PROVIDER=${sms_provider}
       TWILIO_ACCOUNT_SID=${twilio_account_sid}
       TWILIO_AUTH_TOKEN=${twilio_auth_token}
@@ -31,6 +33,9 @@ write_files:
       Description=Hangout Automator FastAPI
       After=network-online.target
       Wants=network-online.target
+      # The database lives on the persistent data disk. Fail loudly instead of
+      # starting up and creating an empty SQLite file on the OS disk.
+      RequiresMountsFor=/var/lib/hangout-automator
 
       [Service]
       Type=simple
@@ -46,6 +51,56 @@ write_files:
 
       [Install]
       WantedBy=multi-user.target
+
+  - path: /usr/local/bin/hangout-backup.sh
+    owner: root:root
+    permissions: "0755"
+    content: |
+      #!/bin/bash
+      set -euo pipefail
+
+      DATA_DIR=/var/lib/hangout-automator
+      BACKUP_DIR="$DATA_DIR/backups"
+      KEEP=7
+
+      mkdir -p "$BACKUP_DIR"
+      DEST="$BACKUP_DIR/app-$(date -u +%Y%m%dT%H%M%SZ).db"
+      # sqlite3 .backup is safe while the app is writing; copying the file is
+      # not, because the committed data may still be in the -wal sidecar.
+      sqlite3 "$DATA_DIR/app.db" ".backup '$DEST'"
+      gzip -f "$DEST"
+      ls -1t "$BACKUP_DIR"/app-*.db.gz | tail -n +$((KEEP + 1)) | xargs -r rm --
+
+  - path: /etc/systemd/system/hangout-backup.service
+    owner: root:root
+    permissions: "0644"
+    content: |
+      [Unit]
+      Description=Snapshot the Hangout Automator SQLite database
+      RequiresMountsFor=/var/lib/hangout-automator
+
+      [Service]
+      Type=oneshot
+      User=${admin_username}
+      Group=${admin_username}
+      ExecStart=/usr/local/bin/hangout-backup.sh
+      NoNewPrivileges=true
+      PrivateTmp=true
+
+  - path: /etc/systemd/system/hangout-backup.timer
+    owner: root:root
+    permissions: "0644"
+    content: |
+      [Unit]
+      Description=Daily Hangout Automator database snapshot
+
+      [Timer]
+      OnCalendar=daily
+      Persistent=true
+      RandomizedDelaySec=15m
+
+      [Install]
+      WantedBy=timers.target
 
   - path: /etc/cloudflared/token.env
     owner: root:root
@@ -146,6 +201,7 @@ write_files:
       systemctl daemon-reload
       systemctl enable hangout-automator
       systemctl restart hangout-automator
+      systemctl enable --now hangout-backup.timer
 
 runcmd:
   - install -d -m 0755 /usr/share/keyrings /etc/cloudflared

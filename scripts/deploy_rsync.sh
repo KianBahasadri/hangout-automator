@@ -9,9 +9,14 @@ rsync -avz --delete \
   --exclude '.git' \
   --exclude '.venv' \
   --exclude '__pycache__' \
+  --exclude '.pytest_cache' \
+  --exclude '*.egg-info' \
   --exclude '.terraform' \
   --exclude '*.tfstate*' \
-  --exclude 'hangout.db' \
+  --exclude 'terraform.tfvars' \
+  --exclude 'backend.hcl' \
+  --exclude '*.db' \
+  --exclude '*.db-*' \
   --exclude '.env' \
   "$ROOT/" "$HOST:/opt/hangout-automator/"
 

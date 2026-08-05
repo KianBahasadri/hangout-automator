@@ -131,6 +131,25 @@ def test_json_with_valid_signature_accepted(client, db, twilio_settings):
     assert "confirmed" in response.text
 
 
+def test_json_signature_without_body_hash_is_rejected(client, db, twilio_settings):
+    """Twilio always appends bodySHA256 when signing a raw body; without it the
+    validator cannot verify the payload, so the request must be refused rather
+    than raising inside the Twilio SDK."""
+    _setup_invitee(db)
+    body = json.dumps({"From": "+15551112222", "Body": "confirm"})
+
+    response = client.post(
+        WEBHOOK_PATH,
+        content=body,
+        headers={
+            "Content-Type": "application/json",
+            "X-Twilio-Signature": _sign(PUBLIC_BASE_URL + WEBHOOK_PATH, {}),
+        },
+    )
+
+    assert response.status_code == 403
+
+
 def test_invalid_json_is_400(client, db, twilio_settings):
     response = client.post(
         WEBHOOK_PATH,

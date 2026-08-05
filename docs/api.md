@@ -1,6 +1,6 @@
 # API
 
-JSON routes in `app/routers/api.py`, prefix `/api`. Schemas in `app/schemas.py`. OpenAPI UI at `/docs`.
+JSON routes in `app/routers/api.py`, prefix `/api`. Schemas in `app/schemas.py`. OpenAPI UI at `/docs` — served only when `ENABLE_API_DOCS` is true, so `/docs`, `/redoc`, and `/openapi.json` all 404 on deployments (see [local-development.md](./local-development.md)).
 
 ## Endpoints
 
@@ -14,14 +14,14 @@ JSON routes in `app/routers/api.py`, prefix `/api`. Schemas in `app/schemas.py`.
 | POST | `/api/allergies` | 201; same uniqueness rules as tags |
 | DELETE | `/api/allergies/{id}` | 204 |
 | GET | `/api/profiles` | Includes `tags` and `allergies` |
-| POST | `/api/profiles` | 201; phone unique after normalize |
-| PATCH | `/api/profiles/{id}` | Partial update; `tag_ids` / `allergy_ids` replace when present |
+| POST | `/api/profiles` | 201; phone unique after normalize; 400 when the normalized phone is not 8-15 digits |
+| PATCH | `/api/profiles/{id}` | Partial update; `tag_ids` / `allergy_ids` replace when present; same phone validation as create |
 | DELETE | `/api/profiles/{id}` | 204 |
 | GET | `/api/hangouts` | Nested invites + profiles |
 | POST | `/api/hangouts` | Creates **draft** + invite rows; does not send SMS |
 | GET | `/api/hangouts/{id}` | |
 | PATCH | `/api/hangouts/{id}` | Clamps interval/goal/cooldown to allowed option sets |
-| POST | `/api/hangouts/{id}/setup` | Optional body `{ "profile_ids": [...] }` |
+| POST | `/api/hangouts/{id}/setup` | Optional body `{ "profile_ids": [...] }`; an explicit list also **removes** invite rows left out of it that were never messaged (see [invites-and-followups.md](./invites-and-followups.md)) |
 | POST | `/api/hangouts/{id}/close` | Sets `closed` |
 
 ## Profile payloads

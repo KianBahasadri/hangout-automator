@@ -56,7 +56,7 @@ Organizer / notify fields:
 
 ### `app_settings`
 
-Legacy singleton table (`id=1`) may still exist in older databases. The app no longer exposes or uses a global default organizer phone; organizer SMS requires selecting an organizer profile on the hangout.
+Legacy singleton table (`id=1`) may still exist in older databases; it is no longer declared in `models.py` and nothing reads or writes it. Organizer SMS requires selecting an organizer profile on the hangout.
 
 ## Clamped UI/API option sets (`services.py`)
 
@@ -71,7 +71,7 @@ Values outside these sets are clamped to the defaults used at create time.
 `init_db()` → `create_all`, then:
 
 1. **`_ensure_sqlite_columns`** — `ALTER TABLE` add missing hangout notify/`weed_involved` columns; add `profiles.drive`; copy `car_access` → `drive`; set `'unknown'` enum strings to `NULL` where possible
-2. **`_rebuild_profiles_if_needed`** — recreate `profiles` if `drinks`/`smokes` were `NOT NULL` or `car_access` still exists (SQLite cannot drop nullability in place)
+2. **`_rebuild_profiles_if_needed`** — recreate `profiles` if `drinks`/`smokes` were `NOT NULL` or `car_access` still exists (SQLite cannot drop nullability in place). It runs on its **own autocommit connection**, outside the surrounding `engine.begin()` block, because SQLite silently ignores `PRAGMA foreign_keys` inside a transaction: with enforcement left on, `DROP TABLE profiles` does an implicit `DELETE FROM` that cascades into invites, tag links, and allergy links and destroys the data the migration exists to preserve. The table swap still gets its own explicit `BEGIN`/`COMMIT` so a crash mid-rebuild cannot leave the database with no `profiles` table, and the pool is disposed afterwards. Regression coverage: `tests/test_migrations.py`
 3. **`_migrate_legacy_food_allergies`** — split comma/semicolon free-text into `Allergy` rows + M2M links, clear legacy text
 
 Connection PRAGMAs (SQLite): `foreign_keys=ON`, `journal_mode=WAL`, `busy_timeout=5000`.

@@ -31,7 +31,7 @@ Run the test suite (pytest, dev dependency group):
 uv run --group dev pytest
 ```
 
-Open `http://127.0.0.1:9000`. Interactive OpenAPI UI is at `/docs`.
+Open `http://127.0.0.1:9000`. Interactive OpenAPI UI is at `/docs` (served only when `ENABLE_API_DOCS` is true).
 
 ## Environment
 
@@ -42,6 +42,7 @@ Copy `.env.example` as needed. Settings are loaded by `app/config.py` (`pydantic
 | Bind host / port | `APP_HOST` / `APP_PORT` | `0.0.0.0` / `9000` |
 | Database | `DATABASE_URL` | `sqlite:///./hangout.db` |
 | Public URL | `PUBLIC_BASE_URL` | `http://localhost:9000` |
+| OpenAPI UI | `ENABLE_API_DOCS` | `true` (deployments set `false`) |
 | SMS provider | `SMS_PROVIDER` | `mock` (`mock` or `twilio`) |
 | Twilio | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER` | empty |
 | Follow-up delays (hours) | `FOLLOWUP_HOURS` | `24,48` (first `max_followups` values used) |
