@@ -52,9 +52,15 @@ Copy `.env.example` to `.env` or export env vars:
 | `DATABASE_URL` | `sqlite:///./hangout.db` | |
 | `FOLLOWUP_HOURS` | `24,48` | Delays for follow-up 1 and 2 |
 | `ORGANIZER_INTERVAL_HOURS` | `6` | Digest spacing |
-| `PUBLIC_BASE_URL` | `http://localhost:9000` | |
+| `PUBLIC_BASE_URL` | `http://localhost:9000` | Canonical public URL; must match the Twilio console webhook URL when `SMS_PROVIDER=twilio` (signature validation) |
 
 Twilio inbound webhook: `POST /webhooks/sms`
+
+## Tests
+
+```bash
+uv run --group dev pytest
+```
 
 ## API
 

@@ -9,6 +9,8 @@ Providers and phone normalization: `app/sms.py`. Message bodies and reply parsin
 | `mock` (default) | Logs and prints to stdout; always succeeds |
 | `twilio` | Twilio REST `messages.create`; requires account SID, auth token, from number |
 
+App startup fails with a clear error when `SMS_PROVIDER=twilio` is set without all three Twilio credentials (config validated in `app/config.py`); `mock` requires none. Terraform also fails at plan time for the same misconfiguration (see [deploy.md](./deploy.md)).
+
 `send_sms` always writes a `message_logs` row (success or error).
 
 ## Phone normalization
@@ -31,8 +33,9 @@ Providers and phone normalization: `app/sms.py`. Message bodies and reply parsin
 
 `POST /webhooks/sms`
 
-- Accepts JSON (`From`/`from`, `Body`/`body`) or Twilio form fields
-- When `SMS_PROVIDER=twilio` and auth token is set, validates `X-Twilio-Signature` (403 on failure); otherwise skips signature checks
+- Accepts Twilio form fields or JSON (`From`/`from`, `Body`/`body`)
+- When `SMS_PROVIDER=twilio`, validates `X-Twilio-Signature` for **both** form and JSON requests (403 on failure). The signature is verified against the canonical public URL `PUBLIC_BASE_URL + /webhooks/sms` (reverse-proxy aware), so `PUBLIC_BASE_URL` must match the URL configured in the Twilio console. JSON payloads are verified via the `bodySHA256` query parameter Twilio appends to the webhook URL.
+- With `SMS_PROVIDER=mock` (local testing), signatures are skipped and JSON is accepted as-is
 - Missing From → 400
 - Response is always TwiML `<Response><Message>…</Message></Response>` with the auto-reply text
 

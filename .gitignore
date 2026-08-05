@@ -15,7 +15,8 @@ hangout.db
 *.tfstate
 *.tfstate.*
 .terraform/
-.terraform.lock.hcl
 terraform/terraform.tfvars
+terraform/backend.hcl
+terraform/backend.tf
 *.pem
 .DS_Store

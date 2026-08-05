@@ -1,6 +1,7 @@
 from functools import lru_cache
 import logging
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
@@ -23,6 +24,30 @@ class Settings(BaseSettings):
     followup_hours: str = "24,48"
     organizer_interval_hours: int = 6
     max_followups: int = 2
+
+    @model_validator(mode="after")
+    def _validate_sms_config(self) -> "Settings":
+        provider = (self.sms_provider or "mock").lower().strip()
+        if provider not in ("mock", "twilio"):
+            raise ValueError(
+                f"Invalid SMS_PROVIDER {self.sms_provider!r} — must be 'mock' or 'twilio'"
+            )
+        if provider == "twilio":
+            missing = [
+                name
+                for name, value in (
+                    ("TWILIO_ACCOUNT_SID", self.twilio_account_sid),
+                    ("TWILIO_AUTH_TOKEN", self.twilio_auth_token),
+                    ("TWILIO_FROM_NUMBER", self.twilio_from_number),
+                )
+                if not (value or "").strip()
+            ]
+            if missing:
+                raise ValueError(
+                    "SMS_PROVIDER=twilio requires all Twilio credentials: "
+                    + ", ".join(missing)
+                )
+        return self
 
     @property
     def followup_hour_list(self) -> list[float]:

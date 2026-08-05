@@ -15,60 +15,48 @@ resource "azurerm_virtual_network" "main" {
 }
 
 resource "azurerm_subnet" "main" {
-  name                 = "${local.name}-subnet"
-  resource_group_name  = azurerm_resource_group.main.name
-  virtual_network_name = azurerm_virtual_network.main.name
-  address_prefixes     = ["10.20.1.0/24"]
+  name                            = "${local.name}-subnet"
+  resource_group_name             = azurerm_resource_group.main.name
+  virtual_network_name            = azurerm_virtual_network.main.name
+  address_prefixes                = ["10.20.1.0/24"]
+  default_outbound_access_enabled = false
 }
 
-resource "azurerm_public_ip" "main" {
-  name                = "${local.name}-pip"
+# New Azure subnets do not receive implicit outbound internet access. A NAT
+# Gateway provides egress for apt, git, pip, and cloudflared without assigning
+# a public IP to the VM or allowing inbound connections.
+resource "azurerm_public_ip" "nat" {
+  name                = "${local.name}-nat-pip"
   location            = azurerm_resource_group.main.location
   resource_group_name = azurerm_resource_group.main.name
   allocation_method   = "Static"
   sku                 = "Standard"
 }
 
+resource "azurerm_nat_gateway" "main" {
+  name                    = "${local.name}-nat"
+  location                = azurerm_resource_group.main.location
+  resource_group_name     = azurerm_resource_group.main.name
+  sku_name                = "Standard"
+  idle_timeout_in_minutes = 10
+}
+
+resource "azurerm_nat_gateway_public_ip_association" "main" {
+  nat_gateway_id       = azurerm_nat_gateway.main.id
+  public_ip_address_id = azurerm_public_ip.nat.id
+}
+
+resource "azurerm_subnet_nat_gateway_association" "main" {
+  subnet_id      = azurerm_subnet.main.id
+  nat_gateway_id = azurerm_nat_gateway.main.id
+}
+
+# The VM has no public IP and the NSG intentionally has no inbound allow rules.
+# cloudflared establishes the only public path through an outbound tunnel.
 resource "azurerm_network_security_group" "main" {
   name                = "${local.name}-nsg"
   location            = azurerm_resource_group.main.location
   resource_group_name = azurerm_resource_group.main.name
-
-  security_rule {
-    name                       = "SSH"
-    priority                   = 1001
-    direction                  = "Inbound"
-    access                     = "Allow"
-    protocol                   = "Tcp"
-    source_port_range          = "*"
-    destination_port_range     = "22"
-    source_address_prefix      = var.allowed_ssh_cidr
-    destination_address_prefix = "*"
-  }
-
-  security_rule {
-    name                       = "HTTP"
-    priority                   = 1002
-    direction                  = "Inbound"
-    access                     = "Allow"
-    protocol                   = "Tcp"
-    source_port_range          = "*"
-    destination_port_range     = "80"
-    source_address_prefix      = "*"
-    destination_address_prefix = "*"
-  }
-
-  security_rule {
-    name                       = "AppDirect"
-    priority                   = 1003
-    direction                  = "Inbound"
-    access                     = "Allow"
-    protocol                   = "Tcp"
-    source_port_range          = "*"
-    destination_port_range     = "8000"
-    source_address_prefix      = "*"
-    destination_address_prefix = "*"
-  }
 }
 
 resource "azurerm_network_interface" "main" {
@@ -80,7 +68,6 @@ resource "azurerm_network_interface" "main" {
     name                          = "internal"
     subnet_id                     = azurerm_subnet.main.id
     private_ip_address_allocation = "Dynamic"
-    public_ip_address_id          = azurerm_public_ip.main.id
   }
 }
 
@@ -89,12 +76,28 @@ resource "azurerm_network_interface_security_group_association" "main" {
   network_security_group_id = azurerm_network_security_group.main.id
 }
 
+resource "azurerm_managed_disk" "data" {
+  name                 = "${local.name}-data-disk"
+  location             = azurerm_resource_group.main.location
+  resource_group_name  = azurerm_resource_group.main.name
+  storage_account_type = "StandardSSD_LRS"
+  create_option        = "Empty"
+  disk_size_gb         = var.data_disk_size_gb
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
 resource "azurerm_linux_virtual_machine" "main" {
   name                = "${local.name}-vm"
   location            = azurerm_resource_group.main.location
   resource_group_name = azurerm_resource_group.main.name
   size                = var.vm_size
   admin_username      = var.admin_username
+
+  # Ensure cloud-init has NAT-backed egress before it tries apt, git, or pip.
+  depends_on = [azurerm_subnet_nat_gateway_association.main]
 
   network_interface_ids = [
     azurerm_network_interface.main.id,
@@ -112,25 +115,45 @@ resource "azurerm_linux_virtual_machine" "main" {
 
   source_image_reference {
     publisher = "Canonical"
-    offer     = "0001-com-ubuntu-server-jammy"
-    sku       = "22_04-lts-gen2"
+    offer     = "ubuntu-24_04-lts"
+    sku       = "server"
     version   = "latest"
   }
+
+  boot_diagnostics {}
 
   custom_data = base64encode(templatefile("${path.module}/cloud-init.yaml.tftpl", {
     admin_username           = var.admin_username
     git_repo_url             = var.git_repo_url
     git_branch               = var.git_branch
+    git_revision             = var.git_revision
     sms_provider             = var.sms_provider
     twilio_account_sid       = var.twilio_account_sid
     twilio_auth_token        = var.twilio_auth_token
     twilio_from_number       = var.twilio_from_number
     followup_hours           = var.followup_hours
     organizer_interval_hours = var.organizer_interval_hours
-    public_ip                = azurerm_public_ip.main.ip_address
+    public_base_url          = var.public_base_url != "" ? var.public_base_url : "https://${var.cloudflare_hostname}"
+    cloudflare_tunnel_token  = data.cloudflare_zero_trust_tunnel_cloudflared_token.app.token
   }))
+
+  lifecycle {
+    precondition {
+      condition = var.sms_provider != "twilio" || (
+        var.twilio_account_sid != "" && var.twilio_auth_token != "" && var.twilio_from_number != ""
+      )
+      error_message = "sms_provider=twilio requires twilio_account_sid, twilio_auth_token, and twilio_from_number."
+    }
+  }
 
   tags = {
     app = "hangout-automator"
   }
+}
+
+resource "azurerm_virtual_machine_data_disk_attachment" "data" {
+  managed_disk_id    = azurerm_managed_disk.data.id
+  virtual_machine_id = azurerm_linux_virtual_machine.main.id
+  lun                = 0
+  caching            = "ReadWrite"
 }

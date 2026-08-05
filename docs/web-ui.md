@@ -13,7 +13,7 @@ HTML routes: `app/routers/web.py`. Templates: `app/templates/`. Styles/scripts: 
 
 | Method | Path | Page / action |
 |--------|------|----------------|
-| GET | `/` | Hangout list + “New hangout” CTA |
+| GET | `/` | Hangout list; “New hangout” button sits in the right of the page header row |
 | GET/POST | `/profiles` | Profiles page; POST creates profile |
 | POST | `/profiles/{id}/delete` | Delete profile |
 | POST | `/tags` | Create tag → redirect `/profiles` |

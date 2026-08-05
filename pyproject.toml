@@ -23,5 +23,14 @@ dependencies = [
 [project.scripts]
 dev = "app.dev:main"
 
+[dependency-groups]
+dev = [
+    "pytest>=8.3,<9",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
 [tool.setuptools.packages.find]
 include = ["app*"]

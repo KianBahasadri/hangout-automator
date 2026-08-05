@@ -6,10 +6,6 @@ terraform {
       source  = "hashicorp/azurerm"
       version = "~> 4.0"
     }
-    cloudflare = {
-      source  = "cloudflare/cloudflare"
-      version = "~> 5.22"
-    }
   }
 }
 
@@ -17,5 +13,3 @@ provider "azurerm" {
   subscription_id = var.subscription_id
   features {}
 }
-
-provider "cloudflare" {}

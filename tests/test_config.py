@@ -1,0 +1,59 @@
+import pytest
+from pydantic import ValidationError
+
+from app.config import Settings
+from app.sms import MockSmsProvider, TwilioSmsProvider, get_sms_provider
+
+
+def test_mock_default_ok():
+    settings = Settings(sms_provider="mock", _env_file=None)
+    assert settings.sms_provider == "mock"
+
+
+def test_twilio_incomplete_raises():
+    with pytest.raises(ValidationError, match="TWILIO_AUTH_TOKEN"):
+        Settings(
+            sms_provider="twilio",
+            twilio_account_sid="AC123",
+            twilio_from_number="+15005550006",
+            _env_file=None,
+        )
+
+
+def test_twilio_partial_raises_from_sms_module():
+    with pytest.raises(ValidationError, match="TWILIO_FROM_NUMBER"):
+        Settings(
+            sms_provider="twilio",
+            twilio_account_sid="AC123",
+            twilio_auth_token="tok",
+            _env_file=None,
+        )
+
+
+def test_get_sms_provider_selects_expected_provider():
+    mock_settings = Settings(sms_provider="mock", _env_file=None)
+    assert isinstance(get_sms_provider(mock_settings), MockSmsProvider)
+    twilio_settings = Settings(
+        sms_provider="twilio",
+        twilio_account_sid="AC123",
+        twilio_auth_token="tok",
+        twilio_from_number="+15005550006",
+        _env_file=None,
+    )
+    assert isinstance(get_sms_provider(twilio_settings), TwilioSmsProvider)
+
+
+def test_twilio_complete_ok():
+    settings = Settings(
+        sms_provider="twilio",
+        twilio_account_sid="AC123",
+        twilio_auth_token="tok",
+        twilio_from_number="+15005550006",
+        _env_file=None,
+    )
+    assert settings.twilio_auth_token == "tok"
+
+
+def test_invalid_provider_raises():
+    with pytest.raises(ValidationError, match="Invalid SMS_PROVIDER"):
+        Settings(sms_provider="carrier_pigeon", _env_file=None)

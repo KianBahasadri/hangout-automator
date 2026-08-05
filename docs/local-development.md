@@ -25,6 +25,12 @@ Also:
 
 Creates `.venv` (uv or venv), installs `requirements.txt`, sets local defaults, starts Uvicorn on `0.0.0.0:9000` with `--reload`.
 
+Run the test suite (pytest, dev dependency group):
+
+```bash
+uv run --group dev pytest
+```
+
 Open `http://127.0.0.1:9000`. Interactive OpenAPI UI is at `/docs`.
 
 ## Environment
@@ -42,6 +48,8 @@ Copy `.env.example` as needed. Settings are loaded by `app/config.py` (`pydantic
 | Organizer interval fallback | `ORGANIZER_INTERVAL_HOURS` | `6` |
 
 `max_followups` is fixed at `2` in settings. Invalid follow-up hour parts become `24.0`; empty list falls back to `[24.0, 48.0]`.
+
+`SMS_PROVIDER=twilio` without all three Twilio credentials is a startup error (fail-fast); `mock` is the default and needs nothing. `PUBLIC_BASE_URL` is used to validate Twilio webhook signatures when provider is twilio — see [sms-and-rsvp.md](./sms-and-rsvp.md).
 
 `.env`, `*.db`, `.venv`, and Terraform state are gitignored — do not put secrets in docs or commits.
 

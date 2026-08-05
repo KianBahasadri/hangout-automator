@@ -1,15 +1,24 @@
-# Copy to terraform.tfvars and fill in.
+# Optional reference values for a local terraform.tfvars. The wrapper can use
+# the ignored .env and the active Azure CLI without this file.
 
 prefix   = "hangout"
 location = "eastus"
 vm_size  = "Standard_B1s"
+data_disk_size_gb = 32
+
+cloudflare_account_id  = "3d463c39c94a3084cea36fc6ffde8931"
+cloudflare_zone_id     = "be69bba16896a53bf407f8745b9b179d"
+cloudflare_hostname    = "hangout.bahasadri.com"
+cloudflare_tunnel_name = "hangout-automator"
 
 admin_username = "hangout"
 ssh_public_key = "ssh-ed25519 AAAA... your-key"
 
-# Deploy from git (recommended). Leave empty to provision VM only and scp code later.
-git_repo_url = "https://github.com/YOUR_USER/hangout-automator.git"
+# Deploy from git on first boot.
+git_repo_url = "https://github.com/KianBahasadri/hangout-automator.git"
 git_branch   = "main"
+# Optional immutable commit SHA for reproducible releases.
+# git_revision = "0123456789abcdef0123456789abcdef01234567"
 
 # SMS
 sms_provider       = "mock"
@@ -17,4 +26,5 @@ twilio_account_sid = ""
 twilio_auth_token  = ""
 twilio_from_number = ""
 
-allowed_ssh_cidr = "0.0.0.0/0"
+# Canonical public URL for Twilio signatures. Defaults to https://hangout.bahasadri.com.
+# public_base_url = "https://hangout.bahasadri.com"

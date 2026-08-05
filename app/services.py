@@ -315,11 +315,11 @@ def process_inbound_sms(db: Session, from_phone: str, body: str) -> str:
     log_message(db, phone=phone, body=body, direction=MessageDirection.inbound, success=True)
 
     intent = parse_reply_intent(body)
-    # Find most recent active invite for this phone
+    # Find most recent active invite for this phone.
     invite = (
         db.query(HangoutInvite)
-        .join(Profile)
-        .join(Hangout)
+        .join(HangoutInvite.profile)
+        .join(HangoutInvite.hangout)
         .options(joinedload(HangoutInvite.profile), joinedload(HangoutInvite.hangout))
         .filter(Profile.phone == phone)
         .filter(Hangout.status == HangoutStatus.active)
@@ -332,8 +332,8 @@ def process_inbound_sms(db: Session, from_phone: str, body: str) -> str:
         digits = "".join(c for c in phone if c.isdigit())[-10:]
         candidates = (
             db.query(HangoutInvite)
-            .join(Profile)
-            .join(Hangout)
+            .join(HangoutInvite.profile)
+            .join(HangoutInvite.hangout)
             .options(joinedload(HangoutInvite.profile), joinedload(HangoutInvite.hangout))
             .filter(Hangout.status == HangoutStatus.active)
             .order_by(HangoutInvite.id.desc())
