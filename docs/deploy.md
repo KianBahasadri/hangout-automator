@@ -54,6 +54,8 @@ complete boundary:
 - a Cloudflare Tunnel from the VM to `http://127.0.0.1:8000`
 - the Tunnel hostname route and DNS record for the configured zone and
   subdomain
+- the Cloudflare Access applications and policies in front of that hostname
+  (see Access control below)
 - the canonical `PUBLIC_BASE_URL` passed to the app so Twilio signatures match
   the public URL
 
@@ -144,7 +146,8 @@ only through environment variables or a secret manager:
 | Area | Input used by this deployment |
 |------|-------------------------------|
 | Cloudflare | Zone, app hostname, account ID, and zone ID — all in the ignored `.env`, never in this repo |
-| Cloudflare | API token exported as `CLOUDFLARE_API_TOKEN`; it needs Tunnel Edit and DNS Edit permissions |
+| Cloudflare | API token exported as `CLOUDFLARE_API_TOKEN`; it needs Tunnel Edit, DNS Edit, and Access: Apps and Policies Edit permissions |
+| Cloudflare | `CLOUDFLARE_ACCESS_EMAILS` in the ignored `.env` — comma-separated addresses Access admits (see Access control below) |
 | Compute | Azure CLI login, region/VM size, repository URL/branch, and an SSH public key for the VM administrator (not direct public access) |
 | Public URL | `https://<app hostname>`, written to `PUBLIC_BASE_URL` for webhook signature validation |
 | SMS | `mock` by default; Twilio SID/token/number must be injected through secret environment variables before selecting `twilio` |
@@ -189,28 +192,43 @@ machine configuration and Terraform state; use a remote encrypted backend and
 restrict state access. Never commit real credentials, `.env`, Terraform state,
 or private keys.
 
-### Release security gate
+### Access control
 
-Cloudflare Tunnel provides transport and origin hiding, not user
-authentication. This repository's FastAPI app **still has no application
-authentication or rate limiting**, and the requested Cloudflare scope is DNS
-plus Tunnel only (no Access policy), so every route — including the
-profile list and the invite-sending actions — is reachable by anyone who
-knows the hostname. Because hangout `motive` and `notes` become the body of
-the outgoing SMS, an unauthenticated visitor could send text of their own
-choosing from your Twilio number to your contacts.
+The FastAPI app has **no authentication of its own**, so Cloudflare Access is
+the only gate in front of it. Every route — the profile list, the
+invite-sending actions — is reachable by anyone Access lets through. Because
+hangout `motive` and `notes` become the body of the outgoing SMS, someone who
+got past Access could send text of their own choosing from the Twilio number.
 
-Keep `SMS_PROVIDER=mock` until that decision is made and tested. The interim
-hardening below reduces exposure but is **not** a substitute:
+`terraform/access.tf` owns this, so it is applied and reviewed like the rest of
+the boundary:
+
+- `cloudflare_zero_trust_access_policy.owner` — `allow` for each address in
+  `cloudflare_access_allowed_emails` (comma-separated `CLOUDFLARE_ACCESS_EMAILS`
+  in the ignored `.env`; no default, so no personal address is published here).
+  `allowed_idps` is left unset, so any login method on the account satisfies it;
+  one-time PIN works out of the box, with no external identity provider.
+- `cloudflare_zero_trust_access_application.app` — the hostname, 24h session
+- `cloudflare_zero_trust_access_application.webhook` +
+  `cloudflare_zero_trust_access_policy.webhook_bypass` — `bypass` for
+  `/webhooks/sms`. Access matches the most specific path first, so this covers
+  the webhook and the application above covers everything else.
+
+The webhook exception is forced: Twilio cannot attach
+`CF-Access-Client-Id`/`CF-Access-Client-Secret` headers to a webhook, so a
+service token cannot work there. That makes the `X-Twilio-Signature` check in
+`app/routers/webhooks.py` the **only** layer on that path — see
+[sms-and-rsvp.md](./sms-and-rsvp.md) for what it verifies.
+
+Defense in depth beyond Access:
 
 - `ENABLE_API_DOCS=false` on the VM, so `/docs`, `/redoc`, and `/openapi.json`
   do not publish a map of the state-changing endpoints
-- the deployed hostname is not committed to this public repository
-  (`cloudflare_hostname` has no default)
+- `cloudflare_hostname` has no default, so the deployed hostname is not
+  committed here — though earlier commits in this public repository still
+  contain it, so treat it as known
 
-The intended fix is a Cloudflare Access policy on the hostname, with a bypass
-or service-token policy for `/webhooks/sms` so Twilio can still deliver inbound
-replies.
+There is still no rate limiting, and Access does not add any.
 
 ### Backups
 
@@ -247,7 +265,8 @@ remaining external or operator-controlled steps:
 
 1. **Twilio**: provision an SMS-capable phone number; set the messaging webhook to `https://<app hostname>/webhooks/sms` (HTTP POST); inject the three Twilio credentials and select `SMS_PROVIDER=twilio`.
 2. **State**: initialize the chosen remote backend before the first production apply.
-3. **Azure**: `az login`, then review `./scripts/terraform.sh plan` and run `./scripts/terraform.sh apply`.
+3. **Cloudflare Zero Trust**: done for the current deployment account — Zero Trust is enabled (the free tier covers 50 users) and the API token carries Access: Apps and Policies. On a fresh account both are dashboard steps, because editing an API token over the API needs a token carrying User: API Tokens Edit, which a deployment token normally does not have. When adding the permission, put it under an *Account* resource row rather than a zone row; it is an account-level permission group, so a zone-scoped policy silently fails to grant it. To confirm, `GET /client/v4/accounts/<account id>/access/apps` should return `success: true` rather than error `10000`.
+4. **Azure**: `az login`, then review `./scripts/terraform.sh plan` and run `./scripts/terraform.sh apply`.
 
 ## Rsync updates
 
