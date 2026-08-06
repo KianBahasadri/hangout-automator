@@ -120,6 +120,22 @@ soft delete, and an Azure AD `Storage Blob Data Contributor` assignment for the
 current Azure CLI principal. The main root then uses Azure Blob leases for
 state locking.
 
+That account sets `shared_access_key_enabled = false`, so both roots reach the
+blob data plane with an Azure AD token instead: the bootstrap provider sets
+`storage_use_azuread = true` and the generated backend file sets
+`use_azuread_auth = true`. Without the provider setting, the account is created
+and then immediately fails its own post-create probe with "Key based
+authentication is not permitted on this storage account", leaving the resource
+tainted.
+
+The `Storage Blob Data Contributor` assignment is a data-plane role, and Azure
+takes up to a minute or two to propagate it. A `terraform.sh init` run
+immediately after bootstrap can therefore fail with
+`AuthorizationPermissionMismatch`; that is propagation delay, not
+misconfiguration, and re-running `init` a minute later succeeds. Note that
+subscription Owner does not imply blob data access — it covers the service
+properties the provider probes, but not the container the backend writes to.
+
 Bootstrap is the one unavoidable two-phase step: a backend cannot create the
 storage account that stores its own first state. Run the bootstrap plan, review
 it, and apply it once:
@@ -295,7 +311,32 @@ remaining external or operator-controlled steps:
 1. **Twilio**: provision an SMS-capable phone number; inject the three Twilio credentials and select `SMS_PROVIDER=twilio`; then run `./scripts/set_twilio_webhook.py` to register the messaging webhook. Use a number not already serving another app — see [Registering the Twilio webhook](#registering-the-twilio-webhook).
 2. **State**: initialize the chosen remote backend before the first production apply.
 3. **Cloudflare Zero Trust**: done for the current deployment account — Zero Trust is enabled (the free tier covers 50 users) and the API token carries Access: Apps and Policies. On a fresh account both are dashboard steps, because editing an API token over the API needs a token carrying User: API Tokens Edit, which a deployment token normally does not have. When adding the permission, put it under an *Account* resource row rather than a zone row; it is an account-level permission group, so a zone-scoped policy silently fails to grant it. To confirm, `GET /client/v4/accounts/<account id>/access/apps` should return `success: true` rather than error `10000`.
-4. **Azure**: `az login`, then review `./scripts/terraform.sh plan` and run `./scripts/terraform.sh apply`.
+4. **Cloudflare API token write scopes**: Cloudflare grants Read and Edit as
+   separate permission groups, and a plan cannot tell them apart — every
+   resource in it is a create, so nothing is exercised until apply. A token
+   holding only Tunnel Read lists tunnels happily and then fails
+   `POST /cfd_tunnel` with 403 `10000` *during* apply, after the Access
+   applications and most of the Azure network already exist. Probe the writes
+   first; an empty body creates nothing, and 400 means the permission is
+   present and only the body was rejected, while 403 means it is missing:
+
+   ```bash
+   for p in "accounts/$CLOUDFLARE_ACCOUNT_ID/cfd_tunnel" \
+            "accounts/$CLOUDFLARE_ACCOUNT_ID/access/apps" \
+            "zones/$CLOUDFLARE_ZONE_ID/dns_records"; do
+     printf '%s -> ' "$p"
+     curl -s -o /dev/null -w '%{http_code}\n' -X POST \
+       -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+       -H "Content-Type: application/json" -d '{}' \
+       "https://api.cloudflare.com/client/v4/$p"
+   done
+   ```
+
+   Note that `GET /client/v4/user/tokens/verify` returns `Invalid API Token`
+   for an account-owned token even when the token is fine, so it is not a
+   usable health check here. Fixing a missing scope is a dashboard step for the
+   same reason as item 3.
+5. **Azure**: `az login`, then review `./scripts/terraform.sh plan` and run `./scripts/terraform.sh apply`.
 
 ## Rsync updates
 
