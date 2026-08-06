@@ -170,8 +170,37 @@ needed for the default configuration.
 `https://<cloudflare_hostname>` when empty) is written into
 `/etc/hangout-automator.env` and used by the app to validate Twilio webhook
 signatures (see [sms-and-rsvp.md](./sms-and-rsvp.md)). Cloudflare terminates
-public HTTPS and the Tunnel sends HTTP to the local Uvicorn process. Set the
-Twilio webhook to the exact `https://<app hostname>/webhooks/sms` URL.
+public HTTPS and the Tunnel sends HTTP to the local Uvicorn process. The Twilio
+webhook must be the exact `https://<app hostname>/webhooks/sms` URL — a
+mismatched base URL produces a valid-looking request whose signature never
+verifies.
+
+### Registering the Twilio webhook
+
+`./scripts/set_twilio_webhook.py` sets it over the Twilio REST API instead of
+the console, using the `twilio` SDK the app already depends on. It resolves the
+number's SID from `TWILIO_FROM_NUMBER`, sets `SmsUrl`, and re-reads the number
+to confirm the value Twilio actually stored. Re-running it once the URL is
+correct is a no-op, and it re-execs into `.venv` if invoked with an interpreter
+that lacks the SDK.
+
+It builds the URL from `Settings.public_base_url` and the webhooks router rather
+than from its own string handling, so the registered value is exactly what
+`_canonical_webhook_url` reconstructs during signature verification. It refuses
+to run while `PUBLIC_BASE_URL` still points at localhost, since the default
+would otherwise register a URL Twilio cannot reach.
+
+This is not managed in Terraform. The only provider that covers it is a
+community 0.x one whose `twilio_phone_number` delete path calls
+`IncomingPhoneNumber.Delete()`, which *releases* the number, and which would
+need Twilio credentials that can spend money — too much blast radius for a
+single URL field.
+
+Twilio permits exactly one `SmsUrl` per number, so pointing a number at this app
+takes it away from anything else using it. The script refuses to overwrite a
+non-empty webhook unless `--force` is passed, and `--dry-run` reports what it
+would do. It also fails fast when the number carries an `SmsApplicationSid`,
+because that binding silently overrides `SmsUrl`.
 
 ### cloud-init
 
@@ -263,7 +292,7 @@ in Azure and must be deleted by hand once you are sure.
 The normal Azure/Cloudflare resources are automated by Terraform. These are the
 remaining external or operator-controlled steps:
 
-1. **Twilio**: provision an SMS-capable phone number; set the messaging webhook to `https://<app hostname>/webhooks/sms` (HTTP POST); inject the three Twilio credentials and select `SMS_PROVIDER=twilio`.
+1. **Twilio**: provision an SMS-capable phone number; inject the three Twilio credentials and select `SMS_PROVIDER=twilio`; then run `./scripts/set_twilio_webhook.py` to register the messaging webhook. Use a number not already serving another app — see [Registering the Twilio webhook](#registering-the-twilio-webhook).
 2. **State**: initialize the chosen remote backend before the first production apply.
 3. **Cloudflare Zero Trust**: done for the current deployment account — Zero Trust is enabled (the free tier covers 50 users) and the API token carries Access: Apps and Policies. On a fresh account both are dashboard steps, because editing an API token over the API needs a token carrying User: API Tokens Edit, which a deployment token normally does not have. When adding the permission, put it under an *Account* resource row rather than a zone row; it is an account-level permission group, so a zone-scoped policy silently fails to grant it. To confirm, `GET /client/v4/accounts/<account id>/access/apps` should return `success: true` rather than error `10000`.
 4. **Azure**: `az login`, then review `./scripts/terraform.sh plan` and run `./scripts/terraform.sh apply`.
