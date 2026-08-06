@@ -8,14 +8,15 @@ the ignored `.env` is loaded and dotenv values are mapped to Terraform inputs.
 
 Provisions roughly: resource group, VNet `10.20.0.0/16`, private subnet
 `10.20.1.0/24`, an NSG with no inbound allow rules, an Ubuntu 24.04 LTS Gen2
-VM (default size `Standard_B1s`, admin user `hangout`), a remotely managed
+VM (default size `Standard_B2ats_v2`, admin user `hangout`), a remotely managed
 Cloudflare Tunnel, its hostname route, and the app hostname's CNAME.
 The VM has no public IP; an Azure NAT Gateway supplies outbound-only access for
 first-boot package installation and `cloudflared`, and a separate managed disk
 holds the SQLite database.
 
 Notable variables (`variables.tf` / `terraform.tfvars.example`): `prefix`,
-`location` (default `eastus`), required `ssh_public_key`, required Cloudflare
+`location` (default `mexicocentral`, see [Region and VM size
+capacity](#region-and-vm-size-capacity)), required `ssh_public_key`, required Cloudflare
 account id, zone id, and `cloudflare_hostname`, optional `git_repo_url` /
 `git_branch` (default `main`), optional pinned `git_revision`, SMS/Twilio
 settings, `public_base_url`, `followup_hours`, and `organizer_interval_hours`.
@@ -136,6 +137,25 @@ misconfiguration, and re-running `init` a minute later succeeds. Note that
 subscription Owner does not imply blob data access — it covers the service
 properties the provider probes, but not the container the backend writes to.
 
+A `plan` holds the same blob-lease lock as an `apply`, so a plan that is
+killed mid-run (closed terminal, laptop sleep) leaves the state locked and
+every later command fails with "state blob is already locked". Confirm no
+terraform process is actually still running, then clear it once:
+`./scripts/terraform.sh force-unlock -force <lock ID from the error>`.
+
+Resuming an interrupted apply can hit ARM propagation lag as two
+benign-looking failures. A freshly created VNet can answer 404
+(`ResourceNotFound`) for a few moments after Azure reports it created, so
+`azurerm_subnet.main` fails while "waiting for provisioning state" —
+re-running the `apply` a minute later just continues. The same 404 wave
+during an apply's refresh can silently drop a real, still-existing resource
+(seen with the NSG) from state; the next apply then dies with "A resource
+with the ID ... already exists — to be managed via Terraform this resource
+needs to be imported". That one does not heal by retrying: re-import it
+(`./scripts/terraform.sh import <addr> <id from the error>`), then apply
+again. A failed apply also makes a saved plan file stale, so re-plan rather
+than reusing an old `tfplan`.
+
 Bootstrap is the one unavoidable two-phase step: a backend cannot create the
 storage account that stores its own first state. Run the bootstrap plan, review
 it, and apply it once:
@@ -153,6 +173,93 @@ After that, `scripts/terraform.sh apply` refuses to run unless the remote
 backend file exists. The bootstrap root has its own local state until you move
 that state to a separately managed backend; protect that small bootstrap state
 file and do not commit it.
+
+### Region and VM size capacity
+
+Neither of the two constraints below is visible to Terraform. `location` and
+`vm_size` are plain strings that no provider validates during plan, so both
+failures land mid-apply — as a 409 `SkuNotAvailable` or a 403
+`RequestDisallowedByAzure` raised while creating resources, after the network
+and every Cloudflare resource already exist. Check both before changing either
+variable.
+
+**1. The subscription is fenced to an allowlist of regions.** An Azure Policy
+named "Allowed resource deployment regions" rejects everything else. Read the
+current list rather than assuming it:
+
+```bash
+az policy assignment list --disable-scope-strict-match \
+  --query "[?displayName=='Allowed resource deployment regions'].parameters" -o json
+```
+
+For this subscription that is `centralus`, `eastus`, `canadacentral`,
+`eastus2`, `mexicocentral`. A region outside it fails at *every* resource, not
+just the VM — the resource group is created, then the NAT gateway, NSG, and
+disk all 403 together.
+
+**2. Within the allowlist, capacity still varies by size.** The entire
+B-series is `NotAvailableForSubscription` in four of those five regions.
+Only `mexicocentral` will schedule a burstable size, which is why `location`
+defaults to it despite being the furthest away — the alternative is roughly
+six times the price for a non-burstable size:
+
+| Region | Size | vCPU / RAM | ~USD/month |
+|--------|------|-----------|------------|
+| `mexicocentral` | `Standard_B2ats_v2` | 2 / 1 GB | 7.52 |
+| `eastus` / `eastus2` / `centralus` | `Standard_F1als_v7` | 1 / 2 GB | 44.16 |
+| `eastus` | `Standard_D2s_v7` | 2 / 8 GB | 96.36 |
+
+Inspect restrictions by **type**, not merely by presence — the distinction
+decides whether a size is usable:
+
+```bash
+az vm list-skus -l <region> --resource-type virtualMachines --all \
+  --query "[?name=='<size>'].{name:name, restrictions:restrictions}" -o json
+```
+
+A `Location` restriction blocks the size outright. A `Zone` restriction only
+blocks the listed zones, and this VM is deliberately non-zonal, so regional
+allocation still succeeds — `Standard_B2ats_v2` is restricted in
+`mexicocentral` zone 3 and deploys fine. Also confirm
+`CpuArchitectureType` is `x64`: the image reference pins the non-ARM `server`
+SKU, so an ARM size (`*p*_v2`, e.g. `Standard_B2pts_v2`) would need
+`server-arm64` instead.
+
+A size can also be listed with no price in a region even when it is
+unrestricted there — `Standard_B2ts_v2` returns no `mexicocentral` retail
+price while its AMD sibling `Standard_B2ats_v2` does. Treat a missing price as
+a sign the size is not really sold there and pick one that quotes.
+
+Current prices come from the public retail API, which needs no credentials:
+
+```bash
+curl -s -G https://prices.azure.com/api/retail/prices \
+  --data-urlencode "\$filter=serviceName eq 'Virtual Machines' and armRegionName eq 'mexicocentral' and armSkuName eq 'Standard_B2ats_v2' and priceType eq 'Consumption'"
+```
+
+Changing `location` after an apply replaces every Azure resource, and two
+things make that more than a normal replace:
+
+- `azurerm_subnet.main` plans as a **no-op**. It has no `location` of its own
+  and its name and parent names do not change, so Terraform sees no diff — but
+  Azure deletes it along with the resource group, and the NIC then fails to
+  find it. Force it: `./scripts/terraform.sh plan -replace=azurerm_subnet.main`.
+- `azurerm_managed_disk.data` carries `prevent_destroy = true`, so the plan is
+  refused outright. If the disk holds real data, back it up per
+  [Backups](#backups) first. Only when it is genuinely empty, drop it from
+  state: `./scripts/terraform.sh state rm azurerm_managed_disk.data`.
+
+  Dropping it from state is not enough on its own. The disk still exists in
+  Azure, and the AzureRM provider defaults
+  `prevent_deletion_if_contains_resources` to true, so destroying the resource
+  group fails with "the Resource Group still contains Resources" — after
+  spending about ten minutes on the attempt, since the guard is checked at the
+  end. Delete the orphan first (`az disk delete -g <rg> -n <disk> --yes`), then
+  re-plan. That guard is worth keeping: it is what stops a `state rm` from
+  quietly taking a real database down with the resource group.
+
+The Cloudflare resources are unaffected by a region change — the tunnel keeps
+its ID and token, so the DNS record and Access policies stay in place.
 
 ### Deployment inputs and secret handling
 
@@ -336,7 +443,33 @@ remaining external or operator-controlled steps:
    for an account-owned token even when the token is fine, so it is not a
    usable health check here. Fixing a missing scope is a dashboard step for the
    same reason as item 3.
+
+   The tunnel permission is not listed under the name the product now uses.
+   In the token editor it is **Cloudflare One / Zero Trust → `Argo Tunnel
+   (Legacy)`**, which is the original name for what Cloudflare rebranded as
+   Cloudflare Tunnel; it still gates the `cfd_tunnel` endpoints. Its
+   description reads "Grants access to view Cloudflare Tunnels" because that
+   describes the Read box — tick **Edit**, which implies Read. The nearby
+   `Connectivity Directory` entry also mentions tunnels but is Magic WAN and
+   grants nothing here.
 5. **Azure**: `az login`, then review `./scripts/terraform.sh plan` and run `./scripts/terraform.sh apply`.
+
+### Verifying a fresh deploy
+
+The VM has no inbound access, so smoke-test from two directions. On the VM,
+via Run Command — cloud-init should report `status: done` with no errors, all
+three units active, and the app answering locally:
+
+```bash
+az vm run-command invoke -g <rg> -n <vm> --command-id RunShellScript \
+  --scripts "cloud-init status --long; systemctl is-active hangout-automator cloudflared hangout-backup.timer; curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8000/" \
+  --query "value[0].message" -o tsv
+```
+
+Externally, `GET https://<hostname>/webhooks/sms` should return **405** from
+the app itself — that one response proves DNS, the tunnel, the Access bypass
+exception, and Uvicorn all at once. `GET /` should redirect (302) to the
+Cloudflare Access login and never serve the app.
 
 ## Rsync updates
 

@@ -15,16 +15,24 @@ variable "subscription_id" {
   }
 }
 
+# Two separate constraints pin this, and both are subscription-specific. An
+# Azure Policy limits deployment to centralus/eastus/canadacentral/eastus2/
+# mexicocentral, and of those only mexicocentral will schedule a burstable size
+# — everywhere else the whole B-series is restricted, leaving sizes that cost
+# roughly six times as much. See docs/deploy.md "Region and VM size capacity"
+# before changing either of these.
 variable "location" {
   description = "Azure region"
   type        = string
-  default     = "eastus"
+  default     = "mexicocentral"
 }
 
+# B2ats_v2 is restricted only in mexicocentral zone 3, and this VM is
+# deliberately non-zonal, so regional allocation is unaffected.
 variable "vm_size" {
   description = "Cheap burstable VM size"
   type        = string
-  default     = "Standard_B1s"
+  default     = "Standard_B2ats_v2"
 }
 
 variable "data_disk_size_gb" {

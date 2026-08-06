@@ -1,9 +1,11 @@
 # Optional reference values for a local terraform.tfvars. The wrapper can use
 # the ignored .env and the active Azure CLI without this file.
 
+# Region and size are constrained by subscription policy and capacity, not
+# preference. See docs/deploy.md "Region and VM size capacity" before editing.
 prefix   = "hangout"
-location = "eastus"
-vm_size  = "Standard_B1s"
+location = "mexicocentral"
+vm_size  = "Standard_B2ats_v2"
 data_disk_size_gb = 32
 
 # Account and zone IDs are 32-char hex values from the Cloudflare dashboard.
