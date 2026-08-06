@@ -7,6 +7,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from app.config import get_settings
+from app.event_logging import audit_event
 from app.messages import (
     craft_followup_message,
     craft_invite_message,
@@ -24,7 +25,7 @@ from app.models import (
     MessageLog,
     Profile,
 )
-from app.sms import get_sms_provider, normalize_phone
+from app.sms import get_sms_provider, is_valid_phone, normalize_phone
 
 logger = logging.getLogger(__name__)
 
@@ -228,14 +229,83 @@ def send_sms(
     invite_id: int | None = None,
     hangout_id: int | None = None,
 ) -> tuple[bool, str | None]:
-    provider = get_sms_provider()
     phone = normalize_phone(to)
-    ok, err = provider.send(phone, body)
+    if not is_valid_phone(phone):
+        error = "Destination phone number is not usable"
+        log_message(
+            db,
+            phone=phone,
+            body=body,
+            direction=MessageDirection.outbound,
+            success=False,
+            error=error,
+            invite_id=invite_id,
+            hangout_id=hangout_id,
+        )
+        audit_event(
+            "sms.outbound.rejected",
+            level=logging.WARNING,
+            to=phone,
+            body=body,
+            reason="invalid_destination_phone",
+            error=error,
+            invite_id=invite_id,
+            hangout_id=hangout_id,
+        )
+        return False, error
+
+    provider = get_sms_provider()
+    provider_name = type(provider).__name__
+    audit_event(
+        "sms.outbound.started",
+        provider=provider_name,
+        to=phone,
+        body=body,
+        invite_id=invite_id,
+        hangout_id=hangout_id,
+    )
+    try:
+        ok, err = provider.send(phone, body)
+    except Exception as exc:
+        error = str(exc)
+        log_message(
+            db,
+            phone=phone,
+            body=body,
+            direction=MessageDirection.outbound,
+            success=False,
+            error=error,
+            invite_id=invite_id,
+            hangout_id=hangout_id,
+        )
+        audit_event(
+            "sms.outbound.failed",
+            level=logging.ERROR,
+            exc_info=True,
+            provider=provider_name,
+            to=phone,
+            body=body,
+            invite_id=invite_id,
+            hangout_id=hangout_id,
+            exception_type=type(exc).__name__,
+            exception_message=error,
+        )
+        raise
     log_message(
         db,
         phone=phone,
         body=body,
         direction=MessageDirection.outbound,
+        success=ok,
+        error=err,
+        invite_id=invite_id,
+        hangout_id=hangout_id,
+    )
+    audit_event(
+        "sms.outbound.completed",
+        provider=provider_name,
+        to=phone,
+        body=body,
         success=ok,
         error=err,
         invite_id=invite_id,
@@ -263,15 +333,34 @@ def load_hangout(db: Session, hangout_id: int) -> Hangout | None:
 
 def setup_hangout(db: Session, hangout: Hangout, profile_ids: list[int] | None = None) -> Hangout:
     """Activate hangout and send invite SMS to selected (or existing) invitees."""
+    audit_event(
+        "hangout.setup.started",
+        hangout_id=hangout.id,
+        current_status=hangout.status,
+        requested_profile_ids=profile_ids,
+    )
     if hangout.status == HangoutStatus.closed:
+        audit_event(
+            "hangout.setup.rejected",
+            hangout_id=hangout.id,
+            reason="hangout_closed",
+        )
         raise ValueError("Hangout is closed")
 
     ids = profile_ids if profile_ids is not None else [i.profile_id for i in hangout.invites]
     if not ids:
+        audit_event(
+            "hangout.setup.rejected",
+            hangout_id=hangout.id,
+            reason="no_profiles_selected",
+        )
         raise ValueError("Select at least one profile to invite")
 
     existing = {inv.profile_id: inv for inv in hangout.invites}
     now = utcnow()
+    sms_attempts = 0
+    sms_successes = 0
+    sms_failures = 0
 
     if profile_ids is not None:
         # Rows for people left out of an explicit selection who have never been
@@ -310,29 +399,49 @@ def setup_hangout(db: Session, hangout: Hangout, profile_ids: list[int] | None =
             continue
 
         body = craft_invite_message(hangout, profile)
+        sms_attempts += 1
         ok, err = send_sms(db, to=profile.phone, body=body, invite_id=inv.id, hangout_id=hangout.id)
         inv.last_outbound_at = now
         inv.followups_sent = 0
         if ok:
             inv.status = InviteStatus.pending
+            sms_successes += 1
         else:
             inv.status = InviteStatus.failed_send
+            sms_failures += 1
             logger.warning("Invite SMS failed for profile %s: %s", pid, err)
 
     hangout.status = HangoutStatus.active
     hangout.activated_at = hangout.activated_at or now
     db.commit()
+    audit_event(
+        "hangout.setup.completed",
+        hangout_id=hangout.id,
+        invited_profile_ids=ids,
+        sms_attempts=sms_attempts,
+        sms_successes=sms_successes,
+        sms_failures=sms_failures,
+        status=hangout.status,
+    )
     return load_hangout(db, hangout.id)  # type: ignore[return-value]
 
 
 def process_inbound_sms(db: Session, from_phone: str, body: str) -> str:
     """Handle invitee reply. Returns auto-response text; "" means reply with nothing."""
     reply = _handle_inbound_sms(db, from_phone, body)
-    if is_opt_out(body):
+    opt_out = is_opt_out(body)
+    if opt_out:
         # The carrier and Twilio have already blocked this number and send their
         # own opt-out confirmation. Anything we reply is undeliverable (Twilio
         # error 21610), so record the decline and stay quiet.
-        return ""
+        reply = ""
+    audit_event(
+        "sms.inbound.processed",
+        from_phone=normalize_phone(from_phone),
+        body=body,
+        reply=reply,
+        opt_out=opt_out,
+    )
     return reply
 
 
@@ -341,6 +450,12 @@ def _handle_inbound_sms(db: Session, from_phone: str, body: str) -> str:
     log_message(db, phone=phone, body=body, direction=MessageDirection.inbound, success=True)
 
     intent = parse_reply_intent(body)
+    audit_event(
+        "sms.inbound.received",
+        from_phone=phone,
+        body=body,
+        parsed_intent=intent,
+    )
     # A reply is almost always about the last text this person received, so rank
     # by most recent outbound before falling back to newest invite.
     recency = (
@@ -378,10 +493,23 @@ def _handle_inbound_sms(db: Session, from_phone: str, body: str) -> str:
 
     if invite is None:
         db.commit()
+        audit_event(
+            "sms.inbound.unmatched",
+            from_phone=phone,
+            body=body,
+            parsed_intent=intent,
+        )
         return "Thanks! We couldn't match this number to an active hangout invite."
 
     if intent is None:
         db.commit()
+        audit_event(
+            "sms.inbound.unrecognized",
+            from_phone=phone,
+            body=body,
+            invite_id=invite.id,
+            hangout_id=invite.hangout_id,
+        )
         return "Reply CONFIRM to confirm, REMIND for a reminder, or NO to decline."
 
     prev_status = invite.status
@@ -409,6 +537,18 @@ def _handle_inbound_sms(db: Session, from_phone: str, body: str) -> str:
         reply = f"You're marked as not coming for hangout #{invite.hangout_id}."
 
     db.commit()
+
+    audit_event(
+        "rsvp.status_changed",
+        from_phone=phone,
+        body=body,
+        parsed_intent=intent,
+        invite_id=invite.id,
+        hangout_id=invite.hangout_id,
+        profile_id=invite.profile_id,
+        previous_status=prev_status,
+        new_status=invite.status,
+    )
 
     # Threshold organizer notify based on hangout preferences
     hangout = load_hangout(db, invite.hangout_id)
@@ -452,6 +592,12 @@ def process_followups(db: Session) -> int:
     budget = min(settings.max_followups, len(delays))
     now = utcnow()
     sent = 0
+    audit_event(
+        "followups.scan.started",
+        at=now,
+        delays_hours=delays,
+        budget=budget,
+    )
 
     invites = (
         db.query(HangoutInvite)
@@ -476,7 +622,16 @@ def process_followups(db: Session) -> int:
             # no_response in the same pass that texted them.
             grace = delays[-1] if delays else 24.0
             if now >= last + timedelta(hours=grace):
+                previous_status = inv.status
                 inv.status = InviteStatus.no_response
+                audit_event(
+                    "followup.invite_marked_no_response",
+                    invite_id=inv.id,
+                    hangout_id=inv.hangout_id,
+                    profile_id=inv.profile_id,
+                    previous_status=previous_status,
+                    new_status=inv.status,
+                )
             continue
 
         next_delay = delays[inv.followups_sent]
@@ -505,6 +660,12 @@ def process_followups(db: Session) -> int:
             )
 
     db.commit()
+    audit_event(
+        "followups.scan.completed",
+        at=now,
+        candidate_count=len(invites),
+        sent_count=sent,
+    )
     return sent
 
 
@@ -512,6 +673,7 @@ def process_organizer_intervals(db: Session) -> int:
     settings = get_settings()
     now = utcnow()
     sent = 0
+    audit_event("organizer_intervals.scan.started", at=now)
     hangouts = (
         db.query(Hangout)
         .options(
@@ -552,4 +714,10 @@ def process_organizer_intervals(db: Session) -> int:
             h.last_digest_fingerprint = fingerprint
             sent += 1
     db.commit()
+    audit_event(
+        "organizer_intervals.scan.completed",
+        at=now,
+        candidate_count=len(hangouts),
+        sent_count=sent,
+    )
     return sent

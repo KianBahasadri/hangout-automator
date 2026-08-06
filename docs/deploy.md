@@ -330,7 +330,7 @@ because that binding silently overrides `SmsUrl`.
 Template `cloud-init.yaml.tftpl`:
 
 - Installs Python, git, and `cloudflared` from Cloudflare's apt repo
-- Writes `/etc/hangout-automator.env` (app on `127.0.0.1:8000`, DB `sqlite:////var/lib/hangout-automator/app.db`, `ENABLE_API_DOCS=false`, SMS settings from Terraform)
+- Writes `/etc/hangout-automator.env` (app on `127.0.0.1:8000`, DB `sqlite:////var/lib/hangout-automator/app.db`, `ENABLE_API_DOCS=false`, SMS settings from Terraform, and `LOG_*` settings for `/var/lib/hangout-automator/logs/server.log`)
 - systemd unit `hangout-automator.service` running Uvicorn, with
   `RequiresMountsFor=/var/lib/hangout-automator` so the app refuses to start
   without the data disk instead of silently creating an empty SQLite file on
@@ -392,6 +392,10 @@ keeps the newest 7.
 It uses `sqlite3 .backup` rather than copying the file: the database runs in WAL
 mode, so committed rows can still live in the `-wal` sidecar and a plain `cp`
 can capture a database that is missing them.
+
+The backup contains the database only. The rotating audit log remains on the
+same data disk at `/var/lib/hangout-automator/logs/` and is not included in
+these snapshots; copy it separately when preserving the trace history.
 
 Scope: this protects against application-level corruption, a bad migration, or
 deleting rows by accident. It is **not** off-site — the snapshots sit on the

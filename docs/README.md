@@ -3,6 +3,7 @@
 - [functional-specification.md](./functional-specification.md) — Product MVP requirements (hand-written; what the system should do)
 - [overview.md](./overview.md) — Runtime architecture, shared-data assumptions, and package layout
 - [local-development.md](./local-development.md) — Stack, env vars, and how to run locally
+- [logging.md](./logging.md) — Verbose JSONL event logging, trace IDs, retention, and operations
 - [data-model.md](./data-model.md) — SQLAlchemy models, enums, SQLite ensure/migrate helpers
 - [web-ui.md](./web-ui.md) — HTML routes, templates, and UI patterns
 - [api.md](./api.md) — JSON REST API under `/api`

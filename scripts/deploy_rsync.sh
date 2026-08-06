@@ -10,6 +10,7 @@ rsync -avz --delete \
   --exclude '.venv' \
   --exclude '__pycache__' \
   --exclude '.pytest_cache' \
+  --exclude 'logs/' \
   --exclude '*.egg-info' \
   --exclude '.terraform' \
   --exclude '*.tfstate*' \

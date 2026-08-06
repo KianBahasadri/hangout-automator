@@ -20,6 +20,15 @@ class Settings(BaseSettings):
     # the state-changing endpoints.
     enable_api_docs: bool = True
 
+    # The application writes a structured JSONL audit stream in addition to
+    # the console/journal stream. Deployments place this on the persistent data
+    # disk; local development keeps it under the repository's logs/ directory.
+    log_file: str = "logs/server.log"
+    log_level: str = "INFO"
+    log_max_bytes: int = 50_000_000
+    log_backup_count: int = 10
+    log_body_max_bytes: int = 262_144
+
     sms_provider: str = "mock"  # mock | twilio
     twilio_account_sid: str = ""
     twilio_auth_token: str = ""

@@ -11,7 +11,12 @@ Providers and phone normalization: `app/sms.py`. Message bodies and reply parsin
 
 App startup fails with a clear error when `SMS_PROVIDER=twilio` is set without all three Twilio credentials (config validated in `app/config.py`); `mock` requires none. Terraform also fails at plan time for the same misconfiguration (see [deploy.md](./deploy.md)).
 
-`send_sms` always writes a `message_logs` row (success or error).
+`send_sms` always writes a `message_logs` row (success or error, including a
+provider exception). It also performs a final destination check immediately
+before provider lookup/send: the normalized number must have a leading `+` and
+8–15 digits. Invalid destinations are rejected without invoking the SMS
+provider, recorded as an unsuccessful message, and emitted as an
+`sms.outbound.rejected` audit event.
 
 ## Phone normalization
 

@@ -17,6 +17,7 @@ Entry points: `app.main:app` (Uvicorn) and console script `dev` → `app.dev:mai
 ```
 app/
   main.py           FastAPI app, static mount, scheduler
+  event_logging.py  JSONL audit file, correlation IDs, HTTP trace middleware
   config.py         pydantic-settings
   database.py       engine, sessions, SQLite ensure/migrate
   models.py         ORM + enums

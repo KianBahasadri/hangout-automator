@@ -16,6 +16,11 @@ write_files:
       APP_HOST=127.0.0.1
       APP_PORT=8000
       DATABASE_URL=sqlite:////var/lib/hangout-automator/app.db
+      LOG_FILE=/var/lib/hangout-automator/logs/server.log
+      LOG_LEVEL=INFO
+      LOG_MAX_BYTES=50000000
+      LOG_BACKUP_COUNT=10
+      LOG_BODY_MAX_BYTES=262144
       PUBLIC_BASE_URL=${public_base_url}
       ENABLE_API_DOCS=false
       SMS_PROVIDER=${sms_provider}
@@ -46,6 +51,7 @@ write_files:
       ExecStart=/opt/hangout-automator/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
       Restart=always
       RestartSec=5
+      UMask=0077
       NoNewPrivileges=true
       PrivateTmp=true
 

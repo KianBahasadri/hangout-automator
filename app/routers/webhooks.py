@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.database import get_db
+from app.event_logging import BodyCapture, audit_event
 from app.services import process_inbound_sms
 
 logger = logging.getLogger(__name__)
@@ -76,28 +77,94 @@ async def inbound_sms(request: Request, db: Session = Depends(get_db)) -> Respon
     content_type = request.headers.get("content-type", "")
 
     phone, text = "", ""
+    signature_valid: bool | None = None
+    signature_required = (
+        (get_settings().sms_provider or "mock").lower().strip() == "twilio"
+        and bool(get_settings().twilio_auth_token)
+    )
     if "application/json" in content_type:
         raw = await request.body()
         try:
             data = json.loads(raw or b"{}")
         except json.JSONDecodeError:
+            captured = BodyCapture(get_settings().log_body_max_bytes)
+            captured.add(raw)
+            body_fields = captured.fields(content_type)
+            audit_event(
+                "sms.webhook.rejected",
+                reason="invalid_json",
+                content_type=content_type,
+                raw_body=body_fields.get("body", ""),
+                raw_body_bytes=body_fields["bytes"],
+                raw_body_sha256=body_fields["sha256"],
+                raw_body_truncated=body_fields["truncated"],
+            )
             return Response(status_code=400, content="Invalid JSON")
-        if not _valid_twilio_request(request, raw.decode("utf-8", "replace")):
-            logger.warning("Rejected webhook with invalid Twilio signature")
-            return Response(status_code=403, content="Invalid Twilio signature")
         phone = str(data.get("From") or data.get("from") or "")
         text = str(data.get("Body") or data.get("body") or "")
+        signature_valid = _valid_twilio_request(request, raw.decode("utf-8", "replace"))
+        audit_event(
+            "sms.webhook.received",
+            content_type=content_type,
+            from_phone=phone,
+            body=text,
+            signature_required=signature_required,
+            signature_present=bool(request.headers.get("X-Twilio-Signature")),
+            signature_valid=signature_valid,
+        )
+        if not signature_valid:
+            logger.warning("Rejected webhook with invalid Twilio signature")
+            audit_event(
+                "sms.webhook.rejected",
+                reason="invalid_twilio_signature",
+                from_phone=phone,
+                body=text,
+                signature_required=signature_required,
+            )
+            return Response(status_code=403, content="Invalid Twilio signature")
     else:
         form = await request.form()
-        if not _valid_twilio_request(request, dict(form)):
-            logger.warning("Rejected webhook with invalid Twilio signature")
-            return Response(status_code=403, content="Invalid Twilio signature")
         phone = str(form.get("From") or form.get("from") or "")
         text = str(form.get("Body") or form.get("body") or "")
+        signature_valid = _valid_twilio_request(request, dict(form))
+        audit_event(
+            "sms.webhook.received",
+            content_type=content_type,
+            from_phone=phone,
+            body=text,
+            signature_required=signature_required,
+            signature_present=bool(request.headers.get("X-Twilio-Signature")),
+            signature_valid=signature_valid,
+        )
+        if not signature_valid:
+            logger.warning("Rejected webhook with invalid Twilio signature")
+            audit_event(
+                "sms.webhook.rejected",
+                reason="invalid_twilio_signature",
+                from_phone=phone,
+                body=text,
+                signature_required=signature_required,
+            )
+            return Response(status_code=403, content="Invalid Twilio signature")
 
     if not phone:
+        audit_event(
+            "sms.webhook.rejected",
+            reason="missing_from",
+            body=text,
+            signature_required=signature_required,
+            signature_valid=signature_valid,
+        )
         return Response(status_code=400, content="Missing From")
 
     logger.info("Inbound SMS from=%s body=%s", phone, text)
     reply = process_inbound_sms(db, phone, text)
+    audit_event(
+        "sms.webhook.completed",
+        from_phone=phone,
+        body=text,
+        reply=reply,
+        signature_required=signature_required,
+        signature_valid=signature_valid,
+    )
     return _twiml(reply)
