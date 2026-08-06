@@ -228,7 +228,10 @@ SKU, so an ARM size (`*p*_v2`, e.g. `Standard_B2pts_v2`) would need
 A size can also be listed with no price in a region even when it is
 unrestricted there — `Standard_B2ts_v2` returns no `mexicocentral` retail
 price while its AMD sibling `Standard_B2ats_v2` does. Treat a missing price as
-a sign the size is not really sold there and pick one that quotes.
+an ambiguity, not proof that the size cannot allocate: Azure's capacity error
+is authoritative. On 2026-08-06, `Standard_B2ats_v2` returned
+`AllocationFailed` in `mexicocentral` and Azure explicitly offered
+`Standard_B2ts_v2`, which then deployed successfully.
 
 Current prices come from the public retail API, which needs no credentials:
 
@@ -260,6 +263,41 @@ things make that more than a normal replace:
 
 The Cloudflare resources are unaffected by a region change — the tunnel keeps
 its ID and token, so the DNS record and Access policies stay in place.
+
+### Recovering a failed VM replacement
+
+Changing the VM `custom_data` (including the cloud-init logging configuration)
+forces a VM replacement. That causes application downtime while Azure destroys
+the old VM and creates the new one. The managed database disk has
+`prevent_destroy`, but its attachment is destroyed and re-created as part of
+the replacement.
+
+An Azure `AllocationFailed` can leave a failed VM resource behind even though
+Terraform did not add it to state. The next apply then reports that the VM
+already exists and suggests importing it. Do not import until checking whether
+the VM actually succeeded:
+
+```bash
+az vm show -g <rg> -n <vm> --show-details \
+  --query '{powerState:powerState,provisioningState:provisioningState,size:hardwareProfile.vmSize}' -o json
+az disk show -g <rg> -n <data-disk> \
+  --query '{state:diskState,managedBy:managedBy}' -o json
+```
+
+If the VM reports `provisioningState: Failed` and the database disk is
+`Unattached`, delete only that failed VM (its disposable OS disk), not the data
+disk:
+
+```bash
+az vm delete -g <rg> -n <vm> --yes
+```
+
+Persist Azure's offered alternative as an explicit ignored deployment input,
+for example `TF_VAR_vm_size=Standard_B2ts_v2` in `.env`, then re-run
+`./scripts/terraform.sh plan` and `apply`. The recovery plan should create the
+VM and data-disk attachment only. After the apply, wait for cloud-init and run
+a final Terraform plan; it should report no changes. During the outage,
+Cloudflare correctly reports the tunnel as down because its origin is absent.
 
 ### Deployment inputs and secret handling
 
@@ -474,6 +512,16 @@ Externally, `GET https://<hostname>/webhooks/sms` should return **405** from
 the app itself — that one response proves DNS, the tunnel, the Access bypass
 exception, and Uvicorn all at once. `GET /` should redirect (302) to the
 Cloudflare Access login and never serve the app.
+
+To verify the exact release from Azure Run Command, Git can reject the app
+directory as being owned by a different service user. Use a per-command safe
+directory override instead of changing global Git configuration:
+
+```bash
+az vm run-command invoke -g <rg> -n <vm> --command-id RunShellScript \
+  --scripts "git -c safe.directory=/opt/hangout-automator -C /opt/hangout-automator rev-parse HEAD" \
+  --query "value[0].message" -o tsv
+```
 
 ## Rsync updates
 
