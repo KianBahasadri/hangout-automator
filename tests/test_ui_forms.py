@@ -16,6 +16,7 @@ from tests.support.routes import PAGE_ROUTES, fill_path
 PAGE_LABELS = (
     "hangout list",
     "profiles",
+    "new profiles",
     "settings",
     "new hangout",
     "draft hangout",
@@ -34,6 +35,7 @@ def _pages(sample_data) -> dict[str, str]:
     return {
         "hangout list": "/",
         "profiles": "/profiles",
+        "new profiles": "/profiles/new",
         "settings": "/settings",
         "new hangout": "/hangouts/new",
         "draft hangout": f"/hangouts/{hangouts['draft']}",

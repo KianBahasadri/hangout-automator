@@ -14,7 +14,9 @@ HTML routes: `app/routers/web.py`. Templates: `app/templates/`. Styles/scripts: 
 | Method | Path | Page / action |
 |--------|------|----------------|
 | GET | `/` | Hangout list without database ID numbers; “New hangout” sits immediately beside the page heading |
-| GET/POST | `/profiles` | Profiles page; POST creates profile |
+| GET | `/profiles` | Profiles page; tags and existing profiles |
+| GET | `/profiles/new` | Add one or more profiles, with optional phone contact import |
+| POST | `/profiles` | Validate and save the add-profiles batch |
 | POST | `/profiles/{id}/delete` | Delete profile |
 | POST | `/tags` | Create tag → redirect `/profiles` |
 | POST | `/tags/{id}/delete` | Delete tag |
@@ -31,11 +33,17 @@ Blank optional enums from forms are parsed to `None` via `_optional_enum_form`.
 ## Profiles page
 
 - Tag catalog manager (pill list + × remove + add form)
-- Add-profile form: name/phone required; drinks/smokes/drive selects; allergy and tag **pill checkboxes** (`.tag-checkboxes`)
-- Create validates server-side and redirects to `/profiles?error=…` (`bad_phone`, `duplicate_phone`, `missing_name`), rendered as an alert above the page. A phone that normalizes to fewer than 8 digits is rejected rather than silently stored — see [sms-and-rsvp.md](./sms-and-rsvp.md) for normalization
+- “Add new profile” opens the dedicated add-profiles page
 - Existing profiles: 3-column card grid (responsive 2/1 columns)
 - **Autosave** (`profiles_autosave.js`): `PATCH /api/profiles/{id}`; text fields debounce 450ms; selects/tags/allergies save immediately
 - **Filters** (`profiles_filter.js`): search name/phone/tag; tag chips (OR); field chips AND (drinks/smokes/drive/allergies); clear filters; visible count
+
+## Add profiles
+
+- Each profile card has name/phone fields, drinks/smokes/drive selects, and allergy/tag **pill checkboxes** (`.tag-checkboxes`)
+- “Add another profile” adds another editable card; “Save profiles” validates and saves the entire batch together
+- **Phone import** (`profiles_new.js`) uses the browser Contact Picker when available, requests name and phone, and fills one card per selected contact. The selected values remain editable and are not saved until the batch form is submitted; unsupported browsers show the manual-entry state.
+- Server-side validation rejects unusable or duplicate phone numbers and does not partially save a batch; rejected cards retain their entered values for correction. A phone that normalizes to fewer than 8 digits is rejected rather than silently stored — see [sms-and-rsvp.md](./sms-and-rsvp.md) for normalization
 
 ## Invitee picker
 

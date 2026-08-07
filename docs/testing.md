@@ -47,8 +47,8 @@ does this against seeded data *and* against an empty database, follows
 redirects so the page a handler bounces to has to render too, and fails only on
 a 5xx. Which non-5xx answer a route gives is the feature tests' business.
 
-`test_ui_forms.py` opens each page (list, profiles, settings, new hangout, and
-a draft/active/closed hangout) and presses every button on it. That is the
+`test_ui_forms.py` opens each page (list, profiles, add profiles, settings, new
+hangout, and a draft/active/closed hangout) and presses every button on it. That is the
 literal reported bug — "Set up hangout with nothing filled in" — and it catches
 what the route matrix cannot: the matrix does not know that `action=setup` is
 the interesting value for that field, the rendered button does.

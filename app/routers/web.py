@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Annotated
 
@@ -88,6 +89,68 @@ PROFILE_ERRORS = {
     "missing_name": "Name is required.",
 }
 
+_PROFILE_FIELD_RE = re.compile(r"^profiles\[(\d+)\]\[([a-z_]+)\]$")
+
+
+def _profile_form_context(db: Session, *, error: str | None = None, profile_rows=None) -> dict:
+    return {
+        "tags": _all_tags(db),
+        "allergies": _all_allergies(db),
+        "drinks_opts": list(YesNo),
+        "smokes_opts": list(YesNo),
+        "drive_opts": list(Drive),
+        "error": error,
+        "profile_rows": profile_rows if profile_rows is not None else [{}],
+    }
+
+
+def _profile_rows_from_form(form) -> tuple[list[dict], bool]:  # type: ignore[no-untyped-def]
+    """Read indexed profile cards, retaining legacy single-profile submissions."""
+    indexes: set[int] = set()
+    for key, _ in form.multi_items():
+        match = _PROFILE_FIELD_RE.match(str(key))
+        if match:
+            indexes.add(int(match.group(1)))
+
+    if not indexes:
+        if "name" not in form and "phone" not in form:
+            return [], False
+        return [
+            {
+                "name": str(form.get("name") or ""),
+                "phone": str(form.get("phone") or ""),
+                "drinks": str(form.get("drinks") or ""),
+                "smokes": str(form.get("smokes") or ""),
+                "drive": str(form.get("drive") or ""),
+                "tag_ids": [str(value) for value in form.getlist("tag_ids")],
+                "allergy_ids": [str(value) for value in form.getlist("allergy_ids")],
+            }
+        ], False
+
+    rows: list[dict] = []
+    for index in sorted(indexes):
+        prefix = f"profiles[{index}]"
+
+        def first(field: str) -> str:
+            values = form.getlist(f"{prefix}[{field}]")
+            return str(values[0]) if values else ""
+
+        def many(field: str) -> list[str]:
+            return [str(value) for value in form.getlist(f"{prefix}[{field}]")]
+
+        rows.append(
+            {
+                "name": first("name"),
+                "phone": first("phone"),
+                "drinks": first("drinks"),
+                "smokes": first("smokes"),
+                "drive": first("drive"),
+                "tag_ids": many("tag_ids"),
+                "allergy_ids": many("allergy_ids"),
+            }
+        )
+    return rows, True
+
 
 @router.get("/profiles", response_class=HTMLResponse)
 def profiles_page(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
@@ -103,6 +166,18 @@ def profiles_page(request: Request, db: Session = Depends(get_db)) -> HTMLRespon
             "drive_opts": list(Drive),
             "error": PROFILE_ERRORS.get(request.query_params.get("error", "")),
         },
+    )
+
+
+@router.get("/profiles/new", response_class=HTMLResponse)
+def profiles_new_page(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
+    return templates.TemplateResponse(
+        request,
+        "profiles_new.html",
+        _profile_form_context(
+            db,
+            error=PROFILE_ERRORS.get(request.query_params.get("error", "")),
+        ),
     )
 
 
@@ -130,34 +205,71 @@ def tags_delete(tag_id: RowIdPath, db: Session = Depends(get_db)) -> RedirectRes
     return RedirectResponse("/profiles", status_code=303)
 
 
-@router.post("/profiles")
-def profiles_create(
-    name: str = Form(...),
-    phone: str = Form(...),
-    drinks: str = Form(""),
-    smokes: str = Form(""),
-    drive: str = Form(""),
-    tag_ids: Annotated[list[RowId], Form()] = [],
-    allergy_ids: Annotated[list[RowId], Form()] = [],
-    db: Session = Depends(get_db),
-) -> RedirectResponse:
-    if not name.strip():
+@router.post("/profiles", response_model=None)
+async def profiles_create(request: Request, db: Session = Depends(get_db)) -> RedirectResponse | HTMLResponse:
+    form = await request.form()
+    rows, is_batch = _profile_rows_from_form(form)
+    if not rows:
         return RedirectResponse("/profiles?error=missing_name", status_code=303)
-    phone_n = normalize_phone(phone)
-    if not is_valid_phone(phone_n):
-        return RedirectResponse("/profiles?error=bad_phone", status_code=303)
-    if db.query(Profile).filter(Profile.phone == phone_n).first():
-        return RedirectResponse("/profiles?error=duplicate_phone", status_code=303)
-    profile = Profile(
-        name=name.strip(),
-        phone=phone_n,
-        drinks=_optional_enum_form(drinks, YesNo),
-        smokes=_optional_enum_form(smokes, YesNo),
-        drive=_optional_enum_form(drive, Drive),
-    )
-    profile.tags = load_tags_by_ids(db, tag_ids or [])
-    profile.allergies = load_allergies_by_ids(db, allergy_ids or [])
-    db.add(profile)
+
+    errors: list[str] = []
+    validated_rows: list[dict] = []
+    seen_phones: set[str] = set()
+    for position, row in enumerate(rows, start=1):
+        name = row["name"].strip()
+        phone = row["phone"].strip()
+        phone_n = normalize_phone(phone)
+        prefix = f"Profile {position}: " if is_batch else ""
+        if not name:
+            errors.append(f"{prefix}Name is required.")
+        if not is_valid_phone(phone_n):
+            errors.append(
+                f"{prefix}That phone number isn't usable — enter a full number like +1 (555) 123-4567."
+            )
+        elif phone_n in seen_phones or db.query(Profile).filter(Profile.phone == phone_n).first():
+            errors.append(f"{prefix}A profile with that phone number already exists.")
+        else:
+            seen_phones.add(phone_n)
+        validated_rows.append(
+            {
+                **row,
+                "name": name,
+                "phone": phone,
+                "phone_normalized": phone_n,
+            }
+        )
+
+    if errors:
+        if not is_batch:
+            if any("phone number isn't usable" in error for error in errors):
+                error_key = "bad_phone"
+            elif any("already exists" in error for error in errors):
+                error_key = "duplicate_phone"
+            else:
+                error_key = "missing_name"
+            return RedirectResponse(f"/profiles?error={error_key}", status_code=303)
+        return templates.TemplateResponse(
+            request,
+            "profiles_new.html",
+            _profile_form_context(db, error=" ".join(errors), profile_rows=validated_rows),
+            status_code=400,
+        )
+
+    for row in validated_rows:
+        profile = Profile(
+            name=row["name"],
+            phone=row["phone_normalized"],
+            drinks=_optional_enum_form(row["drinks"], YesNo),
+            smokes=_optional_enum_form(row["smokes"], YesNo),
+            drive=_optional_enum_form(row["drive"], Drive),
+        )
+        tag_ids = [parsed for value in row["tag_ids"] if (parsed := parse_row_id(value)) is not None]
+        allergy_ids = [
+            parsed for value in row["allergy_ids"] if (parsed := parse_row_id(value)) is not None
+        ]
+        profile.tags = load_tags_by_ids(db, tag_ids)
+        profile.allergies = load_allergies_by_ids(db, allergy_ids)
+        db.add(profile)
     db.commit()
     return RedirectResponse("/profiles", status_code=303)
 

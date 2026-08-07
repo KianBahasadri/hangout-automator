@@ -104,6 +104,7 @@ def test_route_inventory_reflects_the_real_app():
 
     assert {
         "GET /",
+        "GET /profiles/new",
         "POST /profiles",
         "POST /hangouts/new",
         "POST /hangouts/{hangout_id}/setup",

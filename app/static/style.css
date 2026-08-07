@@ -280,6 +280,19 @@ input[type="checkbox"]:disabled {
   margin-top: 0.5rem;
 }
 
+.profile-import-actions {
+  align-items: center;
+  margin: 0 0 1rem;
+}
+
+.profile-draft-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;
@@ -946,5 +959,4 @@ th {
     padding-top: 0;
   }
 }
-
 

@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Add Profiles · Hangout Automator{% endblock %}
+{% block content %}
+<div style="display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap;align-items:center;margin-bottom:1.25rem;">
+  <h1 style="margin:0;">Add profiles</h1>
+  <a href="/profiles">← All profiles</a>
+</div>
+
+{% if error %}
+<div class="alert">{{ error }}</div>
+{% endif %}
+
+<div class="actions profile-import-actions">
+  <button class="btn btn-secondary" type="button" data-import-contacts>Import from phone</button>
+  <span class="muted" data-import-status role="status" aria-live="polite"></span>
+</div>
+
+<form method="post" action="/profiles" id="profiles-form">
+  <div id="profile-drafts" data-next-index="{{ profile_rows|length }}">
+    {% for profile in profile_rows %}
+    {% with profile_index=loop.index0, profile_number=loop.index %}
+    {% include "_profile_draft.html" %}
+    {% endwith %}
+    {% endfor %}
+  </div>
+
+  <button class="btn btn-secondary" type="button" data-add-profile>Add another profile</button>
+
+  <div class="actions" style="margin-top:1.25rem;">
+    <button class="btn" type="submit">Save profiles</button>
+  </div>
+</form>
+
+<template id="profile-draft-template">
+  {% with profile=None, profile_index="__INDEX__", profile_number="" %}
+  {% include "_profile_draft.html" %}
+  {% endwith %}
+</template>
+{% endblock %}
+{% block scripts %}
+<script src="/static/profiles_new.js"></script>
+{% endblock %}

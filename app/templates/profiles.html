@@ -1,7 +1,10 @@
 {% extends "base.html" %}
 {% block title %}Profiles · Hangout Automator{% endblock %}
 {% block content %}
-<h1>Profiles</h1>
+<div style="display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap;align-items:center;margin-bottom:1.25rem;">
+  <h1 style="margin:0;">Profiles</h1>
+  <a class="btn" href="/profiles/new">Add new profile</a>
+</div>
 
 {% if error %}
 <div class="alert">{{ error }}</div>
@@ -29,72 +32,6 @@
       <input id="tag_name" name="name" type="text" required maxlength="64" placeholder="friends" style="margin-bottom:0;" />
     </div>
     <button class="btn" type="submit">Add tag</button>
-  </form>
-</div>
-
-<div class="card">
-  <h2 style="margin-top:0;">Add profile</h2>
-  <form method="post" action="/profiles">
-    <div class="field-row">
-      <div>
-        <label for="name">Name *</label>
-        <input id="name" name="name" type="text" required />
-      </div>
-      <div>
-        <label for="phone">Phone *</label>
-        <input id="phone" name="phone" type="tel" required placeholder="+1 (555) 123-4567" />
-      </div>
-    </div>
-
-    <div class="field-row prefs-row">
-      <div>
-        <label for="drinks">Drinks?</label>
-        <select id="drinks" name="drinks">
-          <option value=""></option>
-          {% for o in drinks_opts %}
-          <option value="{{ o.value }}">{{ o.value }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div>
-        <label for="smokes">Smokes?</label>
-        <select id="smokes" name="smokes">
-          <option value=""></option>
-          {% for o in smokes_opts %}
-          <option value="{{ o.value }}">{{ o.value }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div>
-        <label for="drive">Drive?</label>
-        <select id="drive" name="drive">
-          <option value=""></option>
-          {% for o in drive_opts %}
-          <option value="{{ o.value }}">{{ o.value }}</option>
-          {% endfor %}
-        </select>
-      </div>
-    </div>
-
-    {% if allergies %}
-    <label>Food allergies</label>
-    <div class="tag-checkboxes">
-      {% for a in allergies %}
-      <label><input type="checkbox" name="allergy_ids" value="{{ a.id }}" /> {{ a.name }}</label>
-      {% endfor %}
-    </div>
-    {% endif %}
-
-    {% if tags %}
-    <label>Tags</label>
-    <div class="tag-checkboxes">
-      {% for t in tags %}
-      <label><input type="checkbox" name="tag_ids" value="{{ t.id }}" /> {{ t.name }}</label>
-      {% endfor %}
-    </div>
-    {% endif %}
-
-    <button class="btn" type="submit">Add profile</button>
   </form>
 </div>
 
