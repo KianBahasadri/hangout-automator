@@ -17,11 +17,12 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install application dependencies
-        run: python -m pip install -r requirements.txt
+      - uses: astral-sh/setup-uv@v9
 
       - name: Run application tests
-        run: pytest -q
+        # uv installs the dev dependency group from pyproject.toml, so CI runs
+        # the same suite as `uv run --group dev pytest` locally.
+        run: uv run --group dev --python 3.12 pytest
 
       - uses: hashicorp/setup-terraform@v3
 
