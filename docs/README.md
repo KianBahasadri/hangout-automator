@@ -10,7 +10,7 @@
 - [sms-and-rsvp.md](./sms-and-rsvp.md) — SMS providers, message copy, inbound webhook, reply parsing
 - [invites-and-followups.md](./invites-and-followups.md) — Hangout activation, invite sends, follow-up scheduler
 - [organizer-notifications.md](./organizer-notifications.md) — Interval digests and threshold alerts
-- [testing.md](./testing.md) — Test suite layout, the generated smoke matrix, CI
+- [testing.md](./testing.md) — Test suite layout, the generated smoke matrix, running it
 - [deploy.md](./deploy.md) — Azure Terraform + rsync deploy scripts
 
 ## Notes

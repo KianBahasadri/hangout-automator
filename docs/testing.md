@@ -68,8 +68,21 @@ while checking nothing.
 - New behaviour: assert it in the topic-specific file. The smoke matrix only
   ever says "this did not crash", never "this did the right thing".
 
-## CI
+## Nothing runs this for you
 
-`.github/workflows/validate.yml` runs the suite on every push and pull request
-via `uv run --group dev --python 3.12 pytest`, then `terraform fmt -check` and
-`terraform validate` for both Terraform roots.
+This repository has **no GitHub Actions and no CI** — that is deliberate, not an
+oversight. Run the suite yourself before you push:
+
+```bash
+uv run --group dev pytest
+```
+
+There was a workflow here until it was removed. It is worth knowing why, because
+it is the reason a 500 shipped: it installed `requirements.txt` (which has no
+pytest) and then called `pytest`, so every run since it was added failed with
+`pytest: command not found` and no test ever gated a push. A test suite nobody
+runs is worse than none, because it looks like coverage. If CI is ever added
+back, check that a deliberately broken test actually turns the run red.
+
+Terraform has its own checks (`terraform fmt -check`, `terraform validate`);
+they are an operator step, described in [deploy.md](./deploy.md).

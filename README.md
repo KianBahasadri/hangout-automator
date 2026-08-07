@@ -63,6 +63,8 @@ Twilio inbound webhook: `POST /webhooks/sms`
 uv run --group dev pytest
 ```
 
+There is no CI — run this before you push. See [docs/testing.md](docs/testing.md).
+
 ## API
 
 - Interactive docs: `/docs`

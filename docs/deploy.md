@@ -64,7 +64,7 @@ complete boundary:
 
 Cloudflare documents both a [Terraform provider](https://developers.cloudflare.com/api/terraform/)
 and a [Terraform-managed Tunnel deployment](https://developers.cloudflare.com/tunnel/deployment-guides/terraform/).
-The Cloudflare provider should read `CLOUDFLARE_API_TOKEN` from the shell or CI
+The Cloudflare provider should read `CLOUDFLARE_API_TOKEN` from the shell or a
 secret store; do not put that token in `.tfvars` or repository files.
 
 `cloudflared` runs on the VM and makes an outbound connection to Cloudflare;
@@ -94,8 +94,9 @@ The desired ownership is:
 1. Terraform plans and applies Azure plus Cloudflare resources.
 2. Terraform renders the VM environment and cloud-init from variables; secrets
    come from environment variables or a secret manager, never committed files.
-3. CI runs `terraform fmt -check` and `terraform validate`; an operator reviews
-   a credentialed `terraform plan` before each production apply.
+3. An operator runs `terraform fmt -check` and `terraform validate` (there is no
+   CI in this repository — see [testing.md](./testing.md)), then reviews a
+   credentialed `terraform plan` before each production apply.
 4. Only an approved operator runs `terraform apply`; production state should be
    stored in a locked remote backend (Azure Storage or Terraform Cloud), not a
    developer laptop.
@@ -110,7 +111,7 @@ below.
 
 The provider lock files (`terraform/.terraform.lock.hcl` and
 `terraform/bootstrap-state/.terraform.lock.hcl`) are part of the IaC source and
-should be committed so CI and operators resolve the same provider builds.
+should be committed so every operator resolves the same provider builds.
 
 ### Remote Terraform state
 
