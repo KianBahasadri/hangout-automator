@@ -298,7 +298,10 @@ def setup_hangout_endpoint(
     hangout = load_hangout(db, hangout_id)
     if not hangout:
         raise HTTPException(404, "Hangout not found")
-    profile_ids = payload.profile_ids if payload and payload.profile_ids else None
+    # An omitted body means "reuse the hangout's existing invitees". An
+    # explicit empty list is an empty selection and must be rejected by the
+    # service instead of silently reusing those invitees.
+    profile_ids = payload.profile_ids if payload is not None else None
     try:
         return setup_hangout(db, hangout, profile_ids)
     except ValueError as exc:

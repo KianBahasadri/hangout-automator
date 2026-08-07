@@ -208,7 +208,7 @@ def hangout_create(
     notify_on_ride_needed: str | None = Form(None),
     notify_confirm_goal: str = Form("0"),
     notify_threshold_cooldown_minutes: str = Form("0"),
-    profile_ids: Annotated[list[int], Form()] = [],
+    profile_ids: Annotated[list[int] | None, Form()] = None,
     action: str = Form("draft"),
     db: Session = Depends(get_db),
 ) -> RedirectResponse:
@@ -289,7 +289,7 @@ def hangout_detail(request: Request, hangout_id: int, db: Session = Depends(get_
 @router.post("/hangouts/{hangout_id}/setup")
 def hangout_setup(
     hangout_id: int,
-    profile_ids: Annotated[list[int], Form()] = [],
+    profile_ids: Annotated[list[int] | None, Form()] = None,
     db: Session = Depends(get_db),
 ) -> RedirectResponse:
     hangout = load_hangout(db, hangout_id)

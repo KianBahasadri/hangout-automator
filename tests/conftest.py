@@ -41,3 +41,10 @@ def _clean_tables(db):
 def client():
     with TestClient(app) as test_client:
         yield test_client
+
+
+@pytest.fixture
+def client_no_raise():
+    """Return HTTP 500 responses so API tests can assert no exception escapes."""
+    with TestClient(app, raise_server_exceptions=False) as test_client:
+        yield test_client

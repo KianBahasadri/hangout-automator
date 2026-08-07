@@ -21,7 +21,7 @@ JSON routes in `app/routers/api.py`, prefix `/api`. Schemas in `app/schemas.py`.
 | POST | `/api/hangouts` | Creates **draft** + invite rows; does not send SMS |
 | GET | `/api/hangouts/{id}` | |
 | PATCH | `/api/hangouts/{id}` | Clamps interval/goal/cooldown to allowed option sets |
-| POST | `/api/hangouts/{id}/setup` | Optional body `{ "profile_ids": [...] }`; an explicit list also **removes** invite rows left out of it that were never messaged (see [invites-and-followups.md](./invites-and-followups.md)) |
+| POST | `/api/hangouts/{id}/setup` | Omit the body to reuse existing invitees; an explicit `{ "profile_ids": [...] }` selection returns `400` when empty or invalid, and **removes** invite rows left out of it that were never messaged (see [invites-and-followups.md](./invites-and-followups.md)) |
 | POST | `/api/hangouts/{id}/close` | Sets `closed` |
 
 ## Profile payloads

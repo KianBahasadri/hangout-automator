@@ -347,14 +347,21 @@ def setup_hangout(db: Session, hangout: Hangout, profile_ids: list[int] | None =
         )
         raise ValueError("Hangout is closed")
 
-    ids = profile_ids if profile_ids is not None else [i.profile_id for i in hangout.invites]
+    requested_ids = profile_ids if profile_ids is not None else [i.profile_id for i in hangout.invites]
+    ids = list(
+        dict.fromkeys(pid for pid in requested_ids if db.get(Profile, pid) is not None)
+    )
     if not ids:
         audit_event(
             "hangout.setup.rejected",
             hangout_id=hangout.id,
-            reason="no_profiles_selected",
+            reason="no_valid_profiles_selected" if requested_ids else "no_profiles_selected",
         )
-        raise ValueError("Select at least one profile to invite")
+        raise ValueError(
+            "No valid profiles to invite"
+            if requested_ids
+            else "Select at least one profile to invite"
+        )
 
     existing = {inv.profile_id: inv for inv in hangout.invites}
     now = utcnow()

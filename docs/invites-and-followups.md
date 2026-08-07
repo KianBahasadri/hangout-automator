@@ -9,7 +9,7 @@ Triggered by web “Set up hangout”, web create with `action=setup`, or `POST 
 Rules:
 
 - Reject if hangout is `closed`
-- Require at least one profile id (body/form or existing invites)
+- Require at least one existing profile id (body/form or existing invites); reject selections that contain no valid profiles
 - Create missing `hangout_invites` rows
 - Drop existing invite rows left **out** of an explicit selection that have never been messaged (`last_outbound_at IS NULL`) — they were never really invited, and left in place they would sit in `pending` forever because the follow-up job has no clock to measure them against. Rows that already received a text are never removed, so re-running setup for one person cannot discard anyone else's answer
 - Do not re-send to invites already `confirmed` / `remind` / `declined` when hangout is already active

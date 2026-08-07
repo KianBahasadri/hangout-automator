@@ -32,3 +32,31 @@ def test_index_lists_hangouts(client, db):
     assert "Finished dinner" in response.text
     assert "Hangout Over" in response.text
     assert "Movie night" in response.text
+
+
+def test_new_hangout_without_invitees_redirects_instead_of_500(client):
+    response = client.post(
+        "/hangouts/new",
+        data={"action": "setup"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"].endswith("?error=need_profiles")
+
+
+def test_existing_hangout_without_invitees_redirects_instead_of_500(client, db):
+    from app.models import Hangout, HangoutStatus
+
+    hangout = Hangout(status=HangoutStatus.draft, motive="Empty setup")
+    db.add(hangout)
+    db.commit()
+
+    response = client.post(
+        f"/hangouts/{hangout.id}/setup",
+        data={},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == f"/hangouts/{hangout.id}?error=need_profiles"

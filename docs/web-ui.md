@@ -49,6 +49,7 @@ Partial `_invitee_picker.html` + `invitee_picker.js` (new hangout and hangout de
 ## New hangout
 
 - All hangout detail fields optional
+- Submitting setup without invitees keeps the hangout as a draft and redirects back with a profile-selection error
 - Organizer **combobox** (`combobox.js`): typeahead by name/phone → hidden `organizer_profile_id`
 - Notify panel (`notify_panel.js`): progressive disclosure (master → interval/threshold → nested options)
 - Form defaults: interval every 6h + skip-if-unchanged; threshold confirm/allergy/ride on, decline off; goal off; no cooldown
