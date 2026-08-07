@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import enum
+from collections.abc import Iterable
 from datetime import datetime
 
 from sqlalchemy import (
@@ -16,6 +17,7 @@ from sqlalchemy import (
     TypeDecorator,
     func,
 )
+from sqlalchemy import inspect as sqla_inspect
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -63,6 +65,12 @@ def _optional_enum_column(enum_cls: type[enum.Enum], *, legacy: dict[str, str] |
                 return None
 
     return OptionalEnum()
+
+
+def not_null_columns(model: type, names: Iterable[str]) -> list[str]:
+    """Which of `names` map to a NOT NULL column, so callers can reject `null` early."""
+    columns = sqla_inspect(model).columns
+    return [name for name in names if name in columns and not columns[name].nullable]
 
 
 class HangoutStatus(str, enum.Enum):
@@ -150,7 +158,13 @@ class Profile(Base):
     allergies: Mapped[list[Allergy]] = relationship(
         secondary=profile_allergies, back_populates="profiles"
     )
-    invites: Mapped[list[HangoutInvite]] = relationship(back_populates="profile")
+    # Deleting a profile leaves the database to cascade its invite rows away
+    # (and to NULL the message_logs pointing at them, keeping the SMS history).
+    # Without passive_deletes the ORM would instead try to NULL the invites'
+    # profile_id, which the NOT NULL column rejects.
+    invites: Mapped[list[HangoutInvite]] = relationship(
+        back_populates="profile", cascade="all, delete-orphan", passive_deletes=True
+    )
 
     @property
     def food_allergies_label(self) -> str | None:

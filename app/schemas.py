@@ -5,6 +5,7 @@ from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.ids import RowId
 from app.models import Drive, HangoutStatus, InviteStatus, YesNo
 
 
@@ -36,8 +37,8 @@ class ProfileCreate(BaseModel):
     drinks: Optional[YesNo] = None
     smokes: Optional[YesNo] = None
     drive: Optional[Drive] = None
-    tag_ids: list[int] = Field(default_factory=list)
-    allergy_ids: list[int] = Field(default_factory=list)
+    tag_ids: list[RowId] = Field(default_factory=list)
+    allergy_ids: list[RowId] = Field(default_factory=list)
 
 
 class ProfileUpdate(BaseModel):
@@ -46,8 +47,8 @@ class ProfileUpdate(BaseModel):
     drinks: Optional[YesNo] = None
     smokes: Optional[YesNo] = None
     drive: Optional[Drive] = None
-    tag_ids: Optional[list[int]] = None
-    allergy_ids: Optional[list[int]] = None
+    tag_ids: Optional[list[RowId]] = None
+    allergy_ids: Optional[list[RowId]] = None
 
 
 class ProfileOut(BaseModel):
@@ -72,8 +73,8 @@ class HangoutCreate(BaseModel):
     alcohol_involved: Optional[YesNo] = None
     weed_involved: Optional[YesNo] = None
     notes: Optional[str] = None
-    profile_ids: list[int] = Field(default_factory=list)
-    organizer_profile_id: Optional[int] = None
+    profile_ids: list[RowId] = Field(default_factory=list)
+    organizer_profile_id: Optional[RowId] = None
     notify_enabled: bool = False
     notify_interval: bool = False
     notify_threshold: bool = False
@@ -95,7 +96,7 @@ class HangoutUpdate(BaseModel):
     alcohol_involved: Optional[YesNo] = None
     weed_involved: Optional[YesNo] = None
     notes: Optional[str] = None
-    organizer_profile_id: Optional[int] = None
+    organizer_profile_id: Optional[RowId] = None
     notify_enabled: Optional[bool] = None
     notify_interval: Optional[bool] = None
     notify_threshold: Optional[bool] = None
@@ -154,4 +155,4 @@ class HangoutOut(BaseModel):
 
 
 class SetupHangoutRequest(BaseModel):
-    profile_ids: list[int] = Field(default_factory=list)
+    profile_ids: list[RowId] = Field(default_factory=list)

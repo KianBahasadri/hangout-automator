@@ -50,6 +50,20 @@ def test_api_rejects_phone_that_normalizes_to_nothing(client, db):
     assert _count(db, "Bad") == 0
 
 
+def test_deleting_an_invited_profile_takes_their_invites_and_keeps_the_sms_log(client, db):
+    from app.models import HangoutInvite, MessageLog
+
+    profile = client.post("/api/profiles", json={"name": "Sam", "phone": "+15551112222"}).json()
+    hangout = client.post("/api/hangouts", json={"profile_ids": [profile["id"]]}).json()
+    client.post(f"/api/hangouts/{hangout['id']}/setup", json={"profile_ids": [profile["id"]]})
+
+    response = client.delete(f"/api/profiles/{profile['id']}")
+
+    assert response.status_code == 204
+    assert db.query(HangoutInvite).filter(HangoutInvite.profile_id == profile["id"]).count() == 0
+    assert db.query(MessageLog).count() == 1
+
+
 def test_api_patch_rejects_unusable_phone(client, db):
     created = client.post("/api/profiles", json={"name": "Sam", "phone": "+15551112222"}).json()
 

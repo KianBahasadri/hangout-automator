@@ -97,6 +97,27 @@ def test_setup_with_malformed_profile_ids_returns_422(client_no_raise):
     assert response.status_code == 422
 
 
+def test_patch_rejects_null_for_a_setting_the_column_requires(client_no_raise):
+    hangout = _create_hangout(client_no_raise)
+
+    response = client_no_raise.patch(
+        f"/api/hangouts/{hangout['id']}", json={"notify_enabled": None}
+    )
+
+    assert response.status_code == 400
+    assert "notify_enabled" in response.json()["detail"]
+
+
+def test_row_ids_larger_than_the_database_can_store_are_rejected(client_no_raise):
+    too_large = 10**19
+
+    assert client_no_raise.get(f"/api/hangouts/{too_large}").status_code == 422
+    assert (
+        client_no_raise.post("/api/hangouts", json={"organizer_profile_id": too_large}).status_code
+        == 422
+    )
+
+
 def test_setup_missing_hangout_returns_404(client_no_raise):
     response = client_no_raise.post("/api/hangouts/999999/setup")
 

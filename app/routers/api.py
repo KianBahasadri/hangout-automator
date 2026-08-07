@@ -4,7 +4,8 @@ from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
-from app.models import Allergy, Hangout, HangoutInvite, HangoutStatus, Profile, Tag
+from app.ids import RowIdPath
+from app.models import Allergy, Hangout, HangoutInvite, HangoutStatus, Profile, Tag, not_null_columns
 from app.schemas import (
     AllergyCreate,
     AllergyOut,
@@ -64,7 +65,7 @@ def create_tag(payload: TagCreate, db: Session = Depends(get_db)) -> Tag:
 
 
 @router.delete("/tags/{tag_id}", status_code=204, response_class=Response)
-def delete_tag(tag_id: int, db: Session = Depends(get_db)) -> Response:
+def delete_tag(tag_id: RowIdPath, db: Session = Depends(get_db)) -> Response:
     tag = db.get(Tag, tag_id)
     if not tag:
         raise HTTPException(404, "Tag not found")
@@ -96,7 +97,7 @@ def create_allergy(payload: AllergyCreate, db: Session = Depends(get_db)) -> All
 
 
 @router.delete("/allergies/{allergy_id}", status_code=204, response_class=Response)
-def delete_allergy(allergy_id: int, db: Session = Depends(get_db)) -> Response:
+def delete_allergy(allergy_id: RowIdPath, db: Session = Depends(get_db)) -> Response:
     allergy = db.get(Allergy, allergy_id)
     if not allergy:
         raise HTTPException(404, "Allergy not found")
@@ -142,7 +143,7 @@ def create_profile(payload: ProfileCreate, db: Session = Depends(get_db)) -> Pro
 
 
 @router.patch("/profiles/{profile_id}", response_model=ProfileOut)
-def update_profile(profile_id: int, payload: ProfileUpdate, db: Session = Depends(get_db)) -> Profile:
+def update_profile(profile_id: RowIdPath, payload: ProfileUpdate, db: Session = Depends(get_db)) -> Profile:
     profile = db.get(Profile, profile_id)
     if not profile:
         raise HTTPException(404, "Profile not found")
@@ -173,7 +174,7 @@ def update_profile(profile_id: int, payload: ProfileUpdate, db: Session = Depend
 
 
 @router.delete("/profiles/{profile_id}", status_code=204, response_class=Response)
-def delete_profile(profile_id: int, db: Session = Depends(get_db)) -> Response:
+def delete_profile(profile_id: RowIdPath, db: Session = Depends(get_db)) -> Response:
     profile = db.get(Profile, profile_id)
     if not profile:
         raise HTTPException(404, "Profile not found")
@@ -242,7 +243,7 @@ def create_hangout(payload: HangoutCreate, db: Session = Depends(get_db)) -> Han
 
 
 @router.get("/hangouts/{hangout_id}", response_model=HangoutOut)
-def get_hangout(hangout_id: int, db: Session = Depends(get_db)) -> Hangout:
+def get_hangout(hangout_id: RowIdPath, db: Session = Depends(get_db)) -> Hangout:
     hangout = load_hangout(db, hangout_id)
     if not hangout:
         raise HTTPException(404, "Hangout not found")
@@ -250,11 +251,16 @@ def get_hangout(hangout_id: int, db: Session = Depends(get_db)) -> Hangout:
 
 
 @router.patch("/hangouts/{hangout_id}", response_model=HangoutOut)
-def update_hangout(hangout_id: int, payload: HangoutUpdate, db: Session = Depends(get_db)) -> Hangout:
+def update_hangout(hangout_id: RowIdPath, payload: HangoutUpdate, db: Session = Depends(get_db)) -> Hangout:
     hangout = db.get(Hangout, hangout_id)
     if not hangout:
         raise HTTPException(404, "Hangout not found")
     data = payload.model_dump(exclude_unset=True)
+    # Every notify_* setting is optional in the payload but NOT NULL in the
+    # table, so an explicit null is a bad request rather than a failed INSERT.
+    blanked = not_null_columns(Hangout, [key for key, value in data.items() if value is None])
+    if blanked:
+        raise HTTPException(400, f"Cannot be null: {', '.join(sorted(blanked))}")
     if "organizer_profile_id" in data:
         org_id = data.pop("organizer_profile_id")
         if org_id is None:
@@ -291,7 +297,7 @@ def update_hangout(hangout_id: int, payload: HangoutUpdate, db: Session = Depend
 
 @router.post("/hangouts/{hangout_id}/setup", response_model=HangoutOut)
 def setup_hangout_endpoint(
-    hangout_id: int,
+    hangout_id: RowIdPath,
     payload: SetupHangoutRequest | None = None,
     db: Session = Depends(get_db),
 ) -> Hangout:
@@ -309,7 +315,7 @@ def setup_hangout_endpoint(
 
 
 @router.post("/hangouts/{hangout_id}/close", response_model=HangoutOut)
-def close_hangout(hangout_id: int, db: Session = Depends(get_db)) -> Hangout:
+def close_hangout(hangout_id: RowIdPath, db: Session = Depends(get_db)) -> Hangout:
     hangout = db.get(Hangout, hangout_id)
     if not hangout:
         raise HTTPException(404, "Hangout not found")

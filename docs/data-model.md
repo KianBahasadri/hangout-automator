@@ -50,6 +50,12 @@ Organizer / notify fields:
 
 `hangout_id`, `profile_id`, `status` (default `pending`), `followups_sent` (0), `last_outbound_at`, `responded_at`, `created_at`.
 
+Both FKs are `ON DELETE CASCADE`, and `Profile.invites` is mapped with
+`passive_deletes=True` so the database does the cascading. Deleting a profile
+therefore drops their invite rows (and NULLs the `message_logs.invite_id`
+pointing at them, keeping the SMS history) instead of failing the `NOT NULL`
+constraint on `profile_id`.
+
 ### `message_logs`
 
 `invite_id` / `hangout_id` (nullable), `direction`, `phone`, `body`, `success`, `error`, `created_at`.

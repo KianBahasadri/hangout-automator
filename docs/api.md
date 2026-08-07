@@ -20,7 +20,7 @@ JSON routes in `app/routers/api.py`, prefix `/api`. Schemas in `app/schemas.py`.
 | GET | `/api/hangouts` | Nested invites + profiles |
 | POST | `/api/hangouts` | Creates **draft** + invite rows; does not send SMS |
 | GET | `/api/hangouts/{id}` | |
-| PATCH | `/api/hangouts/{id}` | Clamps interval/goal/cooldown to allowed option sets |
+| PATCH | `/api/hangouts/{id}` | Clamps interval/goal/cooldown to allowed option sets; explicit `null` for a column the table requires (the `notify_*` settings) returns `400` |
 | POST | `/api/hangouts/{id}/setup` | Omit the body to reuse existing invitees; an explicit `{ "profile_ids": [...] }` selection returns `400` when empty or invalid, and **removes** invite rows left out of it that were never messaged (see [invites-and-followups.md](./invites-and-followups.md)) |
 | POST | `/api/hangouts/{id}/close` | Sets `closed` |
 
@@ -33,6 +33,13 @@ Create/update accept optional `drinks`, `smokes`, `drive`, `tag_ids`, `allergy_i
 Create defaults mirror the model/UI notify defaults (interval hours 6, skip-if-unchanged true, confirm/allergy/ride alerts on, decline off, goal 0, cooldown 0). Schema ranges are wider; service layer clamps to the option tuples in [data-model.md](./data-model.md).
 
 Enabling `notify_enabled` without a resolvable organizer phone (selected profile) returns **400** on API create/update.
+
+## Row ids
+
+Ids in a path or payload are bounded to `1 .. 2^63-1` (`app/ids.py`). SQLite
+cannot bind anything larger, so an unbounded id crashed the lookup it could
+never match; out-of-range ids now return **422**. Form fields that carry an id
+as free text (the organizer combobox) read as blank instead.
 
 ## Phone handling
 

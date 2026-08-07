@@ -9,6 +9,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
+from app.ids import RowId, RowIdPath, parse_row_id
 from app.models import (
     Allergy,
     Drive,
@@ -121,7 +122,7 @@ def tags_create(name: str = Form(...), db: Session = Depends(get_db)) -> Redirec
 
 
 @router.post("/tags/{tag_id}/delete")
-def tags_delete(tag_id: int, db: Session = Depends(get_db)) -> RedirectResponse:
+def tags_delete(tag_id: RowIdPath, db: Session = Depends(get_db)) -> RedirectResponse:
     tag = db.get(Tag, tag_id)
     if tag:
         db.delete(tag)
@@ -136,8 +137,8 @@ def profiles_create(
     drinks: str = Form(""),
     smokes: str = Form(""),
     drive: str = Form(""),
-    tag_ids: Annotated[list[int], Form()] = [],
-    allergy_ids: Annotated[list[int], Form()] = [],
+    tag_ids: Annotated[list[RowId], Form()] = [],
+    allergy_ids: Annotated[list[RowId], Form()] = [],
     db: Session = Depends(get_db),
 ) -> RedirectResponse:
     if not name.strip():
@@ -162,7 +163,7 @@ def profiles_create(
 
 
 @router.post("/profiles/{profile_id}/delete")
-def profiles_delete(profile_id: int, db: Session = Depends(get_db)) -> RedirectResponse:
+def profiles_delete(profile_id: RowIdPath, db: Session = Depends(get_db)) -> RedirectResponse:
     profile = db.get(Profile, profile_id)
     if profile:
         db.delete(profile)
@@ -208,17 +209,13 @@ def hangout_create(
     notify_on_ride_needed: str | None = Form(None),
     notify_confirm_goal: str = Form("0"),
     notify_threshold_cooldown_minutes: str = Form("0"),
-    profile_ids: Annotated[list[int] | None, Form()] = None,
+    profile_ids: Annotated[list[RowId] | None, Form()] = None,
     action: str = Form("draft"),
     db: Session = Depends(get_db),
 ) -> RedirectResponse:
     ids = profile_ids or []
-    org_profile = None
-    if organizer_profile_id.strip():
-        try:
-            org_profile = db.get(Profile, int(organizer_profile_id))
-        except ValueError:
-            org_profile = None
+    organizer_id = parse_row_id(organizer_profile_id)
+    org_profile = db.get(Profile, organizer_id) if organizer_id is not None else None
     notify = notify_enabled is not None
     # Notifications require an organizer profile with a phone
     if notify and not (org_profile and org_profile.phone):
@@ -268,7 +265,7 @@ def hangout_create(
 
 
 @router.get("/hangouts/{hangout_id}", response_class=HTMLResponse)
-def hangout_detail(request: Request, hangout_id: int, db: Session = Depends(get_db)) -> HTMLResponse:
+def hangout_detail(request: Request, hangout_id: RowIdPath, db: Session = Depends(get_db)) -> HTMLResponse:
     hangout = load_hangout(db, hangout_id)
     if not hangout:
         return RedirectResponse("/", status_code=303)
@@ -288,8 +285,8 @@ def hangout_detail(request: Request, hangout_id: int, db: Session = Depends(get_
 
 @router.post("/hangouts/{hangout_id}/setup")
 def hangout_setup(
-    hangout_id: int,
-    profile_ids: Annotated[list[int] | None, Form()] = None,
+    hangout_id: RowIdPath,
+    profile_ids: Annotated[list[RowId] | None, Form()] = None,
     db: Session = Depends(get_db),
 ) -> RedirectResponse:
     hangout = load_hangout(db, hangout_id)
@@ -304,7 +301,7 @@ def hangout_setup(
 
 
 @router.post("/hangouts/{hangout_id}/close")
-def hangout_close(hangout_id: int, db: Session = Depends(get_db)) -> RedirectResponse:
+def hangout_close(hangout_id: RowIdPath, db: Session = Depends(get_db)) -> RedirectResponse:
     hangout = db.get(Hangout, hangout_id)
     if hangout:
         hangout.status = HangoutStatus.closed
@@ -333,7 +330,7 @@ def allergies_create(name: str = Form(...), db: Session = Depends(get_db)) -> Re
 
 
 @router.post("/allergies/{allergy_id}/delete")
-def allergies_delete(allergy_id: int, db: Session = Depends(get_db)) -> RedirectResponse:
+def allergies_delete(allergy_id: RowIdPath, db: Session = Depends(get_db)) -> RedirectResponse:
     allergy = db.get(Allergy, allergy_id)
     if allergy:
         db.delete(allergy)

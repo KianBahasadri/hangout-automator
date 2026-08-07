@@ -23,6 +23,7 @@ app/
   event_logging.py  JSONL audit file, correlation IDs, HTTP trace middleware
   config.py         pydantic-settings
   database.py       engine, sessions, SQLite ensure/migrate
+  ids.py            row-id bounds for paths, payloads, and form fields
   models.py         ORM + enums
   schemas.py        API Pydantic models
   services.py       invites, RSVP, follow-ups, organizer SMS
@@ -32,6 +33,7 @@ app/
   templates/        Jinja pages
   static/           CSS, JS, icons
 docs/               topic docs + functional specification
+tests/              pytest suite + generated route/form smoke matrix
 terraform/          Azure VM + cloud-init
 scripts/            local run + rsync deploy
 ```
