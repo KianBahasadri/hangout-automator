@@ -56,7 +56,10 @@ Partial `_invitee_picker.html` + `invitee_picker.js` (new hangout and hangout de
 
 ## Hangout detail
 
-Status badge, logistics, organizer notify summary, RSVP counts, invitee table (status, drive/allergies/drinks/smokes, follow-up count), setup/re-invite form, close action.
+Status badge (`Happening Now` for active, `Hangout Over` for closed), logistics,
+organizer notify summary, RSVP counts, invitee table (status,
+drive/allergies/drinks/smokes, follow-up count), setup/re-invite form, close
+action.
 
 ## Settings
 

@@ -27,6 +27,7 @@ export TF_VAR_cloudflare_account_id="${TF_VAR_cloudflare_account_id:-${CLOUDFLAR
 export TF_VAR_cloudflare_zone_id="${TF_VAR_cloudflare_zone_id:-${CLOUDFLARE_ZONE_ID}}"
 export TF_VAR_cloudflare_hostname="${TF_VAR_cloudflare_hostname:-${CLOUDFLARE_TUNNEL_HOSTNAME}}"
 export TF_VAR_public_base_url="${TF_VAR_public_base_url:-${PUBLIC_BASE_URL:-https://${CLOUDFLARE_TUNNEL_HOSTNAME}}}"
+export TF_VAR_app_port="${TF_VAR_app_port:-${APP_PORT:-8000}}"
 
 # Who Cloudflare Access lets in. Terraform reads list variables from the
 # environment as JSON, so build it from the comma-separated .env value.

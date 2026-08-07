@@ -1,0 +1,3 @@
+{% macro hangout_status_badge(status) -%}
+<span class="badge badge-{{ status.value }}">{% if status.value == "active" %}Happening Now{% elif status.value == "closed" %}Hangout Over{% else %}{{ status.value }}{% endif %}</span>
+{%- endmacro %}

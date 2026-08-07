@@ -23,7 +23,8 @@ Also:
 ./scripts/run_local.sh
 ```
 
-Creates `.venv` (uv or venv), installs `requirements.txt`, sets local defaults, starts Uvicorn on `0.0.0.0:9000` with `--reload`.
+Creates `.venv` (uv or venv), installs `requirements.txt`, and starts the same
+settings-based Uvicorn launcher with `--reload`.
 
 Run the test suite (pytest, dev dependency group):
 
@@ -31,11 +32,14 @@ Run the test suite (pytest, dev dependency group):
 uv run --group dev pytest
 ```
 
-Open `http://127.0.0.1:9000`. Interactive OpenAPI UI is at `/docs` (served only when `ENABLE_API_DOCS` is true).
+Open `http://127.0.0.1:9000` by default. Interactive OpenAPI UI is at `/docs`
+(served only when `ENABLE_API_DOCS` is true).
 
 ## Environment
 
 Copy `.env.example` as needed. Settings are loaded by `app/config.py` (`pydantic-settings`).
+Both local launch commands read `APP_HOST` and `APP_PORT` from `.env` (or from
+the process environment), so changing `APP_PORT` changes the listening port.
 
 | Setting | Env var | Default (code) |
 |---------|---------|----------------|

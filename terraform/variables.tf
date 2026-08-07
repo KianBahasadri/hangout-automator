@@ -92,6 +92,17 @@ variable "public_base_url" {
   default     = ""
 }
 
+variable "app_port" {
+  description = "Port on which the app listens and the Cloudflare Tunnel connects. The dotenv-aware wrapper maps APP_PORT to this variable."
+  type        = number
+  default     = 8000
+
+  validation {
+    condition     = var.app_port >= 1 && var.app_port <= 65535 && floor(var.app_port) == var.app_port
+    error_message = "app_port must be an integer between 1 and 65535."
+  }
+}
+
 variable "cloudflare_account_id" {
   description = "Cloudflare account ID that owns the Tunnel."
   type        = string

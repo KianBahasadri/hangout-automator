@@ -14,7 +14,7 @@ write_files:
     permissions: "0600"
     content: |
       APP_HOST=127.0.0.1
-      APP_PORT=8000
+      APP_PORT=${app_port}
       DATABASE_URL=sqlite:////var/lib/hangout-automator/app.db
       LOG_FILE=/var/lib/hangout-automator/logs/server.log
       LOG_LEVEL=INFO
@@ -48,7 +48,7 @@ write_files:
       Group=${admin_username}
       WorkingDirectory=/opt/hangout-automator
       EnvironmentFile=/etc/hangout-automator.env
-      ExecStart=/opt/hangout-automator/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
+      ExecStart=/opt/hangout-automator/.venv/bin/python -m app.server
       Restart=always
       RestartSec=5
       UMask=0077

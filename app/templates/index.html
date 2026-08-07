@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_status_badge.html" import hangout_status_badge %}
 {% block title %}Home · Hangout Automator{% endblock %}
 {% block content %}
 <div style="display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap;align-items:center;margin-bottom:1.25rem;">
@@ -20,7 +21,7 @@
           {% if h.duration %} · {{ h.duration }}{% endif %}
         </div>
       </div>
-      <span class="badge badge-{{ h.status.value }}">{{ h.status.value }}</span>
+      {{ hangout_status_badge(h.status) }}
     </div>
     <div class="muted" style="margin-top:0.5rem;">
       {{ h.invites|length }} invitee{% if h.invites|length != 1 %}s{% endif %}

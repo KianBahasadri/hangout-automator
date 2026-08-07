@@ -21,10 +21,14 @@ def test_index_lists_hangouts(client, db):
     from app.models import Hangout, HangoutStatus
 
     db.add(Hangout(status=HangoutStatus.active, motive="Board games"))
+    db.add(Hangout(status=HangoutStatus.closed, motive="Finished dinner"))
     db.add(Hangout(status=HangoutStatus.draft, motive="Movie night"))
     db.commit()
 
     response = client.get("/")
     assert response.status_code == 200
     assert "Board games" in response.text
+    assert "Happening Now" in response.text
+    assert "Finished dinner" in response.text
+    assert "Hangout Over" in response.text
     assert "Movie night" in response.text

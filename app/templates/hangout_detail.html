@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_status_badge.html" import hangout_status_badge %}
 {% block title %}Hangout #{{ hangout.id }} · Hangout Automator{% endblock %}
 {% block content %}
 {% if error == 'need_profiles' %}
@@ -17,7 +18,7 @@
       {% if not hangout.day_date and not hangout.time %}<span class="muted">No date/time set</span>{% endif %}
     </p>
   </div>
-  <span class="badge badge-{{ hangout.status.value }}">{{ hangout.status.value }}</span>
+  {{ hangout_status_badge(hangout.status) }}
 </div>
 
 <div class="card" style="margin-top:1rem;">

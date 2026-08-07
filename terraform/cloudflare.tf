@@ -22,7 +22,7 @@ resource "cloudflare_zero_trust_tunnel_cloudflared_config" "app" {
     ingress = [
       {
         hostname = var.cloudflare_hostname
-        service  = "http://127.0.0.1:8000"
+        service  = "http://127.0.0.1:${var.app_port}"
       },
       {
         service = "http_status:404"

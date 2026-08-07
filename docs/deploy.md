@@ -19,7 +19,9 @@ Notable variables (`variables.tf` / `terraform.tfvars.example`): `prefix`,
 capacity](#region-and-vm-size-capacity)), required `ssh_public_key`, required Cloudflare
 account id, zone id, and `cloudflare_hostname`, optional `git_repo_url` /
 `git_branch` (default `main`), optional pinned `git_revision`, SMS/Twilio
-settings, `public_base_url`, `followup_hours`, and `organizer_interval_hours`.
+settings, `public_base_url`, `app_port`, `followup_hours`, and
+`organizer_interval_hours`. `scripts/terraform.sh` maps `APP_PORT` from the
+ignored `.env` to `app_port`.
 
 `cloudflare_hostname` deliberately has **no default** and the example tfvars
 carries placeholders: the deployed hostname is the only thing standing between
@@ -52,7 +54,7 @@ complete boundary:
 
 - Azure VM, NAT-backed private connectivity, network security group, systemd,
   and the persistent application disk
-- a Cloudflare Tunnel from the VM to `http://127.0.0.1:8000`
+- a Cloudflare Tunnel from the VM to `http://127.0.0.1:${APP_PORT}`
 - the Tunnel hostname route and DNS record for the configured zone and
   subdomain
 - the Cloudflare Access applications and policies in front of that hostname
@@ -368,7 +370,11 @@ because that binding silently overrides `SmsUrl`.
 Template `cloud-init.yaml.tftpl`:
 
 - Installs Python, git, and `cloudflared` from Cloudflare's apt repo
-- Writes `/etc/hangout-automator.env` (app on `127.0.0.1:8000`, DB `sqlite:////var/lib/hangout-automator/app.db`, `ENABLE_API_DOCS=false`, SMS settings from Terraform, and `LOG_*` settings for `/var/lib/hangout-automator/logs/server.log`)
+- Writes `/etc/hangout-automator.env` (app on `127.0.0.1:${APP_PORT}`, with
+  `APP_PORT` supplied from the ignored `.env`; DB
+  `sqlite:////var/lib/hangout-automator/app.db`, `ENABLE_API_DOCS=false`, SMS
+  settings from Terraform, and `LOG_*` settings for
+  `/var/lib/hangout-automator/logs/server.log`)
 - systemd unit `hangout-automator.service` running Uvicorn, with
   `RequiresMountsFor=/var/lib/hangout-automator` so the app refuses to start
   without the data disk instead of silently creating an empty SQLite file on
@@ -504,7 +510,7 @@ three units active, and the app answering locally:
 
 ```bash
 az vm run-command invoke -g <rg> -n <vm> --command-id RunShellScript \
-  --scripts "cloud-init status --long; systemctl is-active hangout-automator cloudflared hangout-backup.timer; curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8000/" \
+  --scripts "set -a; . /etc/hangout-automator.env; set +a; cloud-init status --long; systemctl is-active hangout-automator cloudflared hangout-backup.timer; curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:\${APP_PORT}/" \
   --query "value[0].message" -o tsv
 ```
 

@@ -133,6 +133,7 @@ resource "azurerm_linux_virtual_machine" "main" {
     twilio_from_number       = var.twilio_from_number
     followup_hours           = var.followup_hours
     organizer_interval_hours = var.organizer_interval_hours
+    app_port                 = var.app_port
     public_base_url          = var.public_base_url != "" ? var.public_base_url : "https://${var.cloudflare_hostname}"
     cloudflare_tunnel_token  = data.cloudflare_zero_trust_tunnel_cloudflared_token.app.token
   }))

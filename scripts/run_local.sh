@@ -15,8 +15,4 @@ if [ ! -x .venv/bin/uvicorn ]; then
   fi
 fi
 
-export SMS_PROVIDER="${SMS_PROVIDER:-mock}"
-export DATABASE_URL="${DATABASE_URL:-sqlite:///./hangout.db}"
-export PUBLIC_BASE_URL="${PUBLIC_BASE_URL:-http://127.0.0.1:9000}"
-
-exec .venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 9000 --reload
+exec .venv/bin/python -m app.dev

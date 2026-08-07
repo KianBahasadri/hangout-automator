@@ -10,13 +10,16 @@ Hangout Automator is a single shared-dataset FastAPI app: anyone who can open th
 - **Background jobs** — APScheduler in `app/main.py` lifespan: follow-ups every 5 minutes, organizer interval digests every 10 minutes
 - **Persistence** — SQLAlchemy + SQLite by default (`DATABASE_URL`)
 
-Entry points: `app.main:app` (Uvicorn) and console script `dev` → `app.dev:main`.
+Entry points: settings-aware launcher `python -m app.server` (production),
+console script `dev` → `app.dev:main` (reload), and the ASGI app
+`app.main:app`.
 
 ## Package layout
 
 ```
 app/
   main.py           FastAPI app, static mount, scheduler
+  server.py         settings-aware Uvicorn launcher
   event_logging.py  JSONL audit file, correlation IDs, HTTP trace middleware
   config.py         pydantic-settings
   database.py       engine, sessions, SQLite ensure/migrate

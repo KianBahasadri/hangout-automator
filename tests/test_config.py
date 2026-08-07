@@ -10,6 +10,16 @@ def test_mock_default_ok():
     assert settings.sms_provider == "mock"
 
 
+def test_app_port_loads_from_env_file(tmp_path, monkeypatch):
+    env_file = tmp_path / ".env"
+    env_file.write_text("APP_PORT=9123\n", encoding="utf-8")
+    monkeypatch.delenv("APP_PORT", raising=False)
+
+    settings = Settings(_env_file=env_file)
+
+    assert settings.app_port == 9123
+
+
 def test_twilio_incomplete_raises():
     with pytest.raises(ValidationError, match="TWILIO_AUTH_TOKEN"):
         Settings(
