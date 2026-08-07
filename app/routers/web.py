@@ -23,6 +23,7 @@ from app.models import (
     Tag,
     YesNo,
 )
+from app.messages import preview_message_catalog
 from app.services import (
     COOLDOWN_MINUTE_OPTIONS,
     CONFIRM_GOAL_OPTIONS,
@@ -431,6 +432,15 @@ def settings_page(request: Request, db: Session = Depends(get_db)) -> HTMLRespon
         request,
         "settings.html",
         {"allergies": _all_allergies(db)},
+    )
+
+
+@router.get("/settings/sms-simulator", response_class=HTMLResponse)
+def sms_simulator_page(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse(
+        request,
+        "sms_simulator.html",
+        {"messages": preview_message_catalog()},
     )
 
 

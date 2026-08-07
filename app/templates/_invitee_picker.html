@@ -29,8 +29,8 @@
     <button type="button" class="chip" data-toggle-filter='{"drive":"yes"}'>Drives</button>
     <button type="button" class="chip" data-toggle-filter='{"drive":"maybe"}'>Maybe drives</button>
     <button type="button" class="chip" data-toggle-filter='{"drive":"no"}'>Needs ride</button>
-    <button type="button" class="chip" data-toggle-filter='{"allergies":"yes"}'>Has allergies</button>
-    <button type="button" class="chip" data-toggle-filter='{"allergies":"no"}'>No allergies noted</button>
+    <button type="button" class="chip" data-toggle-filter='{"allergies":"yes"}'>Has restrictions</button>
+    <button type="button" class="chip" data-toggle-filter='{"allergies":"no"}'>No restrictions noted</button>
   </div>
 
   <div class="invitee-grid" role="group" aria-label="Invitees">
@@ -60,7 +60,7 @@
           {% if p.drinks %}drinks: {{ p.drinks.value }}{% endif %}
           {% if p.smokes %}{% if p.drinks %} · {% endif %}smokes: {{ p.smokes.value }}{% endif %}
           {% if p.drive %}{% if p.drinks or p.smokes %} · {% endif %}drive: {{ p.drive.value }}{% endif %}
-          {% if p.has_allergies %} · allergies{% endif %}
+          {% if p.has_allergies %} · restrictions{% endif %}
         </span>
         {% if p.id in checked and already_label|default(false) %}
         <span class="muted">· already on list</span>

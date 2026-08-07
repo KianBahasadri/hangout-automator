@@ -4,28 +4,34 @@
 <h1>Settings</h1>
 
 <div class="card tag-manager">
-  <h2 style="margin-top:0;">Food allergies</h2>
+  <h2 style="margin-top:0;">Dietary Restrictions</h2>
   {% if allergies %}
   <div class="tag-list">
     {% for a in allergies %}
     <span class="tag-list-item">
       {{ a.name }}
-      <form method="post" action="/allergies/{{ a.id }}/delete" onsubmit="return confirm('Delete allergy {{ a.name }}?');">
-        <button class="tag-remove" type="submit" title="Delete allergy" aria-label="Delete allergy">×</button>
+      <form method="post" action="/allergies/{{ a.id }}/delete" onsubmit="return confirm('Delete restriction {{ a.name }}?');">
+        <button class="tag-remove" type="submit" title="Delete restriction" aria-label="Delete restriction">×</button>
       </form>
     </span>
     {% endfor %}
   </div>
   {% else %}
-  <p class="muted" style="margin-top:0;">No allergies defined yet.</p>
+  <p class="muted" style="margin-top:0;">No restrictions defined yet.</p>
   {% endif %}
   <form method="post" action="/allergies" class="field-row" style="align-items:flex-end;">
     <div style="flex:2;">
-      <label for="allergy_name">New allergy</label>
-      <input id="allergy_name" name="name" type="text" required maxlength="64" placeholder="peanuts" style="margin-bottom:0;" />
+      <label for="allergy_name">New restriction</label>
+      <input id="allergy_name" name="name" type="text" required maxlength="64" placeholder="gluten" style="margin-bottom:0;" />
     </div>
-    <button class="btn" type="submit">Add allergy</button>
+    <button class="btn" type="submit">Add restriction</button>
   </form>
+</div>
+
+<div class="card">
+  <h2 style="margin-top:0;">SMS simulator</h2>
+  <p class="muted" style="margin-top:0;">Preview invite, follow-up, RSVP, and organizer message layouts without sending.</p>
+  <a class="btn" href="/settings/sms-simulator">Open SMS simulator</a>
 </div>
 
 <div class="card">

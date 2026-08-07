@@ -50,7 +50,8 @@ def test_invitee_reply_confirm_updates_status(db):
 
     reply = process_inbound_sms(db, "+15551112222", "confirm")
 
-    assert reply == f"You're confirmed for hangout #{hangout.id}. See you!"
+    assert f"You're confirmed for hangout #{hangout.id}." in reply
+    assert "See you!" in reply
     db.refresh(invite)
     assert invite.status == InviteStatus.confirmed
     assert invite.responded_at is not None
@@ -197,3 +198,83 @@ def test_confirm_triggers_organizer_threshold_sms(db):
     assert any("new confirmation" in log.body for log in logs)
     db.refresh(invite)
     assert invite.status == InviteStatus.confirmed
+
+
+def test_info_returns_headcounts_without_changing_status(db):
+    from app.models import Drive
+
+    sam = _profile(db, "Sam", "+15551112222")
+    lee = _profile(db, "Lee", "+15553334444")
+    pat = _profile(db, "Pat", "+15555556666")
+    hangout, sam_invite = _active_hangout_with_invite(db, sam)
+    db.add(HangoutInvite(hangout_id=hangout.id, profile_id=lee.id, status=InviteStatus.confirmed))
+    db.add(HangoutInvite(hangout_id=hangout.id, profile_id=pat.id, status=InviteStatus.declined))
+    lee.drive = Drive.yes
+    db.commit()
+
+    reply = process_inbound_sms(db, "+15551112222", "INFO")
+
+    assert "headcount" in reply.lower()
+    assert "Coming: 1" in reply
+    assert "Pending: 1" in reply
+    assert "Declined: 1" in reply
+    assert "Lee" not in reply  # names only on INFO 2
+    assert "Your RSVP: pending" in reply
+    db.refresh(sam_invite)
+    assert sam_invite.status == InviteStatus.pending
+    assert sam_invite.responded_at is None
+
+
+def test_info_2_returns_named_guest_list(db):
+    from app.models import Drive
+
+    sam = _profile(db, "Sam", "+15551112222")
+    lee = _profile(db, "Lee", "+15553334444")
+    pat = _profile(db, "Pat", "+15555556666")
+    hangout, sam_invite = _active_hangout_with_invite(db, sam)
+    db.add(HangoutInvite(hangout_id=hangout.id, profile_id=lee.id, status=InviteStatus.confirmed))
+    db.add(HangoutInvite(hangout_id=hangout.id, profile_id=pat.id, status=InviteStatus.declined))
+    lee.drive = Drive.yes
+    db.commit()
+
+    reply = process_inbound_sms(db, "+15551112222", "info 2")
+
+    assert "guest list" in reply.lower()
+    assert "Coming (1): Lee" in reply
+    assert "Pending (1): Sam" in reply
+    assert "Declined (1): Pat" in reply
+    assert "Can drive: Lee" in reply
+    assert "Your RSVP: pending" in reply
+    db.refresh(sam_invite)
+    assert sam_invite.status == InviteStatus.pending
+
+
+def test_invite_message_is_multiline_with_info_options(db):
+    from app.services import load_hangout, setup_hangout
+
+    invitee = _profile(db, "Sam", "+15551112222")
+    hangout = Hangout(
+        status=HangoutStatus.draft,
+        motive="Dinner",
+        day_date="2026-08-08",
+        time="19:00",
+        location="Sam's place",
+    )
+    db.add(hangout)
+    db.flush()
+    db.add(HangoutInvite(hangout_id=hangout.id, profile_id=invitee.id, status=InviteStatus.pending))
+    db.commit()
+
+    setup_hangout(db, load_hangout(db, hangout.id), profile_ids=[invitee.id])
+    body = (
+        db.query(MessageLog)
+        .filter(MessageLog.direction == MessageDirection.outbound)
+        .order_by(MessageLog.id.desc())
+        .first()
+        .body
+    )
+    assert "You're invited:" in body
+    assert "When: 2026-08-08 at 19:00" in body
+    assert "Where: Sam's place" in body
+    assert "INFO — headcount" in body
+    assert "INFO 2 — full guest list" in body

@@ -31,6 +31,24 @@ class AllergyCreate(BaseModel):
     name: str = Field(min_length=1, max_length=64)
 
 
+class InviteSmsPreviewIn(BaseModel):
+    """Form fields used to preview an invite SMS without creating a hangout."""
+
+    recipient_name: str = "Alex"
+    day_date: Optional[str] = None
+    time: Optional[str] = None
+    duration: Optional[str] = None
+    location: Optional[str] = None
+    motive: Optional[str] = None
+    alcohol_involved: Optional[str] = None
+    weed_involved: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class InviteSmsPreviewOut(BaseModel):
+    body: str
+
+
 class ProfileCreate(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     phone: str = Field(min_length=5, max_length=32)

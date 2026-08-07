@@ -78,7 +78,30 @@ def test_settings_links_to_log_download(client):
     response = client.get("/settings")
     assert response.status_code == 200
     assert 'href="/settings/logs"' in response.text
-    assert "Download log file" in response.text
+    assert 'href="/settings/sms-simulator"' in response.text
+    assert "Dietary Restrictions" in response.text
+    assert "Food allergies" not in response.text
+    # Defaults seeded on init_db
+    assert "meat" in response.text
+    assert "pork" in response.text
+
+
+def test_sms_simulator_page_renders_sample_messages(client):
+    response = client.get("/settings/sms-simulator")
+    assert response.status_code == 200
+    assert "SMS simulator" in response.text
+    # Apostrophe is HTML-escaped in the preformatted body.
+    assert "invited:" in response.text
+    assert "INFO — headcount" in response.text
+    assert "Organizer digest" in response.text
+
+
+def test_new_hangout_has_preview_invite_button(client):
+    response = client.get("/hangouts/new")
+    assert response.status_code == 200
+    assert 'id="preview-invite-sms"' in response.text
+    assert "Preview invite SMS" in response.text
+    assert "hangout_sms_preview.js" in response.text
 
 
 def test_header_has_theme_toggle_after_settings(client):

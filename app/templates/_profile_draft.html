@@ -46,7 +46,7 @@
     </div>
   </div>
 
-  <label>Food allergies</label>
+  <label>Dietary Restrictions</label>
   {% if allergies %}
   <div class="tag-checkboxes" data-field="allergy_ids">
     {% for a in allergies %}
@@ -57,7 +57,7 @@
     {% endfor %}
   </div>
   {% else %}
-  <p class="muted" style="margin-top:0;">No allergies defined yet.</p>
+  <p class="muted" style="margin-top:0;">No restrictions defined yet.</p>
   {% endif %}
 
   <label>Tags</label>

@@ -6,12 +6,15 @@ from sqlalchemy.orm import Session, joinedload
 from app.database import get_db
 from app.ids import RowIdPath
 from app.models import Allergy, Hangout, HangoutInvite, HangoutStatus, Profile, Tag, not_null_columns
+from app.messages import craft_invite_preview
 from app.schemas import (
     AllergyCreate,
     AllergyOut,
     HangoutCreate,
     HangoutOut,
     HangoutUpdate,
+    InviteSmsPreviewIn,
+    InviteSmsPreviewOut,
     ProfileCreate,
     ProfileOut,
     ProfileUpdate,
@@ -40,6 +43,24 @@ router = APIRouter(prefix="/api", tags=["api"])
 @router.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@router.post("/sms/preview-invite", response_model=InviteSmsPreviewOut)
+def preview_invite_sms(payload: InviteSmsPreviewIn) -> InviteSmsPreviewOut:
+    """Craft an invite SMS body from hangout fields (preview only; does not send)."""
+    return InviteSmsPreviewOut(
+        body=craft_invite_preview(
+            recipient_name=payload.recipient_name,
+            day_date=payload.day_date,
+            time=payload.time,
+            duration=payload.duration,
+            location=payload.location,
+            motive=payload.motive,
+            alcohol_involved=payload.alcohol_involved,
+            weed_involved=payload.weed_involved,
+            notes=payload.notes,
+        )
+    )
 
 
 # --- Tags ---

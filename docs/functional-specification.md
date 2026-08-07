@@ -64,7 +64,7 @@ This document defines **what** the MVP must do from a user and system perspectiv
 ### 4.3 Organizer: stay updated
 
 1. At any time, open the website and view the full hangout picture (no login, no phone number required).
-2. Optionally, if an organizer profile is selected for notifications, receive SMS updates at configured intervals and/or when thresholds are met (e.g. first confirmation, enough drivers, allergy flags).
+2. Optionally, if an organizer profile is selected for notifications, receive SMS updates at configured intervals and/or when thresholds are met (e.g. first confirmation, enough drivers, dietary-restriction flags).
 
 ---
 
@@ -108,7 +108,7 @@ Profiles live in a **single shared list** for the application. An invitee must e
 |-----------|------------------------------|
 | Drinks alcohol? | Yes / No (blank if unset) |
 | Smokes? | Yes / No (blank if unset) |
-| Food allergies | Zero or more from a shared allergy list (managed in Settings) |
+| Dietary Restrictions | Zero or more from a shared list (managed in Settings; defaults include meat and pork) |
 | Drive? | Yes / No / Maybe (blank if unset) |
 | Tags | Zero or more labels (e.g. friends, coworkers) for bulk invite selection |
 
@@ -117,8 +117,8 @@ Profiles live in a **single shared list** for the application. An invitee must e
 | PROF-6 | Optional fields may be left blank; blank must not block invites. | Must |
 | PROF-7 | Profiles are **shared application data** (not owned by individual accounts). Any visitor sees the same list. | Must |
 | PROF-8 | Site users can create and delete shared tags and assign tags to profiles. | Must |
-| PROF-8b | Site users can create and delete shared food-allergy options in Settings and assign them to profiles. | Must |
-| PROF-9 | When selecting invitees, the UI must support toggling all profiles with a given tag, and toggling groups by profile fields (e.g. drinks / does not drink, drives / needs ride, has allergies). | Should |
+| PROF-8b | Site users can create and delete shared dietary-restriction options in Settings and assign them to profiles. Defaults include meat and pork. | Must |
+| PROF-9 | When selecting invitees, the UI must support toggling all profiles with a given tag, and toggling groups by profile fields (e.g. drinks / does not drink, drives / needs ride, has dietary restrictions). | Should |
 
 ### 5.4 Hangout creation and details
 
@@ -156,7 +156,7 @@ Hangout details describe the plan. **All hangout detail fields are optional** so
 |----|-------------|----------|
 | SMS-1 | On hangout setup, the system crafts an SMS and sends it **individually** to each selected invitee’s phone number. | Must |
 | SMS-2 | Message content should include available hangout details (date/time, location, motive, alcohol, weed, duration, etc.) and clear reply instructions. | Must |
-| SMS-3 | Message instructs the invitee how to respond, including at least: **confirm** (e.g. “confirm” / “yes”) and **remind** (e.g. “remind”) or equivalent short keywords. Exact keywords and wording are implementation/copy decisions but must be documented in product copy. | Must |
+| SMS-3 | Message instructs the invitee how to respond, including at least: **confirm**, **remind**, **decline**, plus **info** (headcount) and **info 2** (full guest list). Exact keywords and wording are implementation/copy decisions but must be documented in product copy. | Must |
 | SMS-4 | Each invite is tracked per invitee (delivery/send status and response status). | Must |
 | SMS-5 | Failed sends (invalid number, provider error) are visible on the hangout status view. | Should |
 
@@ -165,7 +165,7 @@ Hangout details describe the plan. **All hangout detail fields are optional** so
 | ID | Requirement | Priority |
 |----|-------------|----------|
 | RSVP-1 | System accepts inbound SMS replies and maps them to the correct hangout invitee (by phone number / active invite context). | Must |
-| RSVP-2 | Recognized reply intents include at least: **confirm** (attending) and **remind** (request a reminder). Additional intents (decline, maybe) may be added if specified later. | Must |
+| RSVP-2 | Recognized reply intents include: **confirm** (attending), **remind** (request a reminder), **decline**, **info** (headcount), and **info 2** (named guest list + logistics). Info intents are read-only. | Must |
 | RSVP-3 | If an invitee does not respond, the system may send **one or two follow-up** SMS messages, then **stop** contacting that invitee for that hangout. | Must |
 | RSVP-4 | Follow-up cadence (timing between messages) is configurable or set to sensible defaults; exact schedule is an implementation/product setting. | Should |
 | RSVP-5 | Once the follow-up limit is reached with no response, invitee status remains **no response** (or equivalent) and no further automated asks are sent. | Must |
@@ -180,7 +180,7 @@ Organizer SMS updates help the host stay current without constantly opening the 
 | NOTIF-1 | SMS notifications for a hangout can optionally be enabled (hangout-level settings). | Must |
 | NOTIF-2 | Notifications may be driven by **intervals**, **thresholds**, or **both**. | Must |
 | NOTIF-3 | Interval digests are customizable per hangout: cadence (hours between digests) and whether to skip when RSVP/logistics are unchanged since the last SMS. | Must |
-| NOTIF-4 | Threshold alerts are customizable per hangout: which events fire (new confirm, decline, allergy on confirm, ride needed on confirm), an optional one-shot confirmed-count milestone, and an optional cooldown for routine confirm/decline alerts. Allergy, ride, and milestone alerts bypass cooldown. | Must |
+| NOTIF-4 | Threshold alerts are customizable per hangout: which events fire (new confirm, decline, dietary restriction on confirm, ride needed on confirm), an optional one-shot confirmed-count milestone, and an optional cooldown for routine confirm/decline alerts. Restriction, ride, and milestone alerts bypass cooldown. | Must |
 | NOTIF-5 | Notification content should summarize useful logistics, such as: who is coming / not coming / no response; notable allergies; who needs a ride or can drive. | Should |
 | NOTIF-6 | Notification preferences can be disabled or adjusted. | Must |
 | NOTIF-7 | Organizer SMS is only available if an organizer profile (with phone) has been selected (§5.2), or a settings fallback phone exists. Missing phone must never block non-SMS use of the product. | Must |
@@ -191,7 +191,7 @@ Organizer SMS updates help the host stay current without constantly opening the 
 |----|-------------|----------|
 | STAT-1 | Opening the website shows the **full picture** for hangouts: per-invitee status and relevant profile-derived logistics. No login required. | Must |
 | STAT-2 | Status view shows at least: invited list; response state (confirmed / remind requested / no response / declined if supported); send/follow-up history at a high level. | Must |
-| STAT-3 | Status view surfaces logistics derived from confirmed (or all invited) profiles where available: food allergies, driving capability, drink/smoke preferences if relevant to planning. | Should |
+| STAT-3 | Status view surfaces logistics derived from confirmed (or all invited) profiles where available: dietary restrictions, driving capability, drink/smoke preferences if relevant to planning. | Should |
 | STAT-4 | Status is the source of truth for detailed review; SMS notifications are optional summaries only. | Must |
 
 ### 5.9 Messaging boundaries (MVP assumptions)
@@ -295,7 +295,7 @@ These items need product decisions before or during implementation:
 2. **Remind behavior** — when is the reminder sent (e.g. day-of, N hours before)?
 3. **Editing after send** — can hangout details change, and do invitees get an update SMS?
 4. **Default follow-up timing** — e.g. +24h and +48h.
-5. **Threshold examples for organizer SMS** — ~~which events fire by default?~~ Defaults: new confirm, allergy, ride needed; decline off; milestone off; no cooldown. Interval default 6h with skip-if-unchanged.
+5. **Threshold examples for organizer SMS** — ~~which events fire by default?~~ Defaults: new confirm, dietary restriction, ride needed; decline off; milestone off; no cooldown. Interval default 6h with skip-if-unchanged.
 6. **Timezone handling** for hangout day/time and scheduled messages.
 7. **Regulatory/compliance** — SMS consent language, STOP handling, region (e.g. US A2P). Open site + SMS has obvious abuse risk; acceptable for private MVP only?
 8. **Duplicate profiles** — prevent same phone twice in the shared list?

@@ -1073,6 +1073,123 @@ th {
   color: var(--save-err);
 }
 
+/* --- SMS simulator / phone preview --- */
+
+.sms-sim-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.sms-sim-card {
+  margin-bottom: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.sms-sim-title {
+  margin: 0 0 0.25rem;
+  font-size: 1rem;
+}
+
+.sms-sim-desc {
+  margin: 0 0 0.85rem;
+  font-size: 0.85rem;
+}
+
+.sms-phone {
+  display: flex;
+  justify-content: center;
+  flex: 1;
+}
+
+.sms-phone-bezel {
+  width: 100%;
+  max-width: 280px;
+  background: #111820;
+  border: 2px solid #2a3545;
+  border-radius: 28px;
+  padding: 0.55rem 0.55rem 0.85rem;
+  box-shadow: var(--shadow);
+}
+
+html[data-theme="light"] .sms-phone-bezel {
+  background: #1a2330;
+  border-color: #3a4658;
+}
+
+.sms-phone-notch {
+  width: 36%;
+  height: 8px;
+  margin: 0.15rem auto 0.55rem;
+  background: #0a0e14;
+  border-radius: 999px;
+}
+
+.sms-phone-screen {
+  background: #0c121a;
+  border-radius: 18px;
+  min-height: 160px;
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+.sms-bubble {
+  max-width: 100%;
+  border-radius: 14px 14px 4px 14px;
+  padding: 0.65rem 0.75rem;
+  background: #2a6fad;
+  color: #f4f8fc;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+.sms-bubble-out {
+  align-self: flex-end;
+}
+
+.sms-body {
+  margin: 0;
+  font-family: var(--font);
+  font-size: 0.88rem;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: inherit;
+}
+
+.sms-preview-dialog {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0;
+  background: var(--surface);
+  color: var(--text);
+  max-width: min(420px, calc(100vw - 2rem));
+  width: 100%;
+  box-shadow: var(--shadow);
+}
+
+.sms-preview-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.sms-preview-dialog-inner {
+  padding: 1rem 1.15rem 1.15rem;
+}
+
+.sms-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.sms-phone-modal .sms-phone-bezel {
+  max-width: 100%;
+}
+
 @media (max-width: 700px) {
   .profile-editor-actions {
     width: 100%;

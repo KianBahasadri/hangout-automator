@@ -121,7 +121,7 @@ class Tag(Base):
 
 
 class Allergy(Base):
-    """Catalog of food-allergy options; managed in Settings."""
+    """Catalog of dietary-restriction options; managed in Settings."""
 
     __tablename__ = "allergies"
 

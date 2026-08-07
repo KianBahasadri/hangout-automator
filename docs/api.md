@@ -7,10 +7,11 @@ JSON routes in `app/routers/api.py`, prefix `/api`. Schemas in `app/schemas.py`.
 | Method | Path | Notes |
 |--------|------|-------|
 | GET | `/api/health` | `{"status":"ok"}` |
+| POST | `/api/sms/preview-invite` | Craft invite SMS body from hangout fields (preview only; does not send) |
 | GET | `/api/tags` | List tags |
 | POST | `/api/tags` | 201; normalized name; case-insensitive unique |
 | DELETE | `/api/tags/{id}` | 204 |
-| GET | `/api/allergies` | List allergies |
+| GET | `/api/allergies` | List dietary restrictions (catalog defaults: meat, pork) |
 | POST | `/api/allergies` | 201; same uniqueness rules as tags |
 | DELETE | `/api/allergies/{id}` | 204 |
 | GET | `/api/profiles` | Includes `tags` and `allergies` |

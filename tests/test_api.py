@@ -13,6 +13,37 @@ def _create_hangout(client, payload=None):
     return response.json()
 
 
+def test_preview_invite_sms_uses_form_fields(client_no_raise):
+    response = client_no_raise.post(
+        "/api/sms/preview-invite",
+        json={
+            "recipient_name": "Sam",
+            "motive": "Dinner",
+            "day_date": "2026-08-15",
+            "time": "19:00",
+            "location": "Sam's place",
+            "alcohol_involved": "yes",
+        },
+    )
+    assert response.status_code == 200
+    body = response.json()["body"]
+    assert "Hey Sam!" in body
+    assert "You're invited:" in body
+    assert "Dinner" in body
+    assert "When: 2026-08-15 at 19:00" in body
+    assert "Where: Sam's place" in body
+    assert "Alcohol: yes" in body
+    assert "INFO — headcount" in body
+
+
+def test_default_dietary_restrictions_are_seeded(client_no_raise):
+    response = client_no_raise.get("/api/allergies")
+    assert response.status_code == 200
+    names = {row["name"].lower() for row in response.json()}
+    assert "meat" in names
+    assert "pork" in names
+
+
 def test_empty_hangout_payload_creates_a_draft(client_no_raise):
     hangout = _create_hangout(client_no_raise)
 
@@ -65,7 +96,7 @@ def test_hangout_location_appears_in_invite_sms(client_no_raise, db):
 
     body = db.query(MessageLog).order_by(MessageLog.id.desc()).first().body
     assert "Sam's place" in body
-    assert "@ Sam's place" in body
+    assert "Where: Sam's place" in body
 
 
 @pytest.mark.parametrize("payload", [None, {}, {"profile_ids": []}])

@@ -40,7 +40,7 @@
             · alerts:
             {% if hangout.notify_on_new_confirm %}confirm {% endif %}
             {% if hangout.notify_on_decline %}decline {% endif %}
-            {% if hangout.notify_on_allergy %}allergy {% endif %}
+            {% if hangout.notify_on_allergy %}restriction {% endif %}
             {% if hangout.notify_on_ride_needed %}ride {% endif %}
             {% if hangout.notify_confirm_goal %}· goal {{ hangout.notify_confirm_goal }}{% if hangout.notify_confirm_goal_sent %} (hit){% endif %}{% endif %}
             {% if hangout.notify_threshold_cooldown_minutes %}· {{ hangout.notify_threshold_cooldown_minutes }}m cooldown{% endif %}
@@ -93,7 +93,7 @@
         <td><span class="badge badge-{{ inv.status.value }}">{{ inv.status.value }}</span></td>
         <td class="muted">
           {% if inv.profile.drive %}drive: {{ inv.profile.drive.value }}{% endif %}
-          {% if inv.profile.food_allergies_label %}<br />allergies: {{ inv.profile.food_allergies_label }}{% endif %}
+          {% if inv.profile.food_allergies_label %}<br />restrictions: {{ inv.profile.food_allergies_label }}{% endif %}
           {% if inv.profile.drinks %}<br />drinks: {{ inv.profile.drinks.value }}{% endif %}
           {% if inv.profile.smokes %}<br />smokes: {{ inv.profile.smokes.value }}{% endif %}
         </td>

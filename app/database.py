@@ -125,17 +125,40 @@ def get_db() -> Generator[Session, None, None]:
         db.close()
 
 
+# Default dietary-restriction catalog entries (seeded on every init if missing).
+DEFAULT_DIETARY_RESTRICTIONS = ("meat", "pork")
+
+
 def init_db() -> None:
     from app import models  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
     _ensure_sqlite_columns()
     _migrate_legacy_food_allergies()
+    _ensure_default_dietary_restrictions()
 
 
 def _table_cols(conn, table: str) -> set[str]:  # type: ignore[no-untyped-def]
     rows = conn.execute(text(f"PRAGMA table_info({table})")).fetchall()
     return {row[1] for row in rows}
+
+
+def _ensure_default_dietary_restrictions() -> None:
+    """Ensure default dietary-restriction catalog rows exist (idempotent)."""
+    from app.models import Allergy
+
+    db = SessionLocal()
+    try:
+        added = False
+        for name in DEFAULT_DIETARY_RESTRICTIONS:
+            exists = db.query(Allergy).filter(Allergy.name.ilike(name)).first()
+            if not exists:
+                db.add(Allergy(name=name))
+                added = True
+        if added:
+            db.commit()
+    finally:
+        db.close()
 
 
 def _migrate_legacy_food_allergies() -> None:
@@ -258,7 +281,8 @@ def _ensure_sqlite_columns() -> None:
 
     # Deliberately outside the block above: the rebuild has to run with foreign
     # keys off, which SQLite only honours when no transaction is open.
-    rebuilt = _rebuild_profiles_if_needed()
+    rebuilt_profiles = _rebuild_profiles_if_needed()
+    rebuilt_hangouts = _rebuild_hangouts_if_needed()
 
     with engine.begin() as conn:
         # Prefer blank (NULL) over legacy "unknown"
@@ -275,7 +299,7 @@ def _ensure_sqlite_columns() -> None:
                 except Exception:
                     pass
 
-    if rebuilt:
+    if rebuilt_profiles or rebuilt_hangouts:
         # Belt and braces: no pooled connection should survive a rebuild without
         # having run the connect-time PRAGMAs.
         engine.dispose()
@@ -367,6 +391,144 @@ def _rebuild_profiles_if_needed() -> bool:
             )
             conn.exec_driver_sql("DROP TABLE profiles")
             conn.exec_driver_sql("ALTER TABLE profiles_new RENAME TO profiles")
+            conn.exec_driver_sql("COMMIT")
+        except Exception:
+            conn.exec_driver_sql("ROLLBACK")
+            raise
+        finally:
+            conn.exec_driver_sql("PRAGMA foreign_keys=ON")
+    return True
+
+
+def _rebuild_hangouts_if_needed() -> bool:
+    """Recreate hangouts so alcohol/weed are nullable (SQLite can't ALTER nullability).
+
+    Older DBs created alcohol_involved / weed_involved as NOT NULL (sometimes with
+    a default of 'unknown'). The app now stores blank as NULL, so inserts with
+    empty optional enums fail with IntegrityError until this rebuild runs.
+
+    Same foreign-key / autocommit caveats as `_rebuild_profiles_if_needed`.
+    """
+    with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
+        rows = conn.exec_driver_sql("PRAGMA table_info(hangouts)").fetchall()
+        if not rows:
+            return False
+        by_name = {row[1]: row for row in rows}
+        needs_rebuild = False
+        for col in ("alcohol_involved", "weed_involved"):
+            info = by_name.get(col)
+            if info and info[3] == 1:  # notnull
+                needs_rebuild = True
+        if not needs_rebuild:
+            return False
+
+        def col_or(default: str, *names: str) -> str:
+            for name in names:
+                if name in by_name:
+                    return name
+            return default
+
+        def yn(col: str) -> str:
+            if col not in by_name:
+                return "NULL"
+            return f"CASE WHEN {col} IN ('', 'unknown') THEN NULL ELSE {col} END"
+
+        def bool_col(col: str, default: str) -> str:
+            return col if col in by_name else default
+
+        def int_col(col: str, default: str) -> str:
+            return col if col in by_name else default
+
+        select_cols = f"""
+            id,
+            {col_or("NULL", "day_date")} AS day_date,
+            {col_or("NULL", "time")} AS time,
+            {col_or("NULL", "duration")} AS duration,
+            {col_or("NULL", "location")} AS location,
+            {col_or("NULL", "motive")} AS motive,
+            {yn("alcohol_involved")} AS alcohol_involved,
+            {yn("weed_involved")} AS weed_involved,
+            {col_or("NULL", "notes")} AS notes,
+            COALESCE({col_or("'draft'", "status")}, 'draft') AS status,
+            {col_or("NULL", "organizer_profile_id")} AS organizer_profile_id,
+            {col_or("NULL", "organizer_phone")} AS organizer_phone,
+            COALESCE({bool_col("notify_enabled", "0")}, 0) AS notify_enabled,
+            COALESCE({bool_col("notify_interval", "0")}, 0) AS notify_interval,
+            COALESCE({bool_col("notify_threshold", "0")}, 0) AS notify_threshold,
+            COALESCE({int_col("notify_interval_hours", "6")}, 6) AS notify_interval_hours,
+            COALESCE({bool_col("notify_interval_only_if_changed", "1")}, 1)
+                AS notify_interval_only_if_changed,
+            {col_or("NULL", "last_digest_fingerprint")} AS last_digest_fingerprint,
+            COALESCE({bool_col("notify_on_new_confirm", "1")}, 1) AS notify_on_new_confirm,
+            COALESCE({bool_col("notify_on_decline", "0")}, 0) AS notify_on_decline,
+            COALESCE({bool_col("notify_on_allergy", "1")}, 1) AS notify_on_allergy,
+            COALESCE({bool_col("notify_on_ride_needed", "1")}, 1) AS notify_on_ride_needed,
+            COALESCE({int_col("notify_confirm_goal", "0")}, 0) AS notify_confirm_goal,
+            COALESCE({bool_col("notify_confirm_goal_sent", "0")}, 0) AS notify_confirm_goal_sent,
+            COALESCE({int_col("notify_threshold_cooldown_minutes", "0")}, 0)
+                AS notify_threshold_cooldown_minutes,
+            {col_or("NULL", "last_organizer_notify_at")} AS last_organizer_notify_at,
+            {col_or("NULL", "activated_at")} AS activated_at,
+            created_at
+        """
+
+        conn.exec_driver_sql("PRAGMA foreign_keys=OFF")
+        try:
+            conn.exec_driver_sql("BEGIN")
+            conn.exec_driver_sql(
+                """
+                CREATE TABLE hangouts_new (
+                    id INTEGER NOT NULL PRIMARY KEY,
+                    day_date VARCHAR(64),
+                    time VARCHAR(64),
+                    duration VARCHAR(64),
+                    location VARCHAR(255),
+                    motive VARCHAR(255),
+                    alcohol_involved VARCHAR(16),
+                    weed_involved VARCHAR(16),
+                    notes TEXT,
+                    status VARCHAR(16) NOT NULL,
+                    organizer_profile_id INTEGER REFERENCES profiles(id) ON DELETE SET NULL,
+                    organizer_phone VARCHAR(32),
+                    notify_enabled BOOLEAN NOT NULL DEFAULT 0,
+                    notify_interval BOOLEAN NOT NULL DEFAULT 0,
+                    notify_threshold BOOLEAN NOT NULL DEFAULT 0,
+                    notify_interval_hours INTEGER NOT NULL DEFAULT 6,
+                    notify_interval_only_if_changed BOOLEAN NOT NULL DEFAULT 1,
+                    last_digest_fingerprint VARCHAR(512),
+                    notify_on_new_confirm BOOLEAN NOT NULL DEFAULT 1,
+                    notify_on_decline BOOLEAN NOT NULL DEFAULT 0,
+                    notify_on_allergy BOOLEAN NOT NULL DEFAULT 1,
+                    notify_on_ride_needed BOOLEAN NOT NULL DEFAULT 1,
+                    notify_confirm_goal INTEGER NOT NULL DEFAULT 0,
+                    notify_confirm_goal_sent BOOLEAN NOT NULL DEFAULT 0,
+                    notify_threshold_cooldown_minutes INTEGER NOT NULL DEFAULT 0,
+                    last_organizer_notify_at DATETIME,
+                    activated_at DATETIME,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL
+                )
+                """
+            )
+            conn.exec_driver_sql(
+                f"""
+                INSERT INTO hangouts_new (
+                    id, day_date, time, duration, location, motive,
+                    alcohol_involved, weed_involved, notes, status,
+                    organizer_profile_id, organizer_phone,
+                    notify_enabled, notify_interval, notify_threshold,
+                    notify_interval_hours, notify_interval_only_if_changed,
+                    last_digest_fingerprint,
+                    notify_on_new_confirm, notify_on_decline, notify_on_allergy,
+                    notify_on_ride_needed, notify_confirm_goal, notify_confirm_goal_sent,
+                    notify_threshold_cooldown_minutes, last_organizer_notify_at,
+                    activated_at, created_at
+                )
+                SELECT {select_cols}
+                FROM hangouts
+                """
+            )
+            conn.exec_driver_sql("DROP TABLE hangouts")
+            conn.exec_driver_sql("ALTER TABLE hangouts_new RENAME TO hangouts")
             conn.exec_driver_sql("COMMIT")
         except Exception:
             conn.exec_driver_sql("ROLLBACK")

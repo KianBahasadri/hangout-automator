@@ -66,8 +66,8 @@
     <button type="button" class="chip" data-filter-field='{"drive":"yes"}'>Drives</button>
     <button type="button" class="chip" data-filter-field='{"drive":"maybe"}'>Maybe drives</button>
     <button type="button" class="chip" data-filter-field='{"drive":"no"}'>Needs ride</button>
-    <button type="button" class="chip" data-filter-field='{"allergies":"yes"}'>Has allergies</button>
-    <button type="button" class="chip" data-filter-field='{"allergies":"no"}'>No allergies noted</button>
+    <button type="button" class="chip" data-filter-field='{"allergies":"yes"}'>Has restrictions</button>
+    <button type="button" class="chip" data-filter-field='{"allergies":"no"}'>No restrictions noted</button>
   </div>
 
   <div class="profiles-grid">
@@ -134,7 +134,7 @@
         </div>
       </div>
 
-      <label>Food allergies</label>
+      <label>Dietary Restrictions</label>
       {% if allergies %}
       {% set profile_allergy_ids = p.allergies|map(attribute='id')|list %}
       <div class="tag-checkboxes" data-field="allergy_ids">
@@ -146,7 +146,7 @@
         {% endfor %}
       </div>
       {% else %}
-      <p class="muted" style="margin-top:0;">No allergies defined yet.</p>
+      <p class="muted" style="margin-top:0;">No restrictions defined yet.</p>
       {% endif %}
 
       <label>Tags</label>

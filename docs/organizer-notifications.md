@@ -30,7 +30,7 @@ Evaluated after an invitee reply (`evaluate_organizer_threshold_for_reply`) when
 On **new confirm** (status was not already confirmed):
 
 - Optional “new confirmation” (`notify_on_new_confirm`)
-- Optional “allergy note” if confirmer has allergies (`notify_on_allergy`) — high priority
+- Optional “dietary restriction” if confirmer has restrictions (`notify_on_allergy`) — high priority
 - Optional “ride needed” if confirmer `drive == no` (`notify_on_ride_needed`) — high priority
 - Optional one-shot confirmed-count milestone (`notify_confirm_goal` > 0 and not yet `notify_confirm_goal_sent`) — high priority
 

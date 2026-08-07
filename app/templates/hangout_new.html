@@ -130,7 +130,7 @@
           <div class="checkbox-list" style="margin-bottom:0.75rem;">
             <label><input type="checkbox" name="notify_on_new_confirm" checked /> Someone newly confirms</label>
             <label><input type="checkbox" name="notify_on_decline" /> Someone declines</label>
-            <label><input type="checkbox" name="notify_on_allergy" checked /> A confirmer has food allergies</label>
+            <label><input type="checkbox" name="notify_on_allergy" checked /> A confirmer has dietary restrictions</label>
             <label><input type="checkbox" name="notify_on_ride_needed" checked /> A confirmer needs a ride</label>
           </div>
 
@@ -160,12 +160,35 @@
 
   <div class="actions">
     <button class="btn btn-secondary" type="submit" name="action" value="draft">Save draft</button>
+    <button class="btn btn-secondary" type="button" id="preview-invite-sms" formnovalidate>
+      Preview invite SMS
+    </button>
     <button class="btn" type="submit" name="action" value="setup">Set up hangout (send invites)</button>
   </div>
 </form>
+
+<dialog class="sms-preview-dialog" id="sms-preview-dialog" aria-labelledby="sms-preview-title">
+  <div class="sms-preview-dialog-inner">
+    <div class="sms-preview-header">
+      <h2 id="sms-preview-title" style="margin:0;">Invite SMS preview</h2>
+      <button type="button" class="btn btn-secondary btn-sm" id="sms-preview-close" aria-label="Close">Close</button>
+    </div>
+    <div class="sms-phone sms-phone-modal" style="margin-top:0.75rem;">
+      <div class="sms-phone-bezel">
+        <div class="sms-phone-notch" aria-hidden="true"></div>
+        <div class="sms-phone-screen">
+          <div class="sms-bubble sms-bubble-out">
+            <pre class="sms-body" id="sms-preview-body">Loading…</pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</dialog>
 {% endblock %}
 {% block scripts %}
 <script src="/static/notify_panel.js"></script>
 <script src="/static/combobox.js"></script>
+<script src="/static/hangout_sms_preview.js"></script>
 {% endblock %}
 

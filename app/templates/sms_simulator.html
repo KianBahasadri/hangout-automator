@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}SMS simulator · Hangout Automator{% endblock %}
+{% block content %}
+<div style="display:flex;align-items:baseline;gap:1rem;flex-wrap:wrap;margin-bottom:0.25rem;">
+  <h1 style="margin:0;">SMS simulator</h1>
+  <a class="btn btn-secondary btn-sm" href="/settings">← Settings</a>
+</div>
+<p class="muted" style="margin-top:0.35rem;">
+  Sample outbound and auto-reply texts for a fictional hangout (Game night · #7).
+  Nothing is sent from this page.
+</p>
+
+<div class="sms-sim-grid">
+  {% for msg in messages %}
+  <article class="card sms-sim-card" id="msg-{{ msg.key }}">
+    <h2 class="sms-sim-title">{{ msg.title }}</h2>
+    <p class="muted sms-sim-desc">{{ msg.description }}</p>
+    <div class="sms-phone">
+      <div class="sms-phone-bezel">
+        <div class="sms-phone-notch" aria-hidden="true"></div>
+        <div class="sms-phone-screen">
+          <div class="sms-bubble sms-bubble-out">
+            <pre class="sms-body">{{ msg.body }}</pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </article>
+  {% endfor %}
+</div>
+{% endblock %}

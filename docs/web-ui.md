@@ -35,10 +35,11 @@ HTML routes: `app/routers/web.py`. Templates: `app/templates/`. Styles/scripts: 
 | GET | `/hangouts/{id}` | Detail / status (`?error=need_profiles`) |
 | POST | `/hangouts/{id}/setup` | Activate / (re)send invites |
 | POST | `/hangouts/{id}/close` | End hangout |
-| GET | `/settings` | Allergy catalog + log download |
+| GET | `/settings` | Dietary-restriction catalog, SMS simulator link, log download |
+| GET | `/settings/sms-simulator` | Preview sample outbound / auto-reply SMS layouts (not sent) |
 | GET | `/settings/logs` | Download the active JSONL audit log (`LOG_FILE`) |
-| POST | `/allergies` | Create allergy → `/settings` |
-| POST | `/allergies/{id}/delete` | Delete allergy |
+| POST | `/allergies` | Create dietary restriction → `/settings` |
+| POST | `/allergies/{id}/delete` | Delete dietary restriction |
 
 Blank optional enums from forms are parsed to `None` via `_optional_enum_form`.
 
@@ -74,6 +75,7 @@ Partial `_invitee_picker.html` + `invitee_picker.js` (new hangout and hangout de
 - Notify panel (`notify_panel.js`): progressive disclosure (master → interval/threshold → nested options)
 - Form defaults: interval every 6h + skip-if-unchanged; threshold confirm/allergy/ride on, decline off; goal off; no cooldown
 - If notifications enabled but no organizer phone can be resolved (profile or app settings), notify flags are left off on create
+- **Preview invite SMS** button (left of “Set up hangout”) opens a dialog; body from `POST /api/sms/preview-invite` using the current form fields and the first selected invitee’s name (or “Alex”)
 
 ## Hangout detail
 
@@ -84,6 +86,10 @@ action.
 
 ## Settings
 
-Food-allergy catalog (same pill list pattern as tags). Logs card links to
-`GET /settings/logs`, which returns the active `LOG_FILE` as an attachment
-(404 if the file does not exist yet). See [logging.md](./logging.md).
+Dietary Restrictions catalog (same pill list pattern as tags; defaults
+`meat` and `pork` are seeded on startup). **SMS simulator** card links to
+`GET /settings/sms-simulator`, which renders sample invite / follow-up /
+RSVP / INFO / organizer copy in phone-style bubbles (nothing is sent).
+Logs card links to `GET /settings/logs`, which returns the active
+`LOG_FILE` as an attachment (404 if the file does not exist yet). See
+[logging.md](./logging.md).
