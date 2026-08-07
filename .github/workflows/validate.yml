@@ -17,7 +17,9 @@ jobs:
         with:
           python-version: "3.12"
 
-      - uses: astral-sh/setup-uv@v9
+      # setup-uv publishes exact release tags; its floating major alias stops at
+      # v7, so pin the release rather than a "v9" that does not exist.
+      - uses: astral-sh/setup-uv@v9.0.0
 
       - name: Run application tests
         # uv installs the dev dependency group from pyproject.toml, so CI runs
