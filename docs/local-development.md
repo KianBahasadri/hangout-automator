@@ -32,6 +32,8 @@ Run the test suite (pytest, dev dependency group):
 uv run --group dev pytest
 ```
 
+What the suite covers and how it is structured: [testing.md](./testing.md).
+
 Open `http://127.0.0.1:9000` by default. Interactive OpenAPI UI is at `/docs`
 (served only when `ENABLE_API_DOCS` is true).
 

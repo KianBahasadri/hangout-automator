@@ -48,3 +48,64 @@ def client_no_raise():
     """Return HTTP 500 responses so API tests can assert no exception escapes."""
     with TestClient(app, raise_server_exceptions=False) as test_client:
         yield test_client
+
+
+@pytest.fixture
+def sample_data(db):
+    """One row of everything, so routes that take an id have something real to hit.
+
+    Returns the ids by *path parameter name* (`profile_id`, `hangout_id`, …) so
+    smoke tests can fill any route template from it, plus a `hangouts` map of
+    the three lifecycle states.
+    """
+    from app.models import (
+        Allergy,
+        Drive,
+        Hangout,
+        HangoutInvite,
+        HangoutStatus,
+        Profile,
+        Tag,
+        YesNo,
+    )
+
+    tag = Tag(name="Core")
+    allergy = Allergy(name="Peanuts")
+    db.add_all([tag, allergy])
+    db.flush()
+
+    profile = Profile(
+        name="Sam Rivera",
+        phone="+15551110001",
+        drinks=YesNo.yes,
+        smokes=YesNo.no,
+        drive=Drive.maybe,
+    )
+    profile.tags = [tag]
+    profile.allergies = [allergy]
+    db.add(profile)
+    db.flush()
+
+    hangouts: dict[str, int] = {}
+    for state in (HangoutStatus.draft, HangoutStatus.active, HangoutStatus.closed):
+        hangout = Hangout(
+            status=state,
+            motive=f"{state.value.title()} plans",
+            day_date="2026-08-08",
+            time="19:00",
+            organizer_profile_id=profile.id,
+            organizer_phone=profile.phone,
+        )
+        db.add(hangout)
+        db.flush()
+        db.add(HangoutInvite(hangout_id=hangout.id, profile_id=profile.id))
+        hangouts[state.value] = hangout.id
+    db.commit()
+
+    return {
+        "tag_id": tag.id,
+        "allergy_id": allergy.id,
+        "profile_id": profile.id,
+        "hangout_id": hangouts["draft"],
+        "hangouts": hangouts,
+    }
