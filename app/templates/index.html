@@ -2,7 +2,7 @@
 {% from "_status_badge.html" import hangout_status_badge %}
 {% block title %}Home · Hangout Automator{% endblock %}
 {% block content %}
-<div style="display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap;align-items:center;margin-bottom:1.25rem;">
+<div style="display:flex;gap:1rem;flex-wrap:wrap;align-items:center;margin-bottom:1.25rem;">
   <h1 style="margin:0;">Hangouts</h1>
   <a class="btn" href="/hangouts/new">New hangout</a>
 </div>
@@ -12,7 +12,7 @@
   <div class="card">
     <div style="display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap;align-items:flex-start;">
       <div>
-        <a href="/hangouts/{{ h.id }}"><strong>#{{ h.id }}</strong>
+        <a href="/hangouts/{{ h.id }}">
           {% if h.motive %}{{ h.motive }}{% else %}<span class="muted">Untitled hangout</span>{% endif %}
         </a>
         <div class="muted">

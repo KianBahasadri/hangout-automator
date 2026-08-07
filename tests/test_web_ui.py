@@ -8,19 +8,20 @@ def test_index_new_hangout_button_in_header_row(client):
 
     assert '<div class="actions"' not in html
     header_row = re.search(
-        r'<div style="[^"]*display:flex;justify-content:space-between[^"]*">'
+        r'<div style="[^"]*display:flex;gap:1rem[^"]*">'
         r"\s*<h1[^>]*>Hangouts</h1>"
         r'\s*<a class="btn" href="/hangouts/new">New hangout</a>'
         r"\s*</div>",
         html,
     )
-    assert header_row is not None, "New hangout button must sit in the 'Hangouts' header row"
+    assert header_row is not None, "New hangout button must sit directly beside the 'Hangouts' heading"
 
 
 def test_index_lists_hangouts(client, db):
     from app.models import Hangout, HangoutStatus
 
-    db.add(Hangout(status=HangoutStatus.active, motive="Board games"))
+    active_hangout = Hangout(status=HangoutStatus.active, motive="Board games")
+    db.add(active_hangout)
     db.add(Hangout(status=HangoutStatus.closed, motive="Finished dinner"))
     db.add(Hangout(status=HangoutStatus.draft, motive="Movie night"))
     db.commit()
@@ -32,6 +33,15 @@ def test_index_lists_hangouts(client, db):
     assert "Finished dinner" in response.text
     assert "Hangout Over" in response.text
     assert "Movie night" in response.text
+    assert f"#{active_hangout.id}" not in response.text
+
+
+def test_active_hangout_uses_end_label(client, sample_data):
+    response = client.get(f"/hangouts/{sample_data['hangouts']['active']}")
+
+    assert response.status_code == 200
+    assert "End hangout" in response.text
+    assert "Close hangout" not in response.text
 
 
 def test_new_hangout_without_invitees_redirects_instead_of_500(client):

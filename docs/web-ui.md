@@ -13,7 +13,7 @@ HTML routes: `app/routers/web.py`. Templates: `app/templates/`. Styles/scripts: 
 
 | Method | Path | Page / action |
 |--------|------|----------------|
-| GET | `/` | Hangout list; “New hangout” button sits in the right of the page header row |
+| GET | `/` | Hangout list without database ID numbers; “New hangout” sits immediately beside the page heading |
 | GET/POST | `/profiles` | Profiles page; POST creates profile |
 | POST | `/profiles/{id}/delete` | Delete profile |
 | POST | `/tags` | Create tag → redirect `/profiles` |
@@ -21,7 +21,7 @@ HTML routes: `app/routers/web.py`. Templates: `app/templates/`. Styles/scripts: 
 | GET/POST | `/hangouts/new` | Create hangout (`action=draft` or `setup`) |
 | GET | `/hangouts/{id}` | Detail / status (`?error=need_profiles`) |
 | POST | `/hangouts/{id}/setup` | Activate / (re)send invites |
-| POST | `/hangouts/{id}/close` | Close hangout |
+| POST | `/hangouts/{id}/close` | End hangout |
 | GET | `/settings` | Allergy catalog + SMS webhook path |
 | POST | `/allergies` | Create allergy → `/settings` |
 | POST | `/allergies/{id}/delete` | Delete allergy |
@@ -59,7 +59,7 @@ Partial `_invitee_picker.html` + `invitee_picker.js` (new hangout and hangout de
 
 Status badge (`Happening Now` for active, `Hangout Over` for closed), logistics,
 organizer notify summary, RSVP counts, invitee table (status,
-drive/allergies/drinks/smokes, follow-up count), setup/re-invite form, close
+drive/allergies/drinks/smokes, follow-up count), setup/re-invite form, end
 action.
 
 ## Settings
