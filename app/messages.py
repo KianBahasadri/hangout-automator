@@ -21,6 +21,8 @@ def format_hangout_summary(hangout: Hangout) -> str:
         parts.append(f"at {hangout.time}")
     if hangout.duration:
         parts.append(f"({hangout.duration})")
+    if hangout.location:
+        parts.append(f"@ {hangout.location}")
     alcohol = _yn(hangout.alcohol_involved)
     if alcohol == "yes":
         parts.append("alcohol: yes")

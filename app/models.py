@@ -187,6 +187,7 @@ class Hangout(Base):
     day_date: Mapped[str | None] = mapped_column(String(64), nullable=True)
     time: Mapped[str | None] = mapped_column(String(64), nullable=True)
     duration: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    location: Mapped[str | None] = mapped_column(String(255), nullable=True)
     motive: Mapped[str | None] = mapped_column(String(255), nullable=True)
     alcohol_involved: Mapped[YesNo | None] = mapped_column(
         _optional_enum_column(YesNo), nullable=True

@@ -21,7 +21,7 @@ This document defines **what** the MVP must do from a user and system perspectiv
 |------------|-----------|
 | Access | **No authentication.** Anyone who opens the website can use it; there is no login, signup, or account system. |
 | Multi-tenancy | **None.** A single shared dataset. Every visitor sees and can act on the same profiles, hangouts, and status. |
-| Hangout planning | Create a hangout with optional details (time, day, motive, alcohol, weed, duration, etc.) |
+| Hangout planning | Create a hangout with optional details (time, day, location, motive, alcohol, weed, duration, etc.) |
 | Contacts | Maintain profiles (name + phone required; lifestyle/logistics fields optional) |
 | Invites | Select existing profiles and send individual SMS invites |
 | RSVP | Invitees reply by text (e.g. confirm / remind) |
@@ -137,6 +137,7 @@ Hangout details describe the plan. **All hangout detail fields are optional** so
 | Day / date | When the hangout is planned |
 | Time | Start time (and optionally end time if duration is not used alone) |
 | Estimated duration / how long | Expected length |
+| Location | Where the hangout takes place |
 | Motive / purpose | Why people are hanging out (e.g. dinner, game night, beach) |
 | Alcohol involved | Whether alcohol is expected or present |
 | Weed involved | Whether weed is expected or present |
@@ -154,7 +155,7 @@ Hangout details describe the plan. **All hangout detail fields are optional** so
 | ID | Requirement | Priority |
 |----|-------------|----------|
 | SMS-1 | On hangout setup, the system crafts an SMS and sends it **individually** to each selected invitee’s phone number. | Must |
-| SMS-2 | Message content should include available hangout details (date/time, motive, alcohol, weed, duration, etc.) and clear reply instructions. | Must |
+| SMS-2 | Message content should include available hangout details (date/time, location, motive, alcohol, weed, duration, etc.) and clear reply instructions. | Must |
 | SMS-3 | Message instructs the invitee how to respond, including at least: **confirm** (e.g. “confirm” / “yes”) and **remind** (e.g. “remind”) or equivalent short keywords. Exact keywords and wording are implementation/copy decisions but must be documented in product copy. | Must |
 | SMS-4 | Each invite is tracked per invitee (delivery/send status and response status). | Must |
 | SMS-5 | Failed sends (invalid number, provider error) are visible on the hangout status view. | Should |
@@ -216,7 +217,7 @@ Application (single shared instance)
   │     name, phone
   │     drinks?, smokes?, allergies[], drive?, tags[]
   └── Hangouts[]
-        details (all optional): day/date, time, duration, motive, alcohol, weed, notes
+        details (all optional): day/date, time, duration, location, motive, alcohol, weed, notes
         organizer? → Profile (optional — for organizer SMS)
         status: draft | active | closed (example)
         Invitees[]

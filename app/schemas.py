@@ -69,6 +69,7 @@ class HangoutCreate(BaseModel):
     day_date: Optional[str] = None
     time: Optional[str] = None
     duration: Optional[str] = None
+    location: Optional[str] = None
     motive: Optional[str] = None
     alcohol_involved: Optional[YesNo] = None
     weed_involved: Optional[YesNo] = None
@@ -92,6 +93,7 @@ class HangoutUpdate(BaseModel):
     day_date: Optional[str] = None
     time: Optional[str] = None
     duration: Optional[str] = None
+    location: Optional[str] = None
     motive: Optional[str] = None
     alcohol_involved: Optional[YesNo] = None
     weed_involved: Optional[YesNo] = None
@@ -130,6 +132,7 @@ class HangoutOut(BaseModel):
     day_date: Optional[str]
     time: Optional[str]
     duration: Optional[str]
+    location: Optional[str]
     motive: Optional[str]
     alcohol_involved: Optional[YesNo]
     weed_involved: Optional[YesNo]

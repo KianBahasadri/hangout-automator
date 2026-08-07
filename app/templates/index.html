@@ -19,6 +19,7 @@
           {% if h.day_date %}{{ h.day_date }}{% endif %}
           {% if h.time %} · {{ h.time }}{% endif %}
           {% if h.duration %} · {{ h.duration }}{% endif %}
+          {% if h.location %} · {{ h.location }}{% endif %}
         </div>
       </div>
       {{ hangout_status_badge(h.status) }}

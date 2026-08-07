@@ -34,7 +34,7 @@ Catalog rows: `id`, unique `name` (64), `created_at`. Allergies are managed in S
 
 ### `hangouts`
 
-Optional details: `day_date`, `time`, `duration`, `motive`, `alcohol_involved`, `weed_involved`, `notes`.
+Optional details: `day_date`, `time`, `duration`, `location`, `motive`, `alcohol_involved`, `weed_involved`, `notes`.
 
 `status` defaults to `draft`.
 
@@ -76,7 +76,7 @@ Values outside these sets are clamped to the defaults used at create time.
 
 `init_db()` → `create_all`, then:
 
-1. **`_ensure_sqlite_columns`** — `ALTER TABLE` add missing hangout notify/`weed_involved` columns; add `profiles.drive`; copy `car_access` → `drive`; set `'unknown'` enum strings to `NULL` where possible
+1. **`_ensure_sqlite_columns`** — `ALTER TABLE` add missing hangout notify/`weed_involved`/`location` columns; add `profiles.drive`; copy `car_access` → `drive`; set `'unknown'` enum strings to `NULL` where possible
 2. **`_rebuild_profiles_if_needed`** — recreate `profiles` if `drinks`/`smokes` were `NOT NULL` or `car_access` still exists (SQLite cannot drop nullability in place). It runs on its **own autocommit connection**, outside the surrounding `engine.begin()` block, because SQLite silently ignores `PRAGMA foreign_keys` inside a transaction: with enforcement left on, `DROP TABLE profiles` does an implicit `DELETE FROM` that cascades into invites, tag links, and allergy links and destroys the data the migration exists to preserve. The table swap still gets its own explicit `BEGIN`/`COMMIT` so a crash mid-rebuild cannot leave the database with no `profiles` table, and the pool is disposed afterwards. Regression coverage: `tests/test_migrations.py`
 3. **`_migrate_legacy_food_allergies`** — split comma/semicolon free-text into `Allergy` rows + M2M links, clear legacy text
 

@@ -28,7 +28,7 @@ provider, recorded as an unsuccessful message, and emitted as an
 
 ## Outbound copy
 
-- **Hangout summary** — motive; `on` date; `at` time; `(duration)`; alcohol/weed only if set to yes/no; notes; fallback phrase `"a hangout"`
+- **Hangout summary** — motive; `on` date; `at` time; `(duration)`; `@` location; alcohol/weed only if set to yes/no; notes; fallback phrase `"a hangout"`
 - **Invite** — summary + reply with **CONFIRM / REMIND / NO**
 - **Follow-up** — `reminder ({attempt}): … Reply CONFIRM, REMIND, or NO.`
 - **Immediate remind** (on REMIND reply) — `Reminder for {name}: … Reply CONFIRM if you're still in!`

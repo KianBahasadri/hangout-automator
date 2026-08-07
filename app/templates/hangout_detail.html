@@ -15,7 +15,8 @@
       {% if hangout.day_date %}{{ hangout.day_date }}{% endif %}
       {% if hangout.time %} · {{ hangout.time }}{% endif %}
       {% if hangout.duration %} · {{ hangout.duration }}{% endif %}
-      {% if not hangout.day_date and not hangout.time %}<span class="muted">No date/time set</span>{% endif %}
+      {% if hangout.location %} · {{ hangout.location }}{% endif %}
+      {% if not hangout.day_date and not hangout.time and not hangout.location %}<span class="muted">No date/time set</span>{% endif %}
     </p>
   </div>
   {{ hangout_status_badge(hangout.status) }}

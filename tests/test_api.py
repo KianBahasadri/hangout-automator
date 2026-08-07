@@ -19,7 +19,53 @@ def test_empty_hangout_payload_creates_a_draft(client_no_raise):
     assert hangout["status"] == "draft"
     assert hangout["day_date"] is None
     assert hangout["motive"] is None
+    assert hangout["location"] is None
     assert hangout["invites"] == []
+
+
+def test_hangout_location_round_trips_via_api(client_no_raise):
+    hangout = _create_hangout(
+        client_no_raise,
+        {"motive": "Dinner", "location": "  123 Main St  "},
+    )
+    assert hangout["location"] == "123 Main St"
+
+    updated = client_no_raise.patch(
+        f"/api/hangouts/{hangout['id']}",
+        json={"location": "Park picnic table"},
+    )
+    assert updated.status_code == 200
+    assert updated.json()["location"] == "Park picnic table"
+
+    cleared = client_no_raise.patch(
+        f"/api/hangouts/{hangout['id']}",
+        json={"location": None},
+    )
+    assert cleared.status_code == 200
+    assert cleared.json()["location"] is None
+
+
+def test_hangout_location_appears_in_invite_sms(client_no_raise, db):
+    from app.models import MessageLog
+
+    profile = _create_profile(client_no_raise)
+    hangout = _create_hangout(
+        client_no_raise,
+        {
+            "motive": "Dinner",
+            "location": "Sam's place",
+            "profile_ids": [profile["id"]],
+        },
+    )
+    response = client_no_raise.post(
+        f"/api/hangouts/{hangout['id']}/setup",
+        json={"profile_ids": [profile["id"]]},
+    )
+    assert response.status_code == 200
+
+    body = db.query(MessageLog).order_by(MessageLog.id.desc()).first().body
+    assert "Sam's place" in body
+    assert "@ Sam's place" in body
 
 
 @pytest.mark.parametrize("payload", [None, {}, {"profile_ids": []}])

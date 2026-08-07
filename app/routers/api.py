@@ -210,6 +210,7 @@ def create_hangout(payload: HangoutCreate, db: Session = Depends(get_db)) -> Han
         day_date=payload.day_date or None,
         time=payload.time or None,
         duration=payload.duration or None,
+        location=(payload.location.strip() if payload.location else None) or None,
         motive=payload.motive or None,
         alcohol_involved=payload.alcohol_involved,
         weed_involved=payload.weed_involved,

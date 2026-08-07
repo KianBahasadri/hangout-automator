@@ -195,6 +195,7 @@ def _ensure_sqlite_columns() -> None:
         hangout_cols = _table_cols(conn, "hangouts")
         alters = {
             "weed_involved": "ALTER TABLE hangouts ADD COLUMN weed_involved VARCHAR(16)",
+            "location": "ALTER TABLE hangouts ADD COLUMN location VARCHAR(255)",
             "organizer_profile_id": (
                 "ALTER TABLE hangouts ADD COLUMN organizer_profile_id INTEGER "
                 "REFERENCES profiles(id) ON DELETE SET NULL"
