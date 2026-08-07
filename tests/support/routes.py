@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from typing import Any, get_args, get_origin
 
 from fastapi import params
+from fastapi.responses import HTMLResponse
 from fastapi.routing import APIRoute
 from pydantic import BaseModel
 
@@ -100,7 +101,12 @@ def iter_routes() -> tuple[RouteSpec, ...]:
                     method=method,
                     path=route.path,
                     endpoint=route.name,
-                    is_page=method == "GET" and "web" in (route.tags or []),
+                    # HTML pages only — exclude file downloads and other non-HTML GETs.
+                    is_page=(
+                        method == "GET"
+                        and "web" in (route.tags or [])
+                        and route.response_class is HTMLResponse
+                    ),
                     path_params=tuple(param.name for param in route.dependant.path_params),
                     form_fields=tuple(form_fields),
                     body_model=body_model,

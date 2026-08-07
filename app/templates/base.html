@@ -1,14 +1,50 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>{% block title %}Hangout Automator{% endblock %}</title>
+  <script>
+    (function () {
+      var KEY = "theme";
+      function read() {
+        try {
+          var t = localStorage.getItem(KEY);
+          if (t === "light" || t === "dark") return t;
+        } catch (e) {}
+        return "dark";
+      }
+      function labels(btn, theme) {
+        if (!btn) return;
+        var next = theme === "dark" ? "light" : "dark";
+        btn.setAttribute("aria-label", "Switch to " + next + " theme");
+        btn.setAttribute("title", next.charAt(0).toUpperCase() + next.slice(1) + " theme");
+      }
+      function apply(theme) {
+        if (theme !== "light" && theme !== "dark") theme = "dark";
+        document.documentElement.setAttribute("data-theme", theme);
+        try {
+          localStorage.setItem(KEY, theme);
+        } catch (e) {}
+        labels(document.getElementById("theme-toggle"), theme);
+      }
+      // Apply before paint (html already has data-theme="dark" as fallback).
+      apply(read());
+      window.__hangoutTheme = {
+        apply: apply,
+        toggle: function () {
+          var cur = document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark";
+          apply(cur === "dark" ? "light" : "dark");
+        },
+      };
+    })();
+  </script>
   <link rel="icon" href="/static/favicon.ico" sizes="any" />
   <link rel="icon" type="image/png" href="/static/favicon-32.png" sizes="32x32" />
   <link rel="icon" type="image/png" href="/static/favicon-16.png" sizes="16x16" />
   <link rel="apple-touch-icon" href="/static/apple-touch-icon.png" />
-  <link rel="stylesheet" href="/static/style.css" />
+  {# Cache-bust when theme tokens change so browsers pick up new CSS. #}
+  <link rel="stylesheet" href="/static/style.css?v=theme2" />
 </head>
 <body>
   <header class="app-header">
@@ -21,6 +57,22 @@
         <a href="/">Home</a>
         <a href="/profiles">Profiles</a>
         <a href="/settings">Settings</a>
+        <button
+          type="button"
+          class="theme-toggle"
+          id="theme-toggle"
+          aria-label="Switch to light theme"
+          title="Light theme"
+          onclick="window.__hangoutTheme && window.__hangoutTheme.toggle()"
+        >
+          <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="4" />
+            <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+          </svg>
+          <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 14.5A8.5 8.5 0 0 1 9.5 3 7 7 0 1 0 21 14.5z" />
+          </svg>
+        </button>
       </nav>
     </div>
   </header>

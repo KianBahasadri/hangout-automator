@@ -4,10 +4,21 @@ HTML routes: `app/routers/web.py`. Templates: `app/templates/`. Styles/scripts: 
 
 ## UX principles (as implemented)
 
-- Minimal chrome: nav is Home, Profiles, Settings only
+- Minimal chrome: nav is Home, Profiles, Settings, plus a light/dark theme toggle
 - Labels and placeholders only — no instructional hint/lead paragraphs on forms
 - Optional fields use a blank first option (or unchecked pills), not an “unknown” value
 - Shared data: every visitor sees the same profiles/hangouts
+
+## Theme
+
+`base.html` (inline script) + CSS tokens in `static/style.css`.
+
+- Toggle sits immediately right of **Settings** in the header nav
+- Preference is stored in `localStorage` key `theme` (`light` | `dark`)
+- Default is dark (`data-theme="dark"` on `<html>`, also the unscoped token set)
+- Head script applies the stored theme before paint; the button calls
+  `window.__hangoutTheme.toggle()` (no external JS required)
+- Light palette is `html[data-theme="light"]` overrides only
 
 ## Routes
 
@@ -24,7 +35,8 @@ HTML routes: `app/routers/web.py`. Templates: `app/templates/`. Styles/scripts: 
 | GET | `/hangouts/{id}` | Detail / status (`?error=need_profiles`) |
 | POST | `/hangouts/{id}/setup` | Activate / (re)send invites |
 | POST | `/hangouts/{id}/close` | End hangout |
-| GET | `/settings` | Allergy catalog + SMS webhook path |
+| GET | `/settings` | Allergy catalog + log download |
+| GET | `/settings/logs` | Download the active JSONL audit log (`LOG_FILE`) |
 | POST | `/allergies` | Create allergy → `/settings` |
 | POST | `/allergies/{id}/delete` | Delete allergy |
 
@@ -72,4 +84,6 @@ action.
 
 ## Settings
 
-Food-allergy catalog (same pill list pattern as tags), webhook path shown as `POST /webhooks/sms`.
+Food-allergy catalog (same pill list pattern as tags). Logs card links to
+`GET /settings/logs`, which returns the active `LOG_FILE` as an attachment
+(404 if the file does not exist yet). See [logging.md](./logging.md).

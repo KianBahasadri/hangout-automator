@@ -1,5 +1,7 @@
 import re
 
+from app.config import Settings
+
 
 def test_index_new_hangout_button_in_header_row(client):
     response = client.get("/")
@@ -70,3 +72,56 @@ def test_existing_hangout_without_invitees_redirects_instead_of_500(client, db):
 
     assert response.status_code == 303
     assert response.headers["location"] == f"/hangouts/{hangout.id}?error=need_profiles"
+
+
+def test_settings_links_to_log_download(client):
+    response = client.get("/settings")
+    assert response.status_code == 200
+    assert 'href="/settings/logs"' in response.text
+    assert "Download log file" in response.text
+
+
+def test_header_has_theme_toggle_after_settings(client):
+    response = client.get("/")
+    assert response.status_code == 200
+    html = response.text
+    assert 'id="theme-toggle"' in html
+    assert "__hangoutTheme" in html
+    assert 'data-theme="dark"' in html
+    assert 'html[data-theme="light"]' in client.get("/static/style.css").text
+    # Toggle is the control immediately after the Settings link.
+    assert re.search(
+        r'href="/settings">Settings</a>\s*'
+        r"<button\b[^>]*\bid=\"theme-toggle\"",
+        html,
+    )
+
+
+def test_settings_logs_download_returns_file(client, tmp_path, monkeypatch):
+    # Point at a standalone file (not the live audit stream) so concurrent
+    # request logging does not append extra lines mid-assertion.
+    log_path = tmp_path / "download-me.log"
+    log_path.write_text('{"event":"test"}\n', encoding="utf-8")
+    monkeypatch.setattr(
+        "app.routers.web.get_settings",
+        lambda: Settings(log_file=str(log_path), _env_file=None),
+    )
+
+    response = client.get("/settings/logs")
+
+    assert response.status_code == 200
+    assert "attachment" in response.headers.get("content-disposition", "").lower()
+    assert "download-me.log" in response.headers.get("content-disposition", "")
+    assert response.content == b'{"event":"test"}\n'
+
+
+def test_settings_logs_download_missing_file_is_404(client, tmp_path, monkeypatch):
+    missing = tmp_path / "no-such" / "server.log"
+    monkeypatch.setattr(
+        "app.routers.web.get_settings",
+        lambda: Settings(log_file=str(missing), _env_file=None),
+    )
+
+    response = client.get("/settings/logs")
+
+    assert response.status_code == 404

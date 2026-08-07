@@ -1,14 +1,16 @@
 from __future__ import annotations
 
+import logging
 import re
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session, joinedload
 
+from app.config import get_settings
 from app.database import get_db
 from app.ids import RowId, RowIdPath, parse_row_id
 from app.models import (
@@ -427,6 +429,25 @@ def settings_page(request: Request, db: Session = Depends(get_db)) -> HTMLRespon
         request,
         "settings.html",
         {"allergies": _all_allergies(db)},
+    )
+
+
+@router.get("/settings/logs", response_class=FileResponse)
+def download_logs() -> FileResponse:
+    """Serve the active JSONL audit log as a downloadable file."""
+    log_path = Path(get_settings().log_file).expanduser()
+    # Flush so the download includes events still buffered in handlers.
+    for handler in logging.root.handlers:
+        try:
+            handler.flush()
+        except OSError:
+            pass
+    if not log_path.is_file():
+        raise HTTPException(404, "Log file not found")
+    return FileResponse(
+        path=log_path,
+        filename=log_path.name,
+        media_type="application/x-ndjson",
     )
 
 

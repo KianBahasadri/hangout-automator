@@ -63,6 +63,13 @@ Domain events additionally cover:
 - RSVP status changes, unmatched/unrecognized replies, hangout setup, and
   follow-up/organizer scans.
 
+## Download from Settings
+
+`GET /settings/logs` (linked from the Settings page) returns the active
+`LOG_FILE` as a downloadable attachment (`Content-Disposition: attachment`).
+Handlers are flushed before the file is served so recent events are included.
+Rotated backups (`server.log.1`, …) are not included. A missing file yields 404.
+
 ## Finding events
 
 Local development:
