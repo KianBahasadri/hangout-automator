@@ -224,6 +224,8 @@ class Hangout(Base):
     notify_threshold_cooldown_minutes: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     last_organizer_notify_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     activated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Soft-delete: set when hidden from the main list (closed hangouts only in UI).
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     organizer: Mapped[Profile | None] = relationship(foreign_keys=[organizer_profile_id])

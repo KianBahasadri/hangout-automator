@@ -75,6 +75,7 @@ def home(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
     hangouts = (
         db.query(Hangout)
         .options(joinedload(Hangout.invites).joinedload(HangoutInvite.profile))
+        .filter(Hangout.deleted_at.is_(None))
         .order_by(Hangout.id.desc())
         .all()
     )
@@ -420,10 +421,37 @@ def hangout_setup(
 @router.post("/hangouts/{hangout_id}/close")
 def hangout_close(hangout_id: RowIdPath, db: Session = Depends(get_db)) -> RedirectResponse:
     hangout = db.get(Hangout, hangout_id)
-    if hangout:
+    if hangout and hangout.deleted_at is None:
         hangout.status = HangoutStatus.closed
         db.commit()
     return RedirectResponse(f"/hangouts/{hangout_id}", status_code=303)
+
+
+@router.post("/hangouts/{hangout_id}/delete")
+def hangout_soft_delete(hangout_id: RowIdPath, db: Session = Depends(get_db)) -> RedirectResponse:
+    """Hide a closed hangout from the main list (soft delete)."""
+    from app.services import utcnow
+
+    hangout = db.get(Hangout, hangout_id)
+    if hangout and hangout.status == HangoutStatus.closed and hangout.deleted_at is None:
+        hangout.deleted_at = utcnow()
+        db.commit()
+        return RedirectResponse("/?toast=hangout_deleted", status_code=303)
+    if hangout:
+        return RedirectResponse(f"/hangouts/{hangout_id}", status_code=303)
+    return RedirectResponse("/", status_code=303)
+
+
+@router.post("/hangouts/{hangout_id}/restore")
+def hangout_restore(hangout_id: RowIdPath, db: Session = Depends(get_db)) -> RedirectResponse:
+    """Un-hide a soft-deleted hangout."""
+    hangout = db.get(Hangout, hangout_id)
+    if hangout and hangout.deleted_at is not None:
+        hangout.deleted_at = None
+        db.commit()
+    if hangout:
+        return RedirectResponse(f"/hangouts/{hangout_id}", status_code=303)
+    return RedirectResponse("/settings/deleted-hangouts", status_code=303)
 
 
 @router.get("/settings", response_class=HTMLResponse)
@@ -432,6 +460,29 @@ def settings_page(request: Request, db: Session = Depends(get_db)) -> HTMLRespon
         request,
         "settings.html",
         {"allergies": _all_allergies(db)},
+    )
+
+
+@router.get("/settings/deleted-hangouts", response_class=HTMLResponse)
+def deleted_hangouts_page(
+    request: Request,
+    q: str = "",
+    db: Session = Depends(get_db),
+) -> HTMLResponse:
+    query = (
+        db.query(Hangout)
+        .options(joinedload(Hangout.invites).joinedload(HangoutInvite.profile))
+        .filter(Hangout.deleted_at.isnot(None))
+    )
+    term = (q or "").strip()
+    if term:
+        like = f"%{term}%"
+        query = query.filter(Hangout.motive.ilike(like))
+    hangouts = query.order_by(Hangout.deleted_at.desc(), Hangout.id.desc()).all()
+    return templates.TemplateResponse(
+        request,
+        "deleted_hangouts.html",
+        {"hangouts": hangouts, "q": term},
     )
 
 

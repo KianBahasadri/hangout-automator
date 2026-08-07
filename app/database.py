@@ -255,6 +255,7 @@ def _ensure_sqlite_columns() -> None:
                 "ALTER TABLE hangouts ADD COLUMN notify_threshold_cooldown_minutes "
                 "INTEGER NOT NULL DEFAULT 0"
             ),
+            "deleted_at": "ALTER TABLE hangouts ADD COLUMN deleted_at DATETIME",
         }
         for col, sql in alters.items():
             if col not in hangout_cols:
@@ -505,9 +506,16 @@ def _rebuild_hangouts_if_needed() -> bool:
                     notify_threshold_cooldown_minutes INTEGER NOT NULL DEFAULT 0,
                     last_organizer_notify_at DATETIME,
                     activated_at DATETIME,
+                    deleted_at DATETIME,
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL
                 )
                 """
+            )
+            # select_cols ends with activated_at, created_at — insert deleted_at from source when present
+            deleted_expr = "deleted_at" if "deleted_at" in by_name else "NULL"
+            # Rebuild select_cols to place deleted_at before created_at
+            select_cols_with_deleted = select_cols.rsplit(",\n            created_at", 1)[0] + (
+                f",\n            {deleted_expr} AS deleted_at,\n            created_at"
             )
             conn.exec_driver_sql(
                 f"""
@@ -521,9 +529,9 @@ def _rebuild_hangouts_if_needed() -> bool:
                     notify_on_new_confirm, notify_on_decline, notify_on_allergy,
                     notify_on_ride_needed, notify_confirm_goal, notify_confirm_goal_sent,
                     notify_threshold_cooldown_minutes, last_organizer_notify_at,
-                    activated_at, created_at
+                    activated_at, deleted_at, created_at
                 )
-                SELECT {select_cols}
+                SELECT {select_cols_with_deleted}
                 FROM hangouts
                 """
             )

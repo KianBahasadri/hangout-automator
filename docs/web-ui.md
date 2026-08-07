@@ -35,7 +35,10 @@ HTML routes: `app/routers/web.py`. Templates: `app/templates/`. Styles/scripts: 
 | GET | `/hangouts/{id}` | Detail / status (`?error=need_profiles`) |
 | POST | `/hangouts/{id}/setup` | Activate / (re)send invites |
 | POST | `/hangouts/{id}/close` | End hangout |
-| GET | `/settings` | Dietary-restriction catalog, SMS simulator link, log download |
+| POST | `/hangouts/{id}/delete` | Soft-delete (closed only) — sets `deleted_at`, hides from home |
+| POST | `/hangouts/{id}/restore` | Clear `deleted_at` so the hangout appears on home again |
+| GET | `/settings` | Dietary-restriction catalog, deleted hangouts, SMS simulator, log download |
+| GET | `/settings/deleted-hangouts` | Soft-deleted hangouts; optional `?q=` motive search |
 | GET | `/settings/sms-simulator` | Preview sample outbound / auto-reply SMS layouts (not sent) |
 | GET | `/settings/logs` | Download the active JSONL audit log (`LOG_FILE`) |
 | POST | `/allergies` | Create dietary restriction → `/settings` |
@@ -82,12 +85,16 @@ Partial `_invitee_picker.html` + `invitee_picker.js` (new hangout and hangout de
 Status badge (`Happening Now` for active, `Hangout Over` for closed), logistics,
 organizer notify summary, RSVP counts, invitee table (status,
 drive/allergies/drinks/smokes, follow-up count), setup/re-invite form, end
-action.
+action. **Closed** hangouts show **Delete hangout** (soft-delete). Soft-deleted
+hangouts show a restore control instead of setup/end.
+
+Home list and `GET /api/hangouts` omit rows with `deleted_at` set.
 
 ## Settings
 
 Dietary Restrictions catalog (same pill list pattern as tags; defaults
-`meat` and `pork` are seeded on startup). **SMS simulator** card links to
+`meat` and `pork` are seeded on startup). **Deleted hangouts** lists soft-deleted
+rows with motive search (`?q=`). **SMS simulator** card links to
 `GET /settings/sms-simulator`, which renders sample invite / follow-up /
 RSVP / INFO / organizer copy in phone-style bubbles (nothing is sent).
 Logs card links to `GET /settings/logs`, which returns the active

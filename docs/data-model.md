@@ -40,13 +40,15 @@ Optional details: `day_date`, `time`, `duration`, `location`, `motive`, `alcohol
 
 `status` defaults to `draft`.
 
+Soft delete: `deleted_at` (`NULL` = visible on the home list; set = hidden). Rows are kept; invites and message logs remain. UI only allows soft-delete for **closed** hangouts.
+
 Organizer / notify fields:
 
 - `organizer_profile_id` (FK profiles, `ON DELETE SET NULL`), legacy `organizer_phone`
 - `notify_enabled` (default false), `notify_interval`, `notify_threshold`
 - Interval: `notify_interval_hours` (default 6), `notify_interval_only_if_changed` (default true), `last_digest_fingerprint`
 - Threshold: `notify_on_new_confirm` (true), `notify_on_decline` (false), `notify_on_allergy` (true), `notify_on_ride_needed` (true), `notify_confirm_goal` (0 = off), `notify_confirm_goal_sent`, `notify_threshold_cooldown_minutes` (0), `last_organizer_notify_at`
-- `activated_at`, `created_at`
+- `activated_at`, `deleted_at`, `created_at`
 
 ### `hangout_invites`
 
@@ -78,7 +80,7 @@ Values outside these sets are clamped to the defaults used at create time.
 
 `init_db()` → `create_all`, then:
 
-1. **`_ensure_sqlite_columns`** — `ALTER TABLE` add missing hangout notify/`weed_involved`/`location` columns; add `profiles.drive`; copy `car_access` → `drive`; set `'unknown'` enum strings to `NULL` where possible
+1. **`_ensure_sqlite_columns`** — `ALTER TABLE` add missing hangout notify/`weed_involved`/`location`/`deleted_at` columns; add `profiles.drive`; copy `car_access` → `drive`; set `'unknown'` enum strings to `NULL` where possible
 2. **`_rebuild_profiles_if_needed`** — recreate `profiles` if `drinks`/`smokes` were `NOT NULL` or `car_access` still exists (SQLite cannot drop nullability in place). It runs on its **own autocommit connection**, outside the surrounding `engine.begin()` block, because SQLite silently ignores `PRAGMA foreign_keys` inside a transaction: with enforcement left on, `DROP TABLE profiles` does an implicit `DELETE FROM` that cascades into invites, tag links, and allergy links and destroys the data the migration exists to preserve. The table swap still gets its own explicit `BEGIN`/`COMMIT` so a crash mid-rebuild cannot leave the database with no `profiles` table, and the pool is disposed afterwards. Regression coverage: `tests/test_migrations.py`
 3. **`_rebuild_hangouts_if_needed`** — same pattern for `hangouts` when `alcohol_involved` / `weed_involved` are still `NOT NULL` (legacy schema). Blank optional enums are stored as `NULL`; without this rebuild, empty create/setup hits a SQLite integrity error. Dependent invite/message rows are preserved with foreign keys off during the swap.
 4. **`_migrate_legacy_food_allergies`** — split comma/semicolon free-text into `Allergy` rows + M2M links, clear legacy text

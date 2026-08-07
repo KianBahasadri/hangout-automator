@@ -212,6 +212,7 @@ def list_hangouts(db: Session = Depends(get_db)) -> list[Hangout]:
     return (
         db.query(Hangout)
         .options(joinedload(Hangout.invites).joinedload(HangoutInvite.profile))
+        .filter(Hangout.deleted_at.is_(None))
         .order_by(Hangout.id.desc())
         .all()
     )

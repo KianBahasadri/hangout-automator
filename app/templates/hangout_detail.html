@@ -107,7 +107,12 @@
   {% endif %}
 </div>
 
-{% if hangout.status.value != 'closed' %}
+{% if hangout.deleted_at %}
+<div class="alert">This hangout is hidden from the main list. Restore it to show it again.</div>
+<form method="post" action="/hangouts/{{ hangout.id }}/restore" class="actions">
+  <button class="btn" type="submit">Restore hangout</button>
+</form>
+{% elif hangout.status.value != 'closed' %}
 <div class="card">
   <h2 style="margin-top:0;">
     {% if hangout.status.value == 'draft' %}Set up hangout{% else %}Add / re-send invites{% endif %}
@@ -128,6 +133,10 @@
 
 <form method="post" action="/hangouts/{{ hangout.id }}/close" class="actions">
   <button class="btn btn-secondary" type="submit">End hangout</button>
+</form>
+{% else %}
+<form method="post" action="/hangouts/{{ hangout.id }}/delete" class="actions">
+  <button class="btn btn-danger" type="submit">Delete hangout</button>
 </form>
 {% endif %}
 

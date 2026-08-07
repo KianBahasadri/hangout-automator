@@ -171,6 +171,7 @@ class HangoutOut(BaseModel):
     notify_confirm_goal_sent: bool
     notify_threshold_cooldown_minutes: int
     activated_at: Optional[datetime]
+    deleted_at: Optional[datetime] = None
     created_at: datetime
     invites: list[InviteOut] = Field(default_factory=list)
 

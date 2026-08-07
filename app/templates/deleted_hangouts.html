@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% from "_status_badge.html" import hangout_status_badge %}
+{% block title %}Deleted hangouts · Hangout Automator{% endblock %}
+{% block content %}
+<div style="display:flex;align-items:baseline;gap:1rem;flex-wrap:wrap;margin-bottom:0.25rem;">
+  <h1 style="margin:0;">Deleted hangouts</h1>
+  <a class="btn btn-secondary btn-sm" href="/settings">← Settings</a>
+</div>
+<p class="muted" style="margin-top:0.35rem;">
+  Hidden hangouts stay in the database. Search by name (motive).
+</p>
+
+<form method="get" action="/settings/deleted-hangouts" class="card" style="margin-top:1rem;">
+  <div class="field-row" style="align-items:flex-end;margin:0;">
+    <div style="flex:2;">
+      <label for="q">Search by name</label>
+      <input id="q" name="q" type="search" value="{{ q }}" placeholder="Game night…" style="margin-bottom:0;" />
+    </div>
+    <button class="btn" type="submit">Search</button>
+    {% if q %}
+    <a class="btn btn-secondary" href="/settings/deleted-hangouts">Clear</a>
+    {% endif %}
+  </div>
+</form>
+
+{% if hangouts %}
+  {% for h in hangouts %}
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap;align-items:flex-start;">
+      <div>
+        <a href="/hangouts/{{ h.id }}">
+          {% if h.motive %}{{ h.motive }}{% else %}<span class="muted">Untitled hangout</span>{% endif %}
+        </a>
+        <div class="muted">
+          {% if h.day_date %}{{ h.day_date }}{% endif %}
+          {% if h.time %} · {{ h.time }}{% endif %}
+          {% if h.duration %} · {{ h.duration }}{% endif %}
+          {% if h.location %} · {{ h.location }}{% endif %}
+        </div>
+        {% if h.deleted_at %}
+        <div class="muted" style="margin-top:0.25rem;font-size:0.85rem;">
+          Hidden {{ h.deleted_at.strftime('%Y-%m-%d %H:%M') }}
+        </div>
+        {% endif %}
+      </div>
+      {{ hangout_status_badge(h.status) }}
+    </div>
+    <div class="actions" style="margin-top:0.75rem;">
+      <a class="btn btn-secondary btn-sm" href="/hangouts/{{ h.id }}">View</a>
+      <form method="post" action="/hangouts/{{ h.id }}/restore" style="display:inline;">
+        <button class="btn btn-sm" type="submit">Restore</button>
+      </form>
+    </div>
+  </div>
+  {% endfor %}
+{% else %}
+  <div class="card empty">
+    {% if q %}No deleted hangouts match “{{ q }}”.{% else %}No deleted hangouts yet.{% endif %}
+  </div>
+{% endif %}
+{% endblock %}
