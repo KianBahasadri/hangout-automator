@@ -12,6 +12,15 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ["3.12", "3.13"]
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: hangout
+          POSTGRES_PASSWORD: hangout
+          POSTGRES_DB: hangout_test
+        ports:
+          - 5432:5432
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
@@ -21,6 +30,8 @@ jobs:
       # deps. The whole point of the workflow is that the suite actually runs.
       - run: uv sync --group dev
       - run: uv run --group dev pytest
+        env:
+          TEST_DATABASE_URL: postgresql+psycopg://hangout:hangout@localhost:5432/hangout_test
 
   lint:
     name: ruff

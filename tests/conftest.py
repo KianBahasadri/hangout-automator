@@ -1,7 +1,12 @@
 import os
-import tempfile
+from pathlib import Path
 
-os.environ["DATABASE_URL"] = f"sqlite:///{tempfile.mkdtemp(prefix='hangout-test-')}/test.db"
+# Postgres only. TEST_DATABASE_URL overrides the database (CI provides it);
+# the default is the local compose instance with the test database name.
+os.environ["DATABASE_URL"] = os.environ.get(
+    "TEST_DATABASE_URL",
+    "postgresql+psycopg://hangout:hangout@localhost:5432/hangout_test",
+)
 os.environ["SMS_PROVIDER"] = "mock"
 os.environ["FOLLOWUP_HOURS"] = "1,2"
 # Keep the application import hermetic when a developer's .env enables Clerk.
@@ -10,15 +15,20 @@ os.environ["FOLLOWUP_HOURS"] = "1,2"
 os.environ["CLERK_ENABLED"] = "false"
 
 import pytest
+from alembic import command
+from alembic.config import Config
 from fastapi.testclient import TestClient
 
-from app.database import SessionLocal, init_db
+from app.database import DEFAULT_DIETARY_RESTRICTIONS, SessionLocal
 from app.main import app
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
 @pytest.fixture(scope="session", autouse=True)
 def _db_setup():
-    init_db()
+    """Bring the test database to head once per session, like a deploy step."""
+    command.upgrade(Config(str(REPO_ROOT / "alembic.ini")), "head")
     yield
 
 
@@ -41,9 +51,14 @@ def _clean_tables(db):
     with engine.begin() as conn:
         for table in reversed(Base.metadata.sorted_tables):
             conn.execute(table.delete())
-        # One-time bootstrap flags (not an ORM model); clear so the next
-        # init_db() re-seeds default dietary restrictions for empty catalogs.
-        conn.execute(text("DELETE FROM schema_flags"))
+        # The default dietary restrictions are a one-shot data migration under
+        # Alembic, so no per-test bootstrap re-seeds them. Re-insert them here
+        # (test infrastructure, not app behavior) so every test starts from the
+        # same "fresh seeded database" state the lifespan bootstrap used to give.
+        conn.execute(
+            text("INSERT INTO allergies (name) VALUES (:name)"),
+            [{"name": name} for name in DEFAULT_DIETARY_RESTRICTIONS],
+        )
 
 
 @pytest.fixture

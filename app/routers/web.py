@@ -230,7 +230,9 @@ def profiles_new_page(request: Request, db: Session = Depends(get_db)) -> HTMLRe
 
 
 @router.post("/tags")
-def tags_create(name: str = Form(...), db: Session = Depends(get_db)) -> RedirectResponse:
+def tags_create(
+    name: str = Form(..., max_length=64), db: Session = Depends(get_db)
+) -> RedirectResponse:
     cleaned = normalize_tag_name(name)
     if cleaned:
         existing = db.query(Tag).filter(Tag.name.ilike(cleaned)).first()
@@ -739,7 +741,9 @@ def download_logs() -> FileResponse:
 
 
 @router.post("/allergies")
-def allergies_create(name: str = Form(...), db: Session = Depends(get_db)) -> RedirectResponse:
+def allergies_create(
+    name: str = Form(..., max_length=64), db: Session = Depends(get_db)
+) -> RedirectResponse:
     cleaned = normalize_allergy_name(name)
     if cleaned:
         existing = db.query(Allergy).filter(Allergy.name.ilike(cleaned)).first()

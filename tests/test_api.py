@@ -186,9 +186,11 @@ def test_default_dietary_restrictions_are_seeded(client_no_raise):
 
 
 def test_deleted_default_dietary_restriction_stays_gone(client_no_raise):
-    """Deleting a default must not come back on the next init_db()."""
-    from app.database import init_db
+    """Deleting a default must not come back on the next migrations run.
 
+    Under Alembic the seed is a one-shot data migration: re-running migrations
+    (upgrade head is a no-op at head) does not re-seed.
+    """
     listed = client_no_raise.get("/api/allergies")
     assert listed.status_code == 200
     meat = next(row for row in listed.json() if row["name"].lower() == "meat")
@@ -196,7 +198,13 @@ def test_deleted_default_dietary_restriction_stays_gone(client_no_raise):
     deleted = client_no_raise.delete(f"/api/allergies/{meat['id']}")
     assert deleted.status_code == 204
 
-    init_db()
+    from pathlib import Path
+
+    from alembic import command
+    from alembic.config import Config
+
+    repo_root = Path(__file__).resolve().parent.parent
+    command.upgrade(Config(str(repo_root / "alembic.ini")), "head")
 
     after = client_no_raise.get("/api/allergies")
     assert after.status_code == 200

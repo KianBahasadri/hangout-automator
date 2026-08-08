@@ -182,7 +182,7 @@ exists and fails only on checks 3–6.
 > no way to make it green, which deadlocks the loop protocol's "pytest must be
 > green before you continue" rule. Move the tests off SQLite first, then delete.
 
-- [ ] **P2.4** Move the test suite onto Postgres + Alembic, before anything is
+- [x] **P2.4** Move the test suite onto Postgres + Alembic, before anything is
       deleted from `app/database.py`.
       - `tests/conftest.py:4` sets `DATABASE_URL` to a temp SQLite path before
         importing the app; replace with a `TEST_DATABASE_URL` env var defaulting

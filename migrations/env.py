@@ -17,9 +17,10 @@ from app import models  # noqa: F401,E402
 config = context.config
 
 # Interpret the config file for Python logging.
-# This line sets up loggers basically.
+# disable_existing_loggers=False: the app's own loggers (hangout.audit) keep
+# working when migrations run inside the same process (tests, deploy scripts).
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 # The URL lives in app settings (env-driven), not alembic.ini, so a single
 # source of truth governs app and migrations.

@@ -190,6 +190,13 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
     )
     # ### end Alembic commands ###
+    # One-shot data migration: seed the default dietary-restriction catalog
+    # (replaces the old schema_flags-marked bootstrap; Alembic runs this once by
+    # construction, so re-running migrations never re-seeds).
+    op.bulk_insert(
+        sa.table("allergies", sa.column("name", sa.String(64))),
+        [{"name": "meat"}, {"name": "pork"}],
+    )
 
 
 def downgrade() -> None:
