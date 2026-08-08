@@ -1,0 +1,22 @@
+# Local-development Postgres only. Production runs Azure Database for
+# PostgreSQL Flexible Server (see docs/deploy.md); this file never touches it.
+services:
+  postgres:
+    image: postgres:17
+    container_name: hangout-automator-postgres
+    environment:
+      POSTGRES_USER: hangout
+      POSTGRES_PASSWORD: hangout
+      POSTGRES_DB: hangout
+    ports:
+      - "5432:5432"
+    volumes:
+      - hangout-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hangout -d hangout"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+volumes:
+  hangout-postgres-data:

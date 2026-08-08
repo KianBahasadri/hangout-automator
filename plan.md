@@ -164,7 +164,7 @@ exists and fails only on checks 3–6.
       `app.database.Base.metadata` and read the URL from
       `app.config.get_settings().database_url` rather than `alembic.ini`.
       Set `compare_type=True` and `compare_server_default=True`.
-- [ ] **P2.2** Add `docker-compose.yml` with a single `postgres:17` service,
+- [x] **P2.2** Add `docker-compose.yml` with a single `postgres:17` service,
       a named volume, and port 5432. Add `scripts/db_up.sh` to start it and wait
       for readiness. Change the default `database_url` in `app/config.py` to the
       local compose URL. Update `.env.example`.

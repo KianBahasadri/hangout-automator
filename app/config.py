@@ -12,7 +12,7 @@ class Settings(BaseSettings):
 
     app_host: str = "0.0.0.0"
     app_port: int = 9000
-    database_url: str = "sqlite:///./hangout.db"
+    database_url: str = "postgresql+psycopg://hangout:hangout@localhost:5432/hangout"
     public_base_url: str = "http://localhost:9000"
 
     # Clerk authentication is opt-in so a fresh local checkout remains usable
