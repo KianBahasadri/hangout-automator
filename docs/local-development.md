@@ -77,9 +77,11 @@ comma-separated list of browser origins such as
 `http://localhost:9000,https://app.example.com`; the verifier checks the
 session token's authorized-party claim against this list. With Clerk enabled,
 the UI and `/api/*` routes require a session, while `/api/health`, static
-assets, `/sign-in`, and `POST /webhooks/sms` remain reachable for health checks,
-browser bootstrapping, and Twilio delivery. The webhook still relies on its
-Twilio signature validation when `SMS_PROVIDER=twilio`.
+assets, and `/sign-in` remain reachable for health checks and browser
+bootstrapping. `POST /webhooks/sms` is public only when
+`SMS_PROVIDER=twilio`; in that mode its Twilio signature validation is the
+integration authentication layer. A mock-provider webhook remains protected
+by Clerk.
 
 The sign-in page mounts Clerk's browser component and safely returns to the
 original internal path after login. Authenticated pages mount Clerk's user

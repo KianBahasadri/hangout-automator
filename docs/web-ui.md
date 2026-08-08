@@ -7,7 +7,7 @@ HTML routes: `app/routers/web.py`. Templates: `app/templates/`. Styles/scripts: 
 - Minimal chrome: nav is Home, Profiles, Settings, plus a light/dark theme toggle
 - Labels and placeholders only — no instructional hint/lead paragraphs on forms
 - Optional fields use a blank first option (or unchecked pills), not an “unknown” value
-- Shared data: every visitor sees the same profiles/hangouts
+- Shared data: when Clerk is enabled, every authenticated visitor sees the same profiles/hangouts; with Clerk disabled, every visitor does
 
 ## Theme
 

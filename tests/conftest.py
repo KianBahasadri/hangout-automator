@@ -4,6 +4,10 @@ import tempfile
 os.environ["DATABASE_URL"] = f"sqlite:///{tempfile.mkdtemp(prefix='hangout-test-')}/test.db"
 os.environ["SMS_PROVIDER"] = "mock"
 os.environ["FOLLOWUP_HOURS"] = "1,2"
+# Keep the application import hermetic when a developer's .env enables Clerk.
+# Auth-specific tests construct their own enabled Settings and monkeypatch the
+# middleware verifier explicitly.
+os.environ["CLERK_ENABLED"] = "false"
 
 import pytest
 from fastapi.testclient import TestClient

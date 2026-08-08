@@ -5,7 +5,13 @@
     if (typeof value !== "string" || !value.startsWith("/") || value.startsWith("//")) {
       return "/";
     }
-    return value;
+    try {
+      var destination = new URL(value, window.location.origin);
+      if (destination.origin !== window.location.origin) return "/";
+      return destination.pathname + destination.search + destination.hash;
+    } catch (error) {
+      return "/";
+    }
   }
 
   function showError() {

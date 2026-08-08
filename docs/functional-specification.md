@@ -126,7 +126,7 @@ Hangout details describe the plan. **All hangout detail fields are optional** so
 
 | ID | Requirement | Priority |
 |----|-------------|----------|
-| HANG-1 | A site user can create a new hangout without logging in. | Must |
+| HANG-1 | A site user can create a new hangout; when Clerk auth is enabled, the site user must be signed in. | Must |
 | HANG-2 | All hangout detail fields are optional. The system must allow creating and sending invites with sparse or empty detail sets. | Must |
 | HANG-3 | Supported hangout detail fields (MVP set): | Must |
 

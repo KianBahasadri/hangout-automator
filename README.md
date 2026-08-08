@@ -2,7 +2,7 @@
 
 MVP website that plans hangouts and invites people by SMS.
 
-- **Clerk authentication** — set `CLERK_ENABLED=true` to require a Clerk session for the UI and API; the SMS webhook remains integration-authenticated
+- **Clerk authentication** — set `CLERK_ENABLED=true` to require a Clerk session for the UI and API; a Twilio webhook remains public only for Twilio signature validation
 - **No multi-tenancy** — authenticated users still share one dataset for the whole app
 - **FastAPI** web UI + JSON API
 - **SQLite** on disk

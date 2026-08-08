@@ -432,15 +432,17 @@ the boundary:
 - `cloudflare_zero_trust_access_application.app` — the hostname, 24h session
 - `cloudflare_zero_trust_access_application.webhook` +
   `cloudflare_zero_trust_access_policy.webhook_bypass` — `bypass` for
-  `/webhooks/sms`. Access matches the most specific path first, so this covers
-  the webhook and the application above covers everything else.
+  `/webhooks/sms` when `SMS_PROVIDER=twilio`. With the mock provider, these
+  resources are omitted and the application policy covers every path.
+  Access matches the most specific path first when the webhook exception is
+  present.
 
-The webhook exception is forced: Twilio cannot attach
+The webhook exception is forced when `SMS_PROVIDER=twilio`: Twilio cannot attach
 `CF-Access-Client-Id`/`CF-Access-Client-Secret` headers to a webhook, so a
-service token cannot work there. The app also deliberately leaves
-`POST /webhooks/sms` outside its Clerk browser-session middleware. That makes
-the `X-Twilio-Signature` check in `app/routers/webhooks.py` the **only** layer
-on that path — see
+service token cannot work there. The app leaves that Twilio webhook outside
+its Clerk browser-session middleware, making the `X-Twilio-Signature` check in
+`app/routers/webhooks.py` the **only** application layer on that path. A mock
+provider webhook remains protected by Clerk — see
 [sms-and-rsvp.md](./sms-and-rsvp.md) for what it verifies.
 
 Defense in depth beyond Access:

@@ -18,7 +18,7 @@ from app.config import Settings, get_settings
 
 logger = logging.getLogger(__name__)
 
-_PUBLIC_EXACT_PATHS = frozenset({"/api/health", "/sign-in", "/webhooks/sms"})
+_PUBLIC_EXACT_PATHS = frozenset({"/api/health", "/sign-in"})
 
 
 @lru_cache(maxsize=8)
@@ -42,12 +42,15 @@ async def authenticate_clerk_request(
     return await asyncio.to_thread(client.authenticate_request, request, options)
 
 
-def _is_public_path(path: str) -> bool:
+def _is_public_path(path: str, settings: Settings) -> bool:
+    provider = (settings.sms_provider or "mock").strip().lower()
+    twilio_webhook = provider == "twilio" and bool(settings.twilio_auth_token.strip())
     return (
         path in _PUBLIC_EXACT_PATHS
         or path.startswith("/sign-in/")
         or path == "/static"
         or path.startswith("/static/")
+        or (path == "/webhooks/sms" and twilio_webhook)
     )
 
 
@@ -77,7 +80,7 @@ class ClerkAuthMiddleware(BaseHTTPMiddleware):
         self, request: Request, call_next: RequestResponseEndpoint
     ) -> Response:
         settings = get_settings()
-        if not settings.clerk_enabled or _is_public_path(request.url.path):
+        if not settings.clerk_enabled or _is_public_path(request.url.path, settings):
             return await call_next(request)
 
         try:

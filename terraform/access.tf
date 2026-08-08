@@ -30,15 +30,18 @@ resource "cloudflare_zero_trust_access_application" "app" {
 }
 
 # Twilio cannot attach CF-Access-Client-Id/CF-Access-Client-Secret headers to a
-# webhook, so the inbound SMS route has to skip Access entirely. Cloudflare
+# webhook, so the inbound SMS route has to skip Access entirely when Twilio is
+# active. With the mock provider there is no external callback to exempt, so
+# the normal application Access policy protects this path too. Cloudflare
 # matches the most specific path first, so this application applies to
 # /webhooks/sms and the one above still covers everything else.
 #
 # The route is not left unauthenticated: with SMS_PROVIDER=twilio the handler in
 # app/routers/webhooks.py rejects any request whose X-Twilio-Signature does not
 # verify against PUBLIC_BASE_URL. Bypassing Access here makes that signature
-# check the only layer on this path, which is a deliberate choice.
+# check the only edge/application layer on this path, which is deliberate.
 resource "cloudflare_zero_trust_access_policy" "webhook_bypass" {
+  count      = var.sms_provider == "twilio" ? 1 : 0
   account_id = var.cloudflare_account_id
   name       = "${var.cloudflare_tunnel_name}-twilio-webhook-bypass"
   decision   = "bypass"
@@ -47,13 +50,14 @@ resource "cloudflare_zero_trust_access_policy" "webhook_bypass" {
 }
 
 resource "cloudflare_zero_trust_access_application" "webhook" {
+  count      = var.sms_provider == "twilio" ? 1 : 0
   account_id = var.cloudflare_account_id
   name       = "${var.cloudflare_tunnel_name}-twilio-webhook"
   type       = "self_hosted"
   domain     = "${var.cloudflare_hostname}/webhooks/sms"
 
   policies = [{
-    id         = cloudflare_zero_trust_access_policy.webhook_bypass.id
+    id         = cloudflare_zero_trust_access_policy.webhook_bypass[0].id
     precedence = 1
   }]
 }

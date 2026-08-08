@@ -1,6 +1,6 @@
 # API
 
-JSON routes in `app/routers/api.py`, prefix `/api`. Schemas in `app/schemas.py`. OpenAPI UI at `/docs` — served only when `ENABLE_API_DOCS` is true, so `/docs`, `/redoc`, and `/openapi.json` all 404 on deployments (see [local-development.md](./local-development.md)).
+JSON routes in `app/routers/api.py`, prefix `/api`. Schemas in `app/schemas.py`. When `CLERK_ENABLED=true`, every API route except `/api/health` requires a verified Clerk session and returns `401` for an unauthenticated request. OpenAPI UI at `/docs` — served only when `ENABLE_API_DOCS` is true, so `/docs`, `/redoc`, and `/openapi.json` all 404 on deployments (see [local-development.md](./local-development.md)).
 
 ## Endpoints
 

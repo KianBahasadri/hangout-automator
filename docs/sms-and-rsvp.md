@@ -53,6 +53,7 @@ Messages use short multi-line layout (labels + blank lines) so they read clearly
 - Accepts Twilio form fields or JSON (`From`/`from`, `Body`/`body`)
 - When `SMS_PROVIDER=twilio`, validates `X-Twilio-Signature` for **both** form and JSON requests (403 on failure). The signature is verified against the canonical public URL `PUBLIC_BASE_URL + /webhooks/sms` (reverse-proxy aware), so `PUBLIC_BASE_URL` must match the URL configured in the Twilio console. JSON payloads are verified via the `bodySHA256` query parameter Twilio appends to the webhook URL; a signed JSON request **without** `bodySHA256` is rejected with 403 rather than passed to the validator, which cannot verify a raw body without it.
 - With `SMS_PROVIDER=mock` (local testing), signatures are skipped and JSON is accepted as-is
+- When Clerk is enabled, mock-provider webhook requests still require a Clerk session; the Twilio webhook is the public integration exception because Twilio cannot authenticate with a browser session.
 - Missing From → 400
 - Response is always TwiML `<Response><Message>…</Message></Response>` with the auto-reply text
 

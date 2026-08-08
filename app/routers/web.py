@@ -52,7 +52,7 @@ def _clerk_enabled() -> bool:
 
 
 def _clerk_publishable_key() -> str:
-    return get_settings().clerk_publishable_key
+    return get_settings().clerk_publishable_key.strip()
 
 
 def _clerk_frontend_api_url() -> str:
@@ -97,7 +97,10 @@ def _all_allergies(db: Session) -> list[Allergy]:
 def _safe_redirect_path(value: str | None) -> str:
     """Keep the post-login destination on this app, never an external URL."""
     value = (value or "").strip()
-    if value.startswith("/") and not value.startswith("//"):
+    # Backslashes are treated as URL separators by browsers. Reject them in
+    # addition to scheme-relative URLs so a value such as /\\evil.example
+    # cannot become an external redirect after browser URL normalization.
+    if value.startswith("/") and not value.startswith("//") and "\\" not in value:
         return value
     return "/"
 
