@@ -218,6 +218,13 @@ def test_new_hangout_has_preview_invite_button(client):
     assert "hangout_sms_preview.js" in response.text
 
 
+def test_new_hangout_has_back_button_to_hangout_list(client):
+    response = client.get("/hangouts/new")
+
+    assert response.status_code == 200
+    assert '<a class="btn btn-secondary btn-sm" href="/">← All hangouts</a>' in response.text
+
+
 def test_new_hangout_enables_places_when_configured(client, monkeypatch):
     monkeypatch.setattr(
         "app.routers.web.get_settings",

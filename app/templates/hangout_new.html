@@ -1,7 +1,10 @@
 {% extends "base.html" %}
 {% block title %}New hangout · Hangout Automator{% endblock %}
 {% block content %}
-<h1>New hangout</h1>
+<div style="display:flex;align-items:baseline;gap:1rem;flex-wrap:wrap;margin-bottom:1.25rem;">
+  <h1 style="margin:0;">New hangout</h1>
+  <a class="btn btn-secondary btn-sm" href="/">← All hangouts</a>
+</div>
 <form method="post" action="/hangouts/new" class="card">
   <h2 style="margin-top:0;">Details</h2>
   <div class="field-row">

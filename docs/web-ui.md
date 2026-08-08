@@ -87,6 +87,7 @@ Partial `_invitee_picker.html` + `invitee_picker.js` (new hangout and hangout de
 ## New hangout
 
 - All hangout detail fields optional (day, time, duration, location, motive, alcohol, weed, notes)
+- Header includes an **All hangouts** back button to return to the hangout list without submitting
 - Submitting setup without invitees keeps the hangout as a draft and redirects back with a profile-selection error
 - Organizer **combobox** (`combobox.js`): typeahead by name/phone → hidden `organizer_profile_id`
 - Notify panel (`notify_panel.js`): progressive disclosure (master → interval/threshold → nested options)
