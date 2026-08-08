@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session, joinedload
 
@@ -295,17 +295,104 @@ def hangout_new(request: Request, db: Session = Depends(get_db)) -> HTMLResponse
     return templates.TemplateResponse(
         request,
         "hangout_new.html",
-        {
-            "profiles": _profiles_with_tags(db),
-            "tags": _all_tags(db),
-            "google_places_enabled": bool(get_settings().google_maps_api_key.strip()),
-            "alcohol_opts": list(YesNo),
-            "weed_opts": list(YesNo),
-            "interval_hour_opts": INTERVAL_HOUR_OPTIONS,
-            "cooldown_minute_opts": COOLDOWN_MINUTE_OPTIONS,
-            "confirm_goal_opts": CONFIRM_GOAL_OPTIONS,
-        },
+        _hangout_form_context(db),
     )
+
+
+def _hangout_form_context(
+    db: Session,
+    *,
+    hangout: Hangout | None = None,
+    error: str | None = None,
+) -> dict:
+    return {
+        "hangout": hangout,
+        "profiles": _profiles_with_tags(db),
+        "tags": _all_tags(db),
+        "invited_ids": {invite.profile_id for invite in hangout.invites} if hangout else set(),
+        "error": error,
+        "google_places_enabled": bool(get_settings().google_maps_api_key.strip()),
+        "alcohol_opts": list(YesNo),
+        "weed_opts": list(YesNo),
+        "interval_hour_opts": INTERVAL_HOUR_OPTIONS,
+        "cooldown_minute_opts": COOLDOWN_MINUTE_OPTIONS,
+        "confirm_goal_opts": CONFIRM_GOAL_OPTIONS,
+    }
+
+
+def _apply_hangout_form(
+    db: Session,
+    hangout: Hangout,
+    *,
+    day_date: str,
+    time: str,
+    duration: str,
+    location: str,
+    motive: str,
+    alcohol_involved: str,
+    weed_involved: str,
+    notes: str,
+    organizer_profile_id: str,
+    notify_enabled: str | None,
+    notify_interval: str | None,
+    notify_threshold: str | None,
+    notify_interval_hours: str,
+    notify_interval_only_if_changed: str | None,
+    notify_on_new_confirm: str | None,
+    notify_on_decline: str | None,
+    notify_on_allergy: str | None,
+    notify_on_ride_needed: str | None,
+    notify_confirm_goal: str,
+    notify_threshold_cooldown_minutes: str,
+) -> None:
+    """Apply the shared new/edit form fields to a draft hangout."""
+    organizer_id = parse_row_id(organizer_profile_id)
+    org_profile = db.get(Profile, organizer_id) if organizer_id is not None else None
+    notify = notify_enabled is not None
+    # Notifications require an organizer profile with a phone.
+    if notify and not (org_profile and org_profile.phone):
+        notify = False
+
+    hangout.day_date = day_date.strip() or None
+    hangout.time = time.strip() or None
+    hangout.duration = duration.strip() or None
+    hangout.location = location.strip() or None
+    hangout.motive = motive.strip() or None
+    hangout.alcohol_involved = _optional_enum_form(alcohol_involved, YesNo)
+    hangout.weed_involved = _optional_enum_form(weed_involved, YesNo)
+    hangout.notes = notes.strip() or None
+    hangout.organizer = org_profile
+    hangout.organizer_profile_id = org_profile.id if org_profile else None
+    hangout.organizer_phone = org_profile.phone if org_profile else None
+    hangout.notify_enabled = notify
+    hangout.notify_interval = notify and notify_interval is not None
+    hangout.notify_threshold = notify and notify_threshold is not None
+    hangout.notify_interval_hours = clamp_choice(notify_interval_hours, INTERVAL_HOUR_OPTIONS, 6)
+    hangout.notify_interval_only_if_changed = notify_interval_only_if_changed is not None
+    hangout.notify_on_new_confirm = notify_on_new_confirm is not None
+    hangout.notify_on_decline = notify_on_decline is not None
+    hangout.notify_on_allergy = notify_on_allergy is not None
+    hangout.notify_on_ride_needed = notify_on_ride_needed is not None
+    hangout.notify_confirm_goal = clamp_choice(notify_confirm_goal, CONFIRM_GOAL_OPTIONS, 0)
+    hangout.notify_threshold_cooldown_minutes = clamp_choice(
+        notify_threshold_cooldown_minutes, COOLDOWN_MINUTE_OPTIONS, 0
+    )
+
+
+def _valid_profile_ids(db: Session, profile_ids: list[RowId] | None) -> list[int]:
+    return list(dict.fromkeys(pid for pid in profile_ids or [] if db.get(Profile, pid) is not None))
+
+
+def _sync_draft_invitees(db: Session, hangout: Hangout, profile_ids: list[int]) -> None:
+    """Make a draft's selected invitees match its edit form."""
+    selected_ids = set(profile_ids)
+    existing_ids = {invite.profile_id for invite in hangout.invites}
+    for invite in list(hangout.invites):
+        if invite.profile_id not in selected_ids:
+            db.delete(invite)
+    for profile_id in profile_ids:
+        if profile_id not in existing_ids:
+            db.add(HangoutInvite(hangout_id=hangout.id, profile_id=profile_id))
 
 
 @router.post("/hangouts/new")
@@ -334,56 +421,136 @@ def hangout_create(
     action: str = Form("draft"),
     db: Session = Depends(get_db),
 ) -> RedirectResponse:
-    ids = profile_ids or []
-    organizer_id = parse_row_id(organizer_profile_id)
-    org_profile = db.get(Profile, organizer_id) if organizer_id is not None else None
-    notify = notify_enabled is not None
-    # Notifications require an organizer profile with a phone
-    if notify and not (org_profile and org_profile.phone):
-        notify = False
-    interval_on = notify and notify_interval is not None
-    threshold_on = notify and notify_threshold is not None
-    hangout = Hangout(
-        day_date=day_date.strip() or None,
-        time=time.strip() or None,
-        duration=duration.strip() or None,
-        location=location.strip() or None,
-        motive=motive.strip() or None,
-        alcohol_involved=_optional_enum_form(alcohol_involved, YesNo),
-        weed_involved=_optional_enum_form(weed_involved, YesNo),
-        notes=notes.strip() or None,
-        status=HangoutStatus.draft,
-        organizer_profile_id=org_profile.id if org_profile else None,
-        organizer_phone=org_profile.phone if org_profile else None,
-        notify_enabled=notify,
-        notify_interval=interval_on,
-        notify_threshold=threshold_on,
-        notify_interval_hours=clamp_choice(notify_interval_hours, INTERVAL_HOUR_OPTIONS, 6),
-        notify_interval_only_if_changed=notify_interval_only_if_changed is not None,
-        notify_on_new_confirm=notify_on_new_confirm is not None,
-        notify_on_decline=notify_on_decline is not None,
-        notify_on_allergy=notify_on_allergy is not None,
-        notify_on_ride_needed=notify_on_ride_needed is not None,
-        notify_confirm_goal=clamp_choice(notify_confirm_goal, CONFIRM_GOAL_OPTIONS, 0),
-        notify_threshold_cooldown_minutes=clamp_choice(
-            notify_threshold_cooldown_minutes, COOLDOWN_MINUTE_OPTIONS, 0
-        ),
+    hangout = Hangout(status=HangoutStatus.draft)
+    _apply_hangout_form(
+        db,
+        hangout,
+        day_date=day_date,
+        time=time,
+        duration=duration,
+        location=location,
+        motive=motive,
+        alcohol_involved=alcohol_involved,
+        weed_involved=weed_involved,
+        notes=notes,
+        organizer_profile_id=organizer_profile_id,
+        notify_enabled=notify_enabled,
+        notify_interval=notify_interval,
+        notify_threshold=notify_threshold,
+        notify_interval_hours=notify_interval_hours,
+        notify_interval_only_if_changed=notify_interval_only_if_changed,
+        notify_on_new_confirm=notify_on_new_confirm,
+        notify_on_decline=notify_on_decline,
+        notify_on_allergy=notify_on_allergy,
+        notify_on_ride_needed=notify_on_ride_needed,
+        notify_confirm_goal=notify_confirm_goal,
+        notify_threshold_cooldown_minutes=notify_threshold_cooldown_minutes,
     )
     db.add(hangout)
     db.flush()
-    for pid in ids:
-        if db.get(Profile, int(pid)):
-            db.add(HangoutInvite(hangout_id=hangout.id, profile_id=int(pid)))
+    ids = _valid_profile_ids(db, profile_ids)
+    _sync_draft_invitees(db, hangout, ids)
     db.commit()
 
     if action == "setup":
         hangout = load_hangout(db, hangout.id)  # type: ignore[assignment]
         try:
-            setup_hangout(db, hangout, [int(p) for p in ids])
+            setup_hangout(db, hangout, ids)
         except ValueError:
-            return RedirectResponse(f"/hangouts/{hangout.id}?error=need_profiles", status_code=303)
+            return RedirectResponse(f"/hangouts/{hangout.id}/edit?error=need_profiles", status_code=303)
 
-    return RedirectResponse(f"/hangouts/{hangout.id}", status_code=303)
+    return RedirectResponse(f"/hangouts/{hangout.id}/edit", status_code=303)
+
+
+@router.get("/hangouts/{hangout_id}/edit", response_class=HTMLResponse)
+def hangout_edit(request: Request, hangout_id: RowIdPath, db: Session = Depends(get_db)) -> HTMLResponse:
+    hangout = load_hangout(db, hangout_id)
+    if not hangout or hangout.status != HangoutStatus.draft or hangout.deleted_at is not None:
+        return RedirectResponse(f"/hangouts/{hangout_id}" if hangout else "/", status_code=303)
+    return templates.TemplateResponse(
+        request,
+        "hangout_new.html",
+        _hangout_form_context(
+            db,
+            hangout=hangout,
+            error=request.query_params.get("error"),
+        ),
+    )
+
+
+@router.post("/hangouts/{hangout_id}/edit")
+def hangout_update_draft(
+    hangout_id: RowIdPath,
+    request: Request,
+    day_date: str = Form(""),
+    time: str = Form(""),
+    duration: str = Form(""),
+    location: str = Form(""),
+    motive: str = Form(""),
+    alcohol_involved: str = Form(""),
+    weed_involved: str = Form(""),
+    notes: str = Form(""),
+    organizer_profile_id: str = Form(""),
+    notify_enabled: str | None = Form(None),
+    notify_interval: str | None = Form(None),
+    notify_threshold: str | None = Form(None),
+    notify_interval_hours: str = Form("6"),
+    notify_interval_only_if_changed: str | None = Form(None),
+    notify_on_new_confirm: str | None = Form(None),
+    notify_on_decline: str | None = Form(None),
+    notify_on_allergy: str | None = Form(None),
+    notify_on_ride_needed: str | None = Form(None),
+    notify_confirm_goal: str = Form("0"),
+    notify_threshold_cooldown_minutes: str = Form("0"),
+    profile_ids: Annotated[list[RowId] | None, Form()] = None,
+    action: str = Form("draft"),
+    db: Session = Depends(get_db),
+) -> Response:
+    hangout = load_hangout(db, hangout_id)
+    if not hangout:
+        return RedirectResponse("/", status_code=303)
+    if hangout.status != HangoutStatus.draft or hangout.deleted_at is not None:
+        return RedirectResponse(f"/hangouts/{hangout_id}", status_code=303)
+
+    _apply_hangout_form(
+        db,
+        hangout,
+        day_date=day_date,
+        time=time,
+        duration=duration,
+        location=location,
+        motive=motive,
+        alcohol_involved=alcohol_involved,
+        weed_involved=weed_involved,
+        notes=notes,
+        organizer_profile_id=organizer_profile_id,
+        notify_enabled=notify_enabled,
+        notify_interval=notify_interval,
+        notify_threshold=notify_threshold,
+        notify_interval_hours=notify_interval_hours,
+        notify_interval_only_if_changed=notify_interval_only_if_changed,
+        notify_on_new_confirm=notify_on_new_confirm,
+        notify_on_decline=notify_on_decline,
+        notify_on_allergy=notify_on_allergy,
+        notify_on_ride_needed=notify_on_ride_needed,
+        notify_confirm_goal=notify_confirm_goal,
+        notify_threshold_cooldown_minutes=notify_threshold_cooldown_minutes,
+    )
+    ids = _valid_profile_ids(db, profile_ids)
+    _sync_draft_invitees(db, hangout, ids)
+    db.commit()
+
+    if action == "setup":
+        hangout = load_hangout(db, hangout_id)  # type: ignore[assignment]
+        try:
+            setup_hangout(db, hangout, ids)
+        except ValueError:
+            return RedirectResponse(f"/hangouts/{hangout_id}/edit?error=need_profiles", status_code=303)
+        return RedirectResponse(f"/hangouts/{hangout_id}", status_code=303)
+
+    if "application/json" in request.headers.get("accept", ""):
+        return Response(status_code=204)
+    return RedirectResponse(f"/hangouts/{hangout_id}/edit", status_code=303)
 
 
 @router.get("/hangouts/{hangout_id}", response_class=HTMLResponse)
@@ -391,6 +558,10 @@ def hangout_detail(request: Request, hangout_id: RowIdPath, db: Session = Depend
     hangout = load_hangout(db, hangout_id)
     if not hangout:
         return RedirectResponse("/", status_code=303)
+    if hangout.status == HangoutStatus.draft and hangout.deleted_at is None:
+        error = request.query_params.get("error")
+        suffix = "?error=need_profiles" if error == "need_profiles" else ""
+        return RedirectResponse(f"/hangouts/{hangout_id}/edit{suffix}", status_code=303)
     invited_ids = {i.profile_id for i in hangout.invites}
     return templates.TemplateResponse(
         request,

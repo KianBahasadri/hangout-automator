@@ -1,24 +1,35 @@
 {% extends "base.html" %}
-{% block title %}New hangout · Hangout Automator{% endblock %}
+{% block title %}{% if hangout %}Edit hangout{% else %}New hangout{% endif %} · Hangout Automator{% endblock %}
 {% block content %}
+{% set is_edit = hangout is not none %}
+{% set organizer_label = hangout.organizer.name ~ ' (' ~ (hangout.organizer.phone|phone) ~ ')' if hangout and hangout.organizer else '' %}
+{% if error == 'need_profiles' %}
+<div class="alert">Select at least one profile before setting up the hangout.</div>
+{% endif %}
 <div style="display:flex;align-items:baseline;gap:1rem;flex-wrap:wrap;margin-bottom:1.25rem;">
-  <h1 style="margin:0;">New hangout</h1>
+  <h1 style="margin:0;">{% if is_edit %}Edit hangout{% else %}New hangout{% endif %}</h1>
   <a class="btn btn-secondary btn-sm" href="/">← All hangouts</a>
 </div>
-<form method="post" action="/hangouts/new" class="card">
+<form
+  method="post"
+  action="{% if is_edit %}/hangouts/{{ hangout.id }}/edit{% else %}/hangouts/new{% endif %}"
+  class="card"
+  data-hangout-form
+  {% if is_edit %}data-draft-autosave{% endif %}
+>
   <h2 style="margin-top:0;">Details</h2>
   <div class="field-row">
     <div>
       <label for="day_date">Day / date</label>
-      <input id="day_date" name="day_date" type="date" />
+      <input id="day_date" name="day_date" type="date" value="{{ hangout.day_date if hangout and hangout.day_date else '' }}" />
     </div>
     <div>
       <label for="time">Time</label>
-      <input id="time" name="time" type="time" />
+      <input id="time" name="time" type="time" value="{{ hangout.time if hangout and hangout.time else '' }}" />
     </div>
     <div>
       <label for="duration">Estimated duration (hours)</label>
-      <input id="duration" name="duration" type="number" min="0" step="0.5" />
+      <input id="duration" name="duration" type="number" min="0" step="0.5" value="{{ hangout.duration if hangout and hangout.duration else '' }}" />
     </div>
     <div>
       <label for="location">Location</label>
@@ -36,6 +47,7 @@
           aria-autocomplete="list"
           aria-controls="location-suggestions"
           aria-expanded="false"
+          value="{{ hangout.location if hangout and hangout.location else '' }}"
         />
         <ul class="places-list" id="location-suggestions" role="listbox" hidden></ul>
       </div>
@@ -43,7 +55,7 @@
   </div>
 
   <label for="motive">Motive / purpose</label>
-  <input id="motive" name="motive" type="text" placeholder="Dinner, game night, beach…" />
+  <input id="motive" name="motive" type="text" placeholder="Dinner, game night, beach…" value="{{ hangout.motive if hangout and hangout.motive else '' }}" />
 
   <div class="field-row">
     <div>
@@ -51,7 +63,7 @@
       <select id="alcohol_involved" name="alcohol_involved">
         <option value=""></option>
         {% for o in alcohol_opts %}
-        <option value="{{ o.value }}">{{ o.value }}</option>
+        <option value="{{ o.value }}" {% if hangout and hangout.alcohol_involved == o %}selected{% endif %}>{{ o.value }}</option>
         {% endfor %}
       </select>
     </div>
@@ -60,18 +72,18 @@
       <select id="weed_involved" name="weed_involved">
         <option value=""></option>
         {% for o in weed_opts %}
-        <option value="{{ o.value }}">{{ o.value }}</option>
+        <option value="{{ o.value }}" {% if hangout and hangout.weed_involved == o %}selected{% endif %}>{{ o.value }}</option>
         {% endfor %}
       </select>
     </div>
   </div>
 
   <label for="notes">Notes</label>
-  <textarea id="notes" name="notes" placeholder="Anything else…"></textarea>
+  <textarea id="notes" name="notes" placeholder="Anything else…">{{ hangout.notes if hangout and hangout.notes else '' }}</textarea>
 
   <h2>Invitees</h2>
   {% if profiles %}
-  {% with checked_ids=[], already_label=false %}
+  {% with checked_ids=invited_ids, already_label=false %}
   {% include "_invitee_picker.html" %}
   {% endwith %}
   {% else %}
@@ -81,7 +93,7 @@
   <h2>Organizer SMS</h2>
   <label for="organizer_search">Organizer</label>
   <div class="combobox" id="organizer-combobox" data-empty-label="— none —">
-    <input type="hidden" name="organizer_profile_id" id="organizer_profile_id" value="" />
+    <input type="hidden" name="organizer_profile_id" id="organizer_profile_id" value="{{ hangout.organizer_profile_id if hangout and hangout.organizer_profile_id else '' }}" />
     <input
       id="organizer_search"
       class="combobox-input"
@@ -92,6 +104,7 @@
       aria-controls="organizer-options"
       autocomplete="off"
       placeholder="Type a name or phone…"
+      value="{{ organizer_label }}"
     />
     <ul class="combobox-list" id="organizer-options" role="listbox" hidden>
       <li class="combobox-option" role="option" data-value="" data-label="— none —">— none —</li>
@@ -109,7 +122,7 @@
 
   <div class="notify-panel" id="notify-panel">
     <label class="notify-master">
-      <input type="checkbox" name="notify_enabled" id="notify_enabled" />
+      <input type="checkbox" name="notify_enabled" id="notify_enabled" {% if hangout and hangout.notify_enabled %}checked{% endif %} />
       Enable organizer SMS updates
     </label>
 
@@ -117,7 +130,7 @@
       <fieldset class="notify-block">
         <legend>
           <label>
-            <input type="checkbox" name="notify_interval" id="notify_interval" />
+            <input type="checkbox" name="notify_interval" id="notify_interval" {% if hangout and hangout.notify_interval %}checked{% endif %} />
             Interval digests
           </label>
         </legend>
@@ -125,13 +138,13 @@
           <label for="notify_interval_hours">How often</label>
           <select id="notify_interval_hours" name="notify_interval_hours">
             {% for h in interval_hour_opts %}
-            <option value="{{ h }}" {% if h == 6 %}selected{% endif %}>
+            <option value="{{ h }}" {% if (hangout and h == hangout.notify_interval_hours) or (not hangout and h == 6) %}selected{% endif %}>
               Every {{ h }} hour{% if h != 1 %}s{% endif %}
             </option>
             {% endfor %}
           </select>
           <label class="inline-check">
-            <input type="checkbox" name="notify_interval_only_if_changed" checked />
+            <input type="checkbox" name="notify_interval_only_if_changed" {% if hangout is none or hangout.notify_interval_only_if_changed %}checked{% endif %} />
             Skip digest if nothing changed since last SMS
           </label>
         </div>
@@ -140,23 +153,23 @@
       <fieldset class="notify-block">
         <legend>
           <label>
-            <input type="checkbox" name="notify_threshold" id="notify_threshold" />
+            <input type="checkbox" name="notify_threshold" id="notify_threshold" {% if hangout and hangout.notify_threshold %}checked{% endif %} />
             Threshold alerts
           </label>
         </legend>
         <div class="notify-block-body" id="notify-threshold-opts" hidden>
           <p class="chip-label" style="margin:0 0 0.35rem;">Alert me when</p>
           <div class="checkbox-list" style="margin-bottom:0.75rem;">
-            <label><input type="checkbox" name="notify_on_new_confirm" checked /> Someone newly confirms</label>
-            <label><input type="checkbox" name="notify_on_decline" /> Someone declines</label>
-            <label><input type="checkbox" name="notify_on_allergy" checked /> A confirmer has dietary restrictions</label>
-            <label><input type="checkbox" name="notify_on_ride_needed" checked /> A confirmer needs a ride</label>
+            <label><input type="checkbox" name="notify_on_new_confirm" {% if hangout is none or hangout.notify_on_new_confirm %}checked{% endif %} /> Someone newly confirms</label>
+            <label><input type="checkbox" name="notify_on_decline" {% if hangout and hangout.notify_on_decline %}checked{% endif %} /> Someone declines</label>
+            <label><input type="checkbox" name="notify_on_allergy" {% if hangout is none or hangout.notify_on_allergy %}checked{% endif %} /> A confirmer has dietary restrictions</label>
+            <label><input type="checkbox" name="notify_on_ride_needed" {% if hangout is none or hangout.notify_on_ride_needed %}checked{% endif %} /> A confirmer needs a ride</label>
           </div>
 
           <label for="notify_confirm_goal">Confirmed-count milestone</label>
           <select id="notify_confirm_goal" name="notify_confirm_goal">
             {% for g in confirm_goal_opts %}
-            <option value="{{ g }}">
+            <option value="{{ g }}" {% if hangout and g == hangout.notify_confirm_goal %}selected{% endif %}>
               {% if g == 0 %}Off{% else %}Alert once when {{ g }} people have confirmed{% endif %}
             </option>
             {% endfor %}
@@ -165,7 +178,7 @@
           <label for="notify_threshold_cooldown_minutes">Cooldown between routine alerts</label>
           <select id="notify_threshold_cooldown_minutes" name="notify_threshold_cooldown_minutes">
             {% for m in cooldown_minute_opts %}
-            <option value="{{ m }}">
+            <option value="{{ m }}" {% if hangout and m == hangout.notify_threshold_cooldown_minutes %}selected{% endif %}>
               {% if m == 0 %}No limit (send immediately)
               {% elif m < 60 %}{{ m }} minutes
               {% else %}{{ (m / 60)|int }} hour{% endif %}
@@ -178,7 +191,11 @@
   </div>
 
   <div class="actions">
+    {% if is_edit %}
+    <span class="save-status muted" data-draft-autosave-status aria-live="polite"></span>
+    {% else %}
     <button class="btn btn-secondary" type="submit" name="action" value="draft">Save draft</button>
+    {% endif %}
     <button class="btn btn-secondary" type="button" id="preview-invite-sms" formnovalidate>
       Preview invite SMS
     </button>
@@ -210,4 +227,5 @@
 <script src="/static/combobox.js"></script>
 <script src="/static/location_autocomplete.js"></script>
 <script src="/static/hangout_sms_preview.js"></script>
+<script src="/static/hangout_draft_autosave.js"></script>
 {% endblock %}

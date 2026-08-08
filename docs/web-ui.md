@@ -46,6 +46,7 @@ string whatever characters it holds.
 | POST | `/tags` | Create tag → redirect `/profiles` |
 | POST | `/tags/{id}/delete` | Delete tag |
 | GET/POST | `/hangouts/new` | Create hangout (`action=draft` or `setup`) |
+| GET/POST | `/hangouts/{id}/edit` | Draft-only prefilled edit form (`action=draft` or `setup`) |
 | GET | `/hangouts/{id}` | Detail / status (`?error=need_profiles`) |
 | POST | `/hangouts/{id}/setup` | Activate / (re)send invites |
 | POST | `/hangouts/{id}/close` | End hangout |
@@ -77,7 +78,7 @@ Blank optional enums from forms are parsed to `None` via `_optional_enum_form`.
 
 ## Invitee picker
 
-Partial `_invitee_picker.html` + `invitee_picker.js` (new hangout and hangout detail setup).
+Partial `_invitee_picker.html` + `invitee_picker.js` (new/edit hangout form and hangout detail setup).
 
 - Search filter; Select all / Invert (matched rows) / Clear (all)
 - Tag chips toggle-select everyone with that tag; field chips toggle groups
@@ -88,12 +89,19 @@ Partial `_invitee_picker.html` + `invitee_picker.js` (new hangout and hangout de
 
 - All hangout detail fields optional (day, time, duration, location, motive, alcohol, weed, notes)
 - Header includes an **All hangouts** back button to return to the hangout list without submitting
-- Submitting setup without invitees keeps the hangout as a draft and redirects back with a profile-selection error
+- Submitting setup without invitees keeps the hangout as a draft and returns the create/edit form with a profile-selection error
 - Organizer **combobox** (`combobox.js`): typeahead by name/phone → hidden `organizer_profile_id`
 - Notify panel (`notify_panel.js`): progressive disclosure (master → interval/threshold → nested options)
 - Form defaults: interval every 6h + skip-if-unchanged; threshold confirm/allergy/ride on, decline off; goal off; no cooldown
-- If notifications enabled but no organizer phone can be resolved (profile or app settings), notify flags are left off on create
+- If notifications enabled but no organizer phone can be resolved (profile or app settings), notify flags are left off when saving
 - **Preview invite SMS** button (left of “Set up hangout”) opens a dialog; body from `POST /api/sms/preview-invite` using the current form fields and the first selected invitee’s name (or “Alex”)
+
+## Draft editing
+
+- Opening a visible draft through its home-list link or its detail URL sends the visitor to `/hangouts/{id}/edit`
+- The edit form preloads saved detail, organizer-notification, and invitee selections; it has no manual save button and saves field changes in the background (with Saving/Saved feedback)
+- **Set up hangout** waits for the latest draft save, then activates it and sends the selected invites
+- Non-draft or hidden hangouts cannot be edited through the draft edit routes and return to their detail page
 
 ## Hangout detail
 

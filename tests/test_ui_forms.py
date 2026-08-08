@@ -22,6 +22,7 @@ PAGE_LABELS = (
     "deleted hangouts",
     "new hangout",
     "draft hangout",
+    "edit draft hangout",
     "active hangout",
     "closed hangout",
 )
@@ -43,6 +44,7 @@ def _pages(sample_data) -> dict[str, str]:
         "deleted hangouts": "/settings/deleted-hangouts",
         "new hangout": "/hangouts/new",
         "draft hangout": f"/hangouts/{hangouts['draft']}",
+        "edit draft hangout": f"/hangouts/{hangouts['draft']}/edit",
         "active hangout": f"/hangouts/{hangouts['active']}",
         "closed hangout": f"/hangouts/{hangouts['closed']}",
     }

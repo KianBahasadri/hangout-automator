@@ -42,7 +42,7 @@ def test_hangout_ui_humanizes_date_time_duration(client, db):
     from app.models import Hangout, HangoutStatus
 
     hangout = Hangout(
-        status=HangoutStatus.draft,
+        status=HangoutStatus.active,
         motive="Dinner",
         day_date="2026-08-15",
         time="19:00",
@@ -66,6 +66,190 @@ def test_hangout_ui_humanizes_date_time_duration(client, db):
     assert "3 hours" in detail.text
 
 
+def test_draft_hangout_opens_a_prefilled_edit_form(client, db):
+    from app.models import Hangout, HangoutInvite, HangoutStatus, Profile, YesNo
+
+    organizer = Profile(name="Sam Rivera", phone="+15551110001")
+    db.add(organizer)
+    db.flush()
+    hangout = Hangout(
+        status=HangoutStatus.draft,
+        day_date="2026-08-15",
+        time="19:30",
+        duration="2.5",
+        location="Central Park",
+        motive="Picnic",
+        alcohol_involved=YesNo.yes,
+        weed_involved=YesNo.no,
+        notes="Bring a blanket",
+        organizer_profile_id=organizer.id,
+        organizer_phone=organizer.phone,
+        notify_enabled=True,
+        notify_interval=True,
+        notify_threshold=True,
+        notify_interval_hours=8,
+        notify_interval_only_if_changed=False,
+        notify_on_new_confirm=False,
+        notify_on_decline=True,
+        notify_on_allergy=False,
+        notify_on_ride_needed=True,
+        notify_confirm_goal=4,
+        notify_threshold_cooldown_minutes=15,
+    )
+    db.add(hangout)
+    db.flush()
+    db.add(HangoutInvite(hangout_id=hangout.id, profile_id=organizer.id))
+    db.commit()
+
+    home = client.get("/")
+    assert f'href="/hangouts/{hangout.id}/edit"' in home.text
+
+    redirect = client.get(f"/hangouts/{hangout.id}", follow_redirects=False)
+
+    assert redirect.status_code == 303
+    assert redirect.headers["location"] == f"/hangouts/{hangout.id}/edit"
+
+    response = client.get(f"/hangouts/{hangout.id}/edit")
+
+    assert response.status_code == 200
+    html = response.text
+    assert "<title>Edit hangout · Hangout Automator</title>" in html
+    assert f'action="/hangouts/{hangout.id}/edit"' in html
+    assert 'name="day_date" type="date" value="2026-08-15"' in html
+    assert 'name="time" type="time" value="19:30"' in html
+    assert 'name="duration" type="number" min="0" step="0.5" value="2.5"' in html
+    assert 'name="location"' in html and 'value="Central Park"' in html
+    assert 'name="motive" type="text" placeholder="Dinner, game night, beach…" value="Picnic"' in html
+    assert '<option value="yes" selected>yes</option>' in html
+    assert '<option value="no" selected>no</option>' in html
+    assert "Bring a blanket" in html
+    assert re.search(rf'name="profile_ids" value="{organizer.id}"\s+checked', html)
+    assert f'name="organizer_profile_id" id="organizer_profile_id" value="{organizer.id}"' in html
+    assert re.search(r'name="notify_enabled" id="notify_enabled" checked', html)
+    assert re.search(r'name="notify_interval" id="notify_interval" checked', html)
+    assert re.search(r'name="notify_threshold" id="notify_threshold" checked', html)
+    assert '<option value="8" selected>' in html
+    assert '<option value="4" selected>' in html
+    assert '<option value="15" selected>' in html
+    assert "Save changes" not in html
+    assert "Save draft" not in html
+    assert "data-draft-autosave" in html
+    assert "data-draft-autosave-status" in html
+    assert "hangout_draft_autosave.js" in html
+
+
+def test_draft_edit_saves_updated_details_and_invitees(client, db):
+    from app.models import Hangout, HangoutInvite, HangoutStatus, Profile, YesNo
+
+    old_invitee = Profile(name="Taylor", phone="+15551110001")
+    organizer = Profile(name="Morgan", phone="+15551110002")
+    db.add_all([old_invitee, organizer])
+    db.flush()
+    hangout = Hangout(status=HangoutStatus.draft, motive="Old plan")
+    db.add(hangout)
+    db.flush()
+    db.add(HangoutInvite(hangout_id=hangout.id, profile_id=old_invitee.id))
+    db.commit()
+
+    response = client.post(
+        f"/hangouts/{hangout.id}/edit",
+        data={
+            "day_date": "2026-08-16",
+            "time": "18:15",
+            "duration": "4",
+            "location": "Riverside Park",
+            "motive": "Updated plan",
+            "alcohol_involved": "no",
+            "weed_involved": "yes",
+            "notes": "Meet at the south gate",
+            "organizer_profile_id": str(organizer.id),
+            "notify_enabled": "on",
+            "notify_interval": "on",
+            "notify_threshold": "on",
+            "notify_interval_hours": "12",
+            "notify_on_decline": "on",
+            "notify_on_ride_needed": "on",
+            "notify_confirm_goal": "3",
+            "notify_threshold_cooldown_minutes": "30",
+            "profile_ids": str(organizer.id),
+            "action": "draft",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == f"/hangouts/{hangout.id}/edit"
+
+    db.refresh(hangout)
+    assert hangout.status == HangoutStatus.draft
+    assert hangout.day_date == "2026-08-16"
+    assert hangout.time == "18:15"
+    assert hangout.duration == "4"
+    assert hangout.location == "Riverside Park"
+    assert hangout.motive == "Updated plan"
+    assert hangout.alcohol_involved == YesNo.no
+    assert hangout.weed_involved == YesNo.yes
+    assert hangout.notes == "Meet at the south gate"
+    assert hangout.organizer_profile_id == organizer.id
+    assert hangout.organizer_phone == organizer.phone
+    assert hangout.notify_enabled is True
+    assert hangout.notify_interval is True
+    assert hangout.notify_threshold is True
+    assert hangout.notify_interval_hours == 12
+    assert hangout.notify_interval_only_if_changed is False
+    assert hangout.notify_on_new_confirm is False
+    assert hangout.notify_on_decline is True
+    assert hangout.notify_on_allergy is False
+    assert hangout.notify_on_ride_needed is True
+    assert hangout.notify_confirm_goal == 3
+    assert hangout.notify_threshold_cooldown_minutes == 30
+    assert {invite.profile_id for invite in hangout.invites} == {organizer.id}
+
+
+def test_draft_edit_autosave_returns_no_content(client, db):
+    from app.models import Hangout, HangoutStatus
+
+    hangout = Hangout(status=HangoutStatus.draft, motive="Before")
+    db.add(hangout)
+    db.commit()
+
+    response = client.post(
+        f"/hangouts/{hangout.id}/edit",
+        data={"motive": "Autosaved", "action": "draft"},
+        headers={"Accept": "application/json"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 204
+    db.refresh(hangout)
+    assert hangout.motive == "Autosaved"
+
+
+def test_draft_edit_can_set_up_the_saved_invitees(client, db):
+    from app.models import Hangout, HangoutStatus, Profile
+
+    invitee = Profile(name="Casey", phone="+15551110001")
+    hangout = Hangout(status=HangoutStatus.draft, motive="Dinner")
+    db.add_all([invitee, hangout])
+    db.commit()
+
+    response = client.post(
+        f"/hangouts/{hangout.id}/edit",
+        data={
+            "motive": "Dinner",
+            "profile_ids": str(invitee.id),
+            "action": "setup",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == f"/hangouts/{hangout.id}"
+    db.refresh(hangout)
+    assert hangout.status == HangoutStatus.active
+    assert {invite.profile_id for invite in hangout.invites} == {invitee.id}
+
+
 def test_active_hangout_uses_end_label(client, sample_data):
     response = client.get(f"/hangouts/{sample_data['hangouts']['active']}")
 
@@ -73,6 +257,23 @@ def test_active_hangout_uses_end_label(client, sample_data):
     assert "End hangout" in response.text
     assert "Close hangout" not in response.text
     assert "Delete hangout" not in response.text
+
+
+def test_non_draft_hangout_edit_route_returns_to_detail(client, sample_data):
+    hangout_id = sample_data["hangouts"]["active"]
+
+    response = client.get(f"/hangouts/{hangout_id}/edit", follow_redirects=False)
+
+    assert response.status_code == 303
+    assert response.headers["location"] == f"/hangouts/{hangout_id}"
+
+    update = client.post(
+        f"/hangouts/{hangout_id}/edit",
+        data={"motive": "Should not change"},
+        follow_redirects=False,
+    )
+    assert update.status_code == 303
+    assert update.headers["location"] == f"/hangouts/{hangout_id}"
 
 
 def test_closed_hangout_shows_delete_option(client, sample_data):
@@ -186,6 +387,11 @@ def test_existing_hangout_without_invitees_redirects_instead_of_500(client, db):
     assert response.status_code == 303
     assert response.headers["location"] == f"/hangouts/{hangout.id}?error=need_profiles"
 
+    edit = client.get(response.headers["location"])
+    assert edit.status_code == 200
+    assert "Select at least one profile before setting up the hangout." in edit.text
+    assert f'action="/hangouts/{hangout.id}/edit"' in edit.text
+
 
 def test_settings_links_to_log_download(client):
     response = client.get("/settings")
@@ -216,6 +422,14 @@ def test_new_hangout_has_preview_invite_button(client):
     assert 'id="preview-invite-sms"' in response.text
     assert "Preview invite SMS" in response.text
     assert "hangout_sms_preview.js" in response.text
+
+
+def test_new_hangout_keeps_manual_draft_save(client):
+    response = client.get("/hangouts/new")
+
+    assert response.status_code == 200
+    assert "Save draft" in response.text
+    assert "data-draft-autosave" not in response.text
 
 
 def test_new_hangout_has_back_button_to_hangout_list(client):

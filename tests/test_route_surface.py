@@ -107,6 +107,8 @@ def test_route_inventory_reflects_the_real_app():
         "GET /profiles/new",
         "POST /profiles",
         "POST /hangouts/new",
+        "GET /hangouts/{hangout_id}/edit",
+        "POST /hangouts/{hangout_id}/edit",
         "POST /hangouts/{hangout_id}/setup",
         "POST /api/hangouts/{hangout_id}/setup",
         "POST /webhooks/sms",

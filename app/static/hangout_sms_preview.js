@@ -1,5 +1,5 @@
 (function () {
-  const form = document.querySelector('form[action="/hangouts/new"]');
+  const form = document.querySelector("[data-hangout-form]");
   const openBtn = document.getElementById("preview-invite-sms");
   const dialog = document.getElementById("sms-preview-dialog");
   const closeBtn = document.getElementById("sms-preview-close");

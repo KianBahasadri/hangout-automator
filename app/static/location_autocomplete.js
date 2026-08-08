@@ -171,6 +171,7 @@
     } finally {
       if (selectionSequence === requestSequence) {
         input.removeAttribute("aria-busy");
+        input.dispatchEvent(new Event("change", { bubbles: true }));
       }
     }
   }

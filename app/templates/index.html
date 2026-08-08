@@ -12,7 +12,7 @@
   <div class="card">
     <div style="display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap;align-items:flex-start;">
       <div>
-        <a href="/hangouts/{{ h.id }}">
+        <a href="{% if h.status.value == 'draft' %}/hangouts/{{ h.id }}/edit{% else %}/hangouts/{{ h.id }}{% endif %}">
           {% if h.motive %}{{ h.motive }}{% else %}<span class="muted">Untitled hangout</span>{% endif %}
         </a>
         <div class="muted">

@@ -46,6 +46,7 @@
       hidden.value = value;
       input.value = value ? label : "";
       options.forEach((o) => o.classList.toggle("is-selected", o === opt && !!value));
+      hidden.dispatchEvent(new Event("change", { bubbles: true }));
       close();
       filter("");
     }
@@ -55,12 +56,22 @@
       let shown = 0;
       options.forEach((opt) => {
         const isEmpty = !opt.getAttribute("data-value");
-        const hay = (opt.getAttribute("data-search") || opt.getAttribute("data-label") || "").toLowerCase();
+        const hay = [opt.getAttribute("data-search"), opt.getAttribute("data-label")]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
         const match = !q || isEmpty || hay.includes(q);
         opt.hidden = !match;
         if (match) shown += 1;
       });
       return shown;
+    }
+
+    const initiallySelected = options.find((opt) => opt.getAttribute("data-value") === hidden.value);
+    if (initiallySelected && hidden.value) {
+      const label = initiallySelected.getAttribute("data-label") || initiallySelected.textContent.trim();
+      if (!input.value.trim()) input.value = label;
+      initiallySelected.classList.add("is-selected");
     }
 
     input.addEventListener("focus", () => {
@@ -76,6 +87,7 @@
         if (input.value.trim() !== label) {
           hidden.value = "";
           options.forEach((o) => o.classList.remove("is-selected"));
+          hidden.dispatchEvent(new Event("change", { bubbles: true }));
         }
       }
       const shown = filter(input.value);

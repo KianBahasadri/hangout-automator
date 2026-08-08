@@ -26,6 +26,10 @@
       countEl.textContent = String(n);
     }
 
+    function announceSelectionChanged() {
+      root.dispatchEvent(new Event("invitees:changed", { bubbles: true }));
+    }
+
     function matchingRows() {
       const q = (search && search.value ? search.value : "").trim().toLowerCase();
       return rows().filter((row) => {
@@ -69,6 +73,7 @@
       });
       updateCount();
       syncChipStates();
+      announceSelectionChanged();
     }
 
     function matchesFilter(row, filter) {
@@ -155,6 +160,7 @@
         });
         updateCount();
         syncChipStates();
+        announceSelectionChanged();
       } else if (action === "clear") {
         rows().forEach((row) => {
           const cb = row.querySelector('input[type="checkbox"]');
@@ -162,6 +168,7 @@
         });
         updateCount();
         syncChipStates();
+        announceSelectionChanged();
       } else if (action === "invert") {
         matched.forEach((row) => {
           const cb = row.querySelector('input[type="checkbox"]');
@@ -169,6 +176,7 @@
         });
         updateCount();
         syncChipStates();
+        announceSelectionChanged();
       }
     });
 
