@@ -139,6 +139,12 @@ resource "azurerm_linux_virtual_machine" "main" {
   }))
 
   lifecycle {
+    # custom_data (cloud-init) only runs on first boot. Azure treats any change
+    # as ForceNew and replaces the whole VM (downtime + AllocationFailed risk).
+    # App releases and env edits use other paths; recreate the VM deliberately
+    # with: terraform apply -replace=azurerm_linux_virtual_machine.main
+    ignore_changes = [custom_data]
+
     precondition {
       condition = var.sms_provider != "twilio" || (
         var.twilio_account_sid != "" && var.twilio_auth_token != "" && var.twilio_from_number != ""

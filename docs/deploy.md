@@ -267,13 +267,35 @@ things make that more than a normal replace:
 The Cloudflare resources are unaffected by a region change — the tunnel keeps
 its ID and token, so the DNS record and Access policies stay in place.
 
+### VM `custom_data` and accidental replacement
+
+Azure treats any change to the VM's `custom_data` (the rendered cloud-init
+user-data) as **ForceNew**: Terraform destroys the VM and creates a new one.
+Cloud-init only runs on first boot, so day-to-day app releases and most env
+tweaks do not need a replace.
+
+The VM resource therefore sets `lifecycle.ignore_changes = [custom_data]`. Plan
+and apply will not replace the VM when the template, env vars, or unit file in
+`cloud-init.yaml.tftpl` drift from what was last written into state. New VMs
+still get the current template on create.
+
+To intentionally rebuild the VM (pick up a new cloud-init, rotate secrets that
+only live in user-data, etc.):
+
+```bash
+./scripts/terraform.sh apply -replace=azurerm_linux_virtual_machine.main
+```
+
+Expect downtime while Azure recreates the VM. The managed database disk has
+`prevent_destroy` and is re-attached; bootstrap waits for the data disk before
+starting the app.
+
 ### Recovering a failed VM replacement
 
-Changing the VM `custom_data` (including the cloud-init logging configuration)
-forces a VM replacement. That causes application downtime while Azure destroys
-the old VM and creates the new one. The managed database disk has
-`prevent_destroy`, but its attachment is destroyed and re-created as part of
-the replacement.
+An intentional VM replace (or a plan that still force-replaces for other
+reasons) causes application downtime while Azure destroys the old VM and
+creates the new one. The managed database disk has `prevent_destroy`, but its
+attachment is destroyed and re-created as part of the replacement.
 
 An Azure `AllocationFailed` can leave a failed VM resource behind even though
 Terraform did not add it to state. The next apply then reports that the VM
