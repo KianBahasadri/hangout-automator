@@ -110,7 +110,7 @@ called `pytest`). Do not repeat that. The self-check in P1.2 is mandatory.
       with a loud message otherwise. Without that guard this script is a way to
       run migrations against production by accident, which the hard rules forbid.
       It also needs the Phase 2 compose Postgres up; say so in the failure text.
-- [ ] **P1.5** Update `docs/testing.md`: CI now exists, what it runs, and that
+- [x] **P1.5** Update `docs/testing.md`: CI now exists, what it runs, and that
       `scripts/verify_plan.sh` is the aggregate gate. Delete the "Nothing runs
       this for you" section's claim that there is no CI, but **keep** the
       paragraph explaining why the old workflow was removed — it is the reason

@@ -68,21 +68,40 @@ while checking nothing.
 - New behaviour: assert it in the topic-specific file. The smoke matrix only
   ever says "this did not crash", never "this did the right thing".
 
-## Nothing runs this for you
+## CI
 
-This repository has **no GitHub Actions and no CI** — that is deliberate, not an
-oversight. Run the suite yourself before you push:
-
-```bash
-uv run --group dev pytest
-```
+CI lives in `.github/workflows/ci.yml` and runs on every push and pull request.
+The test job installs with `uv sync --group dev` — **never** from
+`requirements.txt`, which has no pytest — and runs `uv run --group dev pytest`
+on a Python 3.12/3.13 matrix. A separate `ruff` job runs `ruff check` and
+`ruff format --check`. A new push goes red if any of that fails.
 
 There was a workflow here until it was removed. It is worth knowing why, because
 it is the reason a 500 shipped: it installed `requirements.txt` (which has no
 pytest) and then called `pytest`, so every run since it was added failed with
 `pytest: command not found` and no test ever gated a push. A test suite nobody
-runs is worse than none, because it looks like coverage. If CI is ever added
-back, check that a deliberately broken test actually turns the run red.
+runs is worse than none, because it looks like coverage. When CI was added back,
+a deliberately broken test was pushed to a scratch branch and confirmed to turn
+the run red before the current workflow was trusted.
+
+## The aggregate gate
+
+`scripts/verify_plan.sh` is the terminal condition for the growth plan in
+`plan.md` (see the plan's "How to work this plan" for when it runs). It exits
+non-zero unless **all** of these hold, each as a separate labelled check:
+
+1. `uv run --group dev pytest` exits 0
+2. `ruff check` and `ruff format --check` exit 0
+3. `alembic upgrade head` then `alembic check` report no pending diff
+4. no `BackgroundScheduler` in `app/main.py`
+5. no `sqlite`/`PRAGMA` reference anywhere in `app/`
+6. `tests/test_tenant_isolation.py` and `tests/test_worker_concurrency.py`
+   both exist and pass
+
+Checks 3–6 depend on later phases of the plan and are expected to fail until
+those land. Check 3 writes to a database, so the script refuses to run (exit 2)
+unless `TEST_DATABASE_URL` is set or `DATABASE_URL` points at localhost — never
+point it at anything else.
 
 Terraform has its own checks (`terraform fmt -check`, `terraform validate`);
 they are an operator step, described in [deploy.md](./deploy.md).
