@@ -23,8 +23,12 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 # The URL lives in app settings (env-driven), not alembic.ini, so a single
-# source of truth governs app and migrations.
-config.set_main_option("sqlalchemy.url", get_settings().database_url)
+# source of truth governs app and migrations. Tests that need a scratch
+# database override it via config.attributes["sqlalchemy.url"].
+config.set_main_option(
+    "sqlalchemy.url",
+    config.attributes.get("sqlalchemy.url") or get_settings().database_url,
+)
 
 # add your model's MetaData object here
 # for 'autogenerate' support

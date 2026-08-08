@@ -209,7 +209,7 @@ exists and fails only on checks 3–6.
       did not already. Keep every `Session` audit-event listener
       (`_audit_transaction_*`, `app/database.py:31-118`) untouched — that is
       unrelated machinery and the audit stream depends on it.
-- [ ] **P2.6** Write the new `tests/test_migrations.py`: `alembic upgrade head`
+- [x] **P2.6** Write the new `tests/test_migrations.py`: `alembic upgrade head`
       from empty succeeds; `downgrade base` then `upgrade head` succeeds;
       `alembic check` reports no diff between models and head. That last one is
       what keeps a model edit from shipping without a migration.
