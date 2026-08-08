@@ -189,7 +189,13 @@ class Hangout(Base):
     weed_involved: Mapped[YesNo | None] = mapped_column(_optional_enum_column(YesNo), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[HangoutStatus] = mapped_column(
-        Enum(HangoutStatus, values_callable=lambda x: [e.value for e in x]),
+        # VARCHAR + CHECK, not a native Postgres enum type: adding a status
+        # value must not cost an ALTER TYPE migration and a table rewrite.
+        Enum(
+            HangoutStatus,
+            native_enum=False,
+            values_callable=lambda x: [e.value for e in x],
+        ),
         default=HangoutStatus.draft,
         nullable=False,
     )
@@ -243,7 +249,12 @@ class HangoutInvite(Base):
         ForeignKey("profiles.id", ondelete="CASCADE"), nullable=False
     )
     status: Mapped[InviteStatus] = mapped_column(
-        Enum(InviteStatus, values_callable=lambda x: [e.value for e in x]),
+        # VARCHAR + CHECK, not a native Postgres enum type (see Hangout.status).
+        Enum(
+            InviteStatus,
+            native_enum=False,
+            values_callable=lambda x: [e.value for e in x],
+        ),
         default=InviteStatus.pending,
         nullable=False,
     )
@@ -272,7 +283,12 @@ class MessageLog(Base):
         ForeignKey("hangouts.id", ondelete="SET NULL"), nullable=True
     )
     direction: Mapped[MessageDirection] = mapped_column(
-        Enum(MessageDirection, values_callable=lambda x: [e.value for e in x]),
+        # VARCHAR + CHECK, not a native Postgres enum type (see Hangout.status).
+        Enum(
+            MessageDirection,
+            native_enum=False,
+            values_callable=lambda x: [e.value for e in x],
+        ),
         nullable=False,
     )
     phone: Mapped[str] = mapped_column(String(32), nullable=False)

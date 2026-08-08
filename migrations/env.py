@@ -8,6 +8,10 @@ from alembic import context
 from app.config import get_settings
 from app.database import Base
 
+# Register the models on Base.metadata — without this import autogenerate
+# sees no tables and emits empty migrations.
+from app import models  # noqa: F401,E402
+
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config

@@ -168,7 +168,7 @@ exists and fails only on checks 3–6.
       a named volume, and port 5432. Add `scripts/db_up.sh` to start it and wait
       for readiness. Change the default `database_url` in `app/config.py` to the
       local compose URL. Update `.env.example`.
-- [ ] **P2.3** Generate the baseline migration. Against an **empty** Postgres
+- [x] **P2.3** Generate the baseline migration. Against an **empty** Postgres
       database, `alembic revision --autogenerate -m "baseline schema"`. Review it
       by hand — autogenerate will get the `_optional_enum_column` `TypeDecorator`
       (`app/models.py:37`) wrong if left unchecked; it must land as `VARCHAR(16)`,
