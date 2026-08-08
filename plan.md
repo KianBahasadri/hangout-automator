@@ -200,7 +200,7 @@ exists and fails only on checks 3–6.
         guards is now "re-running migrations does not re-seed".
       - Add the `postgres` service to the CI workflow.
       Suite must be green on Postgres at the end of this task.
-- [ ] **P2.5** Now delete the schema machinery. Remove all nine helpers listed in
+- [x] **P2.5** Now delete the schema machinery. Remove all nine helpers listed in
       the decisions above and reduce `init_db()` to nothing (or delete it and its
       call at `app/main.py:96`, plus the import at `app/main.py:14`). Migrations
       run as a deploy step, not at import. Delete the `_sqlite_pragma` event

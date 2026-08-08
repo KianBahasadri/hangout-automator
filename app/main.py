@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config import get_settings
 from app.auth import ClerkAuthMiddleware
-from app.database import SessionLocal, init_db
+from app.database import SessionLocal
 from app.event_logging import EventTraceMiddleware, audit_event, configure_logging, request_context
 from app.routers import api, web, webhooks
 from app.services import process_followups, process_organizer_intervals
@@ -93,11 +93,6 @@ async def lifespan(_app: FastAPI):
         log_level=settings.log_level,
     )
     try:
-        init_db()
-        audit_event(
-            "database.initialized",
-            database_backend=settings.database_url.split(":", 1)[0],
-        )
         scheduler.add_job(
             _job_followups, "interval", minutes=5, id="followups", replace_existing=True
         )
