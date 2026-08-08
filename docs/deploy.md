@@ -19,20 +19,20 @@ Notable variables (`variables.tf` / `terraform.tfvars.example`): `prefix`,
 capacity](#region-and-vm-size-capacity)), required `ssh_public_key`, required Cloudflare
 account id, zone id, and `cloudflare_hostname`, optional `git_repo_url` /
 `git_branch` (default `main`), optional pinned `git_revision`, SMS/Twilio
-settings, optional `GOOGLE_MAPS_API_KEY`, `public_base_url`, `app_port`,
-`followup_hours`, and `organizer_interval_hours`. `scripts/terraform.sh` maps
-`APP_PORT` and `GOOGLE_MAPS_API_KEY` from the ignored `.env` to Terraform.
+settings, optional `GOOGLE_MAPS_API_KEY`, Clerk settings, `public_base_url`,
+`app_port`, `followup_hours`, and `organizer_interval_hours`.
+`scripts/terraform.sh` maps these values from the ignored `.env` to Terraform.
 
 `cloudflare_hostname` deliberately has **no default** and the example tfvars
-carries placeholders: the deployed hostname is the only thing standing between
-an unauthenticated app and the open internet, so it stays in the ignored `.env`
-rather than in this public repository. `scripts/terraform.sh` supplies it from
-`CLOUDFLARE_TUNNEL_HOSTNAME`.
+carries placeholders: the deployed hostname is a sensitive deployment boundary,
+so it stays in the ignored `.env` rather than in this public repository.
+`scripts/terraform.sh` supplies it from `CLOUDFLARE_TUNNEL_HOSTNAME`.
 
 Validation (fails at plan/apply, before anything is created):
 
 - `sms_provider` must be `mock` or `twilio`
 - `sms_provider=twilio` requires `twilio_account_sid`, `twilio_auth_token`, and `twilio_from_number`
+- `clerk_enabled=true` requires the Clerk publishable key, frontend API URL, and secret or JWT key
 
 Outputs: resource group, `app_url`, `sms_webhook_url`, Cloudflare Tunnel ID,
 and the public hostname. There is deliberately no public-IP or SSH-command
@@ -407,18 +407,19 @@ Template `cloud-init.yaml.tftpl`:
 - `hangout-backup.service` + `.timer` (see Backups below)
 - Bootstrap: wait for and mount the persistent data disk, clone `git_repo_url`, create venv, `pip install -r requirements.txt`, enable/restart the app service, and enable the backup timer
 
-The cloudflared service token and SMS secrets are rendered into root-readable
-machine configuration and Terraform state; use a remote encrypted backend and
-restrict state access. Never commit real credentials, `.env`, Terraform state,
-or private keys.
+The cloudflared service token, Clerk backend credentials, and SMS secrets are
+rendered into root-readable machine configuration and Terraform state; use a
+remote encrypted backend and restrict state access. Never commit real
+credentials, `.env`, Terraform state, or private keys.
 
 ### Access control
 
-The FastAPI app has **no authentication of its own**, so Cloudflare Access is
-the only gate in front of it. Every route — the profile list, the
-invite-sending actions — is reachable by anyone Access lets through. Because
-hangout `motive` and `notes` become the body of the outgoing SMS, someone who
-got past Access could send text of their own choosing from the Twilio number.
+Cloudflare Access remains the edge gate in front of the Tunnel. The FastAPI app
+can also require a verified Clerk session by setting `CLERK_ENABLED=true` (the
+Terraform wrapper passes the Clerk settings from the ignored `.env`). With that
+switch enabled, the browser UI and `/api/*` routes require both the edge Access
+session and an in-app Clerk session. The app still keeps one shared dataset;
+Clerk identity does not create per-user ownership.
 
 `terraform/access.tf` owns this, so it is applied and reviewed like the rest of
 the boundary:
@@ -436,8 +437,10 @@ the boundary:
 
 The webhook exception is forced: Twilio cannot attach
 `CF-Access-Client-Id`/`CF-Access-Client-Secret` headers to a webhook, so a
-service token cannot work there. That makes the `X-Twilio-Signature` check in
-`app/routers/webhooks.py` the **only** layer on that path — see
+service token cannot work there. The app also deliberately leaves
+`POST /webhooks/sms` outside its Clerk browser-session middleware. That makes
+the `X-Twilio-Signature` check in `app/routers/webhooks.py` the **only** layer
+on that path — see
 [sms-and-rsvp.md](./sms-and-rsvp.md) for what it verifies.
 
 Defense in depth beyond Access:
@@ -541,7 +544,9 @@ az vm run-command invoke -g <rg> -n <vm> --command-id RunShellScript \
 Externally, `GET https://<hostname>/webhooks/sms` should return **405** from
 the app itself — that one response proves DNS, the tunnel, the Access bypass
 exception, and Uvicorn all at once. `GET /` should redirect (302) to the
-Cloudflare Access login and never serve the app.
+Cloudflare Access login and never serve the app. After an Access-authenticated
+request reaches a deployment with `CLERK_ENABLED=true`, the app should then
+redirect unauthenticated users to `/sign-in`.
 
 To verify the exact release from Azure Run Command, Git can reject the app
 directory as being owned by a different service user. Use a per-command safe

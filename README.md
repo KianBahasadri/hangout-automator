@@ -2,8 +2,8 @@
 
 MVP website that plans hangouts and invites people by SMS.
 
-- **No authentication** — open the URL and use it. Anyone who reaches the site can read every profile and send SMS, so read the release security gate in [docs/deploy.md](docs/deploy.md) before going public
-- **No multi-tenancy** — one shared dataset for the whole app
+- **Clerk authentication** — set `CLERK_ENABLED=true` to require a Clerk session for the UI and API; the SMS webhook remains integration-authenticated
+- **No multi-tenancy** — authenticated users still share one dataset for the whole app
 - **FastAPI** web UI + JSON API
 - **SQLite** on disk
 - **SMS** via Twilio or mock (console log)

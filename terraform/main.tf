@@ -132,6 +132,12 @@ resource "azurerm_linux_virtual_machine" "main" {
     twilio_auth_token        = var.twilio_auth_token
     twilio_from_number       = var.twilio_from_number
     google_maps_api_key      = var.google_maps_api_key
+    clerk_enabled            = var.clerk_enabled
+    clerk_publishable_key    = var.clerk_publishable_key
+    clerk_frontend_api_url   = var.clerk_frontend_api_url
+    clerk_secret_key         = var.clerk_secret_key
+    clerk_jwt_key            = var.clerk_jwt_key
+    clerk_authorized_parties = var.clerk_authorized_parties
     followup_hours           = var.followup_hours
     organizer_interval_hours = var.organizer_interval_hours
     app_port                 = var.app_port
@@ -151,6 +157,15 @@ resource "azurerm_linux_virtual_machine" "main" {
         var.twilio_account_sid != "" && var.twilio_auth_token != "" && var.twilio_from_number != ""
       )
       error_message = "sms_provider=twilio requires twilio_account_sid, twilio_auth_token, and twilio_from_number."
+    }
+
+    precondition {
+      condition = !var.clerk_enabled || (
+        trimspace(var.clerk_publishable_key) != "" &&
+        trimspace(var.clerk_frontend_api_url) != "" &&
+        (trimspace(var.clerk_secret_key) != "" || trimspace(var.clerk_jwt_key) != "")
+      )
+      error_message = "clerk_enabled requires clerk_publishable_key, clerk_frontend_api_url, and clerk_secret_key or clerk_jwt_key."
     }
   }
 

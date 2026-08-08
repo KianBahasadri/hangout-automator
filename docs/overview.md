@@ -1,11 +1,16 @@
 # Overview
 
-Hangout Automator is a single shared-dataset FastAPI app: anyone who can open the site sees and edits the same profiles and hangouts. There is no authentication and no multi-tenancy.
+Hangout Automator is a single shared-dataset FastAPI app. When
+`CLERK_ENABLED=true`, its browser UI and JSON API require a verified Clerk
+session; the authenticated users still see and edit the same profiles and
+hangouts. There is no per-user ownership or multi-tenancy. Local development
+keeps Clerk disabled until its instance values are configured.
 
 ## Runtime shape
 
 - **Web UI** — Jinja templates served by `app/routers/web.py`
 - **JSON API** — `app/routers/api.py` under `/api` (also powers profile autosave)
+- **Authentication** — `app/auth.py` verifies Clerk sessions in middleware; `/sign-in` is rendered with ClerkJS when enabled
 - **SMS webhook** — `POST /webhooks/sms` in `app/routers/webhooks.py`
 - **Background jobs** — APScheduler in `app/main.py` lifespan: follow-ups every 5 minutes, organizer interval digests every 10 minutes
 - **Persistence** — SQLAlchemy + SQLite by default (`DATABASE_URL`)

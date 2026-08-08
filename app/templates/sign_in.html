@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Sign in · Hangout Automator{% endblock %}
+{% block content %}
+<section class="auth-page" aria-labelledby="sign-in-heading">
+  <div class="auth-heading">
+    <h1 id="sign-in-heading">Sign in to Hangout Automator</h1>
+    <p class="lead">Use your Clerk account to manage hangouts and shared profiles.</p>
+  </div>
+  {% if clerk_enabled() %}
+  <div id="clerk-sign-in" class="clerk-sign-in" data-redirect-url="{{ redirect_url }}"></div>
+  <p id="clerk-auth-error" class="alert" hidden>
+    The sign-in service could not load. Check the Clerk configuration and refresh the page.
+  </p>
+  {% else %}
+  <p class="alert">Clerk authentication is disabled in this environment.</p>
+  {% endif %}
+</section>
+{% endblock %}

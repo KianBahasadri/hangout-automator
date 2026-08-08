@@ -166,6 +166,27 @@ nav a:hover {
   color: var(--text);
 }
 
+.clerk-user-button {
+  min-width: 2.25rem;
+  min-height: 2.25rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.auth-page {
+  max-width: 30rem;
+  margin: 2rem auto 0;
+}
+
+.auth-heading {
+  margin-bottom: 1.25rem;
+}
+
+.clerk-sign-in {
+  min-height: 20rem;
+}
+
 .theme-toggle {
   display: inline-flex;
   align-items: center;

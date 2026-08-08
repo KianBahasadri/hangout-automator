@@ -47,6 +47,12 @@ export TF_VAR_twilio_account_sid="${TF_VAR_twilio_account_sid:-${TWILIO_ACCOUNT_
 export TF_VAR_twilio_auth_token="${TF_VAR_twilio_auth_token:-${TWILIO_AUTH_TOKEN:-}}"
 export TF_VAR_twilio_from_number="${TF_VAR_twilio_from_number:-${TWILIO_FROM_NUMBER:-}}"
 export TF_VAR_google_maps_api_key="${TF_VAR_google_maps_api_key:-${GOOGLE_MAPS_API_KEY:-}}"
+export TF_VAR_clerk_enabled="${TF_VAR_clerk_enabled:-${CLERK_ENABLED:-false}}"
+export TF_VAR_clerk_publishable_key="${TF_VAR_clerk_publishable_key:-${CLERK_PUBLISHABLE_KEY:-}}"
+export TF_VAR_clerk_frontend_api_url="${TF_VAR_clerk_frontend_api_url:-${CLERK_FRONTEND_API_URL:-}}"
+export TF_VAR_clerk_secret_key="${TF_VAR_clerk_secret_key:-${CLERK_SECRET_KEY:-}}"
+export TF_VAR_clerk_jwt_key="${TF_VAR_clerk_jwt_key:-${CLERK_JWT_KEY:-}}"
+export TF_VAR_clerk_authorized_parties="${TF_VAR_clerk_authorized_parties:-${CLERK_AUTHORIZED_PARTIES:-}}"
 if [[ -z "${TF_VAR_subscription_id:-}" ]]; then
   export TF_VAR_subscription_id="$(az account show --query id -o tsv)"
 fi

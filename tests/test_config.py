@@ -76,3 +76,35 @@ def test_twilio_complete_ok():
 def test_invalid_provider_raises():
     with pytest.raises(ValidationError, match="Invalid SMS_PROVIDER"):
         Settings(sms_provider="carrier_pigeon", _env_file=None)
+
+
+def test_clerk_is_disabled_by_default():
+    settings = Settings(
+        sms_provider="mock",
+        public_base_url="http://localhost:9000",
+        _env_file=None,
+    )
+
+    assert settings.clerk_enabled is False
+    assert settings.clerk_authorized_party_list == ["http://localhost:9000"]
+
+
+def test_clerk_enabled_requires_verification_configuration():
+    with pytest.raises(ValidationError, match="CLERK_PUBLISHABLE_KEY"):
+        Settings(clerk_enabled=True, _env_file=None)
+
+
+def test_clerk_enabled_accepts_secret_or_jwt_key_and_normalizes_origins():
+    settings = Settings(
+        clerk_enabled=True,
+        clerk_publishable_key="pk_test_example",
+        clerk_frontend_api_url="https://example.clerk.accounts.dev/",
+        clerk_secret_key="sk_test_example",
+        clerk_authorized_parties=" http://localhost:9000/ , https://app.example.com/ ",
+        _env_file=None,
+    )
+
+    assert settings.clerk_authorized_party_list == [
+        "http://localhost:9000",
+        "https://app.example.com",
+    ]

@@ -47,6 +47,27 @@ templates.env.filters["time_fmt"] = format_time
 templates.env.filters["duration"] = format_duration
 
 
+def _clerk_enabled() -> bool:
+    return get_settings().clerk_enabled
+
+
+def _clerk_publishable_key() -> str:
+    return get_settings().clerk_publishable_key
+
+
+def _clerk_frontend_api_url() -> str:
+    return get_settings().clerk_frontend_api_url.strip().rstrip("/")
+
+
+# These globals keep the shared base template consistent without requiring
+# every existing route to repeat auth configuration in its context dict.
+templates.env.globals.update(
+    clerk_enabled=_clerk_enabled,
+    clerk_publishable_key=_clerk_publishable_key,
+    clerk_frontend_api_url=_clerk_frontend_api_url,
+)
+
+
 def _optional_enum_form(value: str | None, enum_cls):  # type: ignore[no-untyped-def]
     if not value or not str(value).strip():
         return None
@@ -71,6 +92,23 @@ def _all_tags(db: Session) -> list[Tag]:
 
 def _all_allergies(db: Session) -> list[Allergy]:
     return db.query(Allergy).order_by(Allergy.name).all()
+
+
+def _safe_redirect_path(value: str | None) -> str:
+    """Keep the post-login destination on this app, never an external URL."""
+    value = (value or "").strip()
+    if value.startswith("/") and not value.startswith("//"):
+        return value
+    return "/"
+
+
+@router.get("/sign-in", response_class=HTMLResponse)
+def sign_in(request: Request) -> Response:
+    return templates.TemplateResponse(
+        request,
+        "sign_in.html",
+        {"redirect_url": _safe_redirect_path(request.query_params.get("redirect_url"))},
+    )
 
 
 @router.get("/", response_class=HTMLResponse)

@@ -14,6 +14,7 @@ from tests.support.html_forms import forms_in
 from tests.support.routes import PAGE_ROUTES, fill_path
 
 PAGE_LABELS = (
+    "sign in",
     "hangout list",
     "profiles",
     "new profiles",
@@ -36,6 +37,7 @@ def _pages(sample_data) -> dict[str, str]:
     """Every page a person can open, in every state that renders differently."""
     hangouts = sample_data["hangouts"]
     return {
+        "sign in": "/sign-in",
         "hangout list": "/",
         "profiles": "/profiles",
         "new profiles": "/profiles/new",

@@ -4,7 +4,7 @@
 
 - Python `>=3.12,<3.14` (local script prefers 3.12 for wheel availability)
 - FastAPI, Uvicorn, Jinja2, SQLAlchemy 2, Pydantic Settings
-- APScheduler, Twilio SDK, httpx, python-multipart
+- APScheduler, Twilio SDK, Clerk backend SDK, httpx, python-multipart
 - Package name `hangout-automator` `0.1.0` (`pyproject.toml`)
 
 ## Run
@@ -48,6 +48,11 @@ the process environment), so changing `APP_PORT` changes the listening port.
 | Bind host / port | `APP_HOST` / `APP_PORT` | `0.0.0.0` / `9000` |
 | Database | `DATABASE_URL` | `sqlite:///./hangout.db` |
 | Public URL | `PUBLIC_BASE_URL` | `http://localhost:9000` |
+| Clerk auth switch | `CLERK_ENABLED` | `false` |
+| Clerk browser key | `CLERK_PUBLISHABLE_KEY` | empty |
+| Clerk frontend API URL | `CLERK_FRONTEND_API_URL` | empty |
+| Clerk backend verification | `CLERK_SECRET_KEY` or `CLERK_JWT_KEY` | empty |
+| Clerk authorized origins | `CLERK_AUTHORIZED_PARTIES` | `PUBLIC_BASE_URL` when empty |
 | OpenAPI UI | `ENABLE_API_DOCS` | `true` (deployments set `false`) |
 | SMS provider | `SMS_PROVIDER` | `mock` (`mock` or `twilio`) |
 | Twilio | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER` | empty |
@@ -64,6 +69,22 @@ Places API (New) through the app's server-side proxy. The key is never sent to
 the browser. The app requests only autocomplete prediction text and Place
 Details `formattedAddress` / `location`; without the key, the field remains
 ordinary free text.
+
+To enable Clerk locally, create an application in the Clerk Dashboard and set
+`CLERK_ENABLED=true`, its publishable key, frontend API URL, and either the
+backend secret key or PEM JWT key. `CLERK_AUTHORIZED_PARTIES` is a
+comma-separated list of browser origins such as
+`http://localhost:9000,https://app.example.com`; the verifier checks the
+session token's authorized-party claim against this list. With Clerk enabled,
+the UI and `/api/*` routes require a session, while `/api/health`, static
+assets, `/sign-in`, and `POST /webhooks/sms` remain reachable for health checks,
+browser bootstrapping, and Twilio delivery. The webhook still relies on its
+Twilio signature validation when `SMS_PROVIDER=twilio`.
+
+The sign-in page mounts Clerk's browser component and safely returns to the
+original internal path after login. Authenticated pages mount Clerk's user
+button, which supplies the sign-out action; no application-specific password or
+logout endpoint is stored in this repo.
 
 `.env`, `*.db`, `.venv`, and Terraform state are gitignored — do not put secrets in docs or commits.
 

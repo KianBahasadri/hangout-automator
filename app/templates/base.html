@@ -45,6 +45,10 @@
   <link rel="apple-touch-icon" href="/static/apple-touch-icon.png" />
   {# Cache-bust when theme tokens change so browsers pick up new CSS. #}
   <link rel="stylesheet" href="/static/style.css?v=theme3" />
+  {% if clerk_enabled() %}
+  <script defer crossorigin="anonymous" src="{{ clerk_frontend_api_url() }}/npm/@clerk/ui@1/dist/ui.browser.js"></script>
+  <script defer crossorigin="anonymous" data-clerk-publishable-key="{{ clerk_publishable_key() }}" src="{{ clerk_frontend_api_url() }}/npm/@clerk/clerk-js@6/dist/clerk.browser.js"></script>
+  {% endif %}
 </head>
 <body>
   <header class="app-header">
@@ -57,6 +61,9 @@
         <a href="/">Home</a>
         <a href="/profiles">Profiles</a>
         <a href="/settings">Settings</a>
+        {% if clerk_enabled() %}
+        <div id="clerk-user-button" class="clerk-user-button" aria-label="Account"></div>
+        {% endif %}
         <button
           type="button"
           class="theme-toggle"
@@ -83,6 +90,9 @@
   <script src="/static/phone_format.js"></script>
   <script src="/static/toast.js"></script>
   <script src="/static/confirm.js"></script>
+  {% if clerk_enabled() %}
+  <script defer src="/static/clerk_auth.js?v=1"></script>
+  {% endif %}
   {% block scripts %}{% endblock %}
 </body>
 </html>

@@ -3,7 +3,7 @@
 **Document type:** Functional Specification (MVP)  
 **Product:** Hangout Automator — a website that helps plan hangouts and invite people via SMS  
 **Status:** Draft  
-**Last updated:** 2026-08-05
+**Last updated:** 2026-08-08
 
 ---
 
@@ -19,8 +19,8 @@ This document defines **what** the MVP must do from a user and system perspectiv
 
 | Capability | MVP scope |
 |------------|-----------|
-| Access | **No authentication.** Anyone who opens the website can use it; there is no login, signup, or account system. |
-| Multi-tenancy | **None.** A single shared dataset. Every visitor sees and can act on the same profiles, hangouts, and status. |
+| Access | Clerk authentication is supported and enabled for secured deployments; local development can leave it disabled until configured. |
+| Multi-tenancy | **None.** A single shared dataset. Every authenticated visitor sees and can act on the same profiles, hangouts, and status. |
 | Hangout planning | Create a hangout with optional details (time, day, location, motive, alcohol, weed, duration, etc.) |
 | Contacts | Maintain profiles (name + phone required; lifestyle/logistics fields optional) |
 | Invites | Select existing profiles and send individual SMS invites |
@@ -28,7 +28,7 @@ This document defines **what** the MVP must do from a user and system perspectiv
 | Follow-ups | Up to one or two follow-up texts if no response; then stop |
 | Organizer updates | Full status always available by reopening the site; optional SMS digests/alerts only if an organizer profile (with phone) is selected |
 
-**Explicit non-MVP (deferred):** authentication, user accounts, multi-tenant isolation, per-user private data. These will be addressed later; they are not part of this MVP.
+**Explicit non-MVP (deferred):** per-user private data, multi-tenant isolation, and account-owned data. Clerk identity is used for access control, but it does not yet create private workspaces or data partitions.
 
 ---
 
@@ -36,7 +36,7 @@ This document defines **what** the MVP must do from a user and system perspectiv
 
 | Actor | Description |
 |-------|-------------|
-| **Organizer (site user)** | Anyone using the website. No registration. Creates hangouts, manages the shared profile list, sends invites, and reviews status. Multiple people opening the site all interact with the **same** data. |
+| **Organizer (site user)** | An authenticated Clerk user when app auth is enabled. Creates hangouts, manages the shared profile list, sends invites, and reviews status. Multiple authenticated users all interact with the **same** data. |
 | **Invitee** | Person contacted only by SMS (no website account). Identified by a profile in the shared list. |
 | **System** | Website backend and SMS pipeline that sends messages, records replies, and updates hangout state. |
 
@@ -46,14 +46,14 @@ This document defines **what** the MVP must do from a user and system perspectiv
 
 ### 4.1 Organizer: set up a hangout
 
-1. Open the website (no login).
+1. Open the website and sign in with Clerk when app auth is enabled.
 2. Optionally add contact profiles (name + phone; optional attributes)—shared list visible to anyone with the URL.
 3. Start a new hangout and fill in any desired hangout details (all fields optional).
 4. Select one or more existing profiles to invite.
 5. Confirm and **set up the hangout**.
 6. System sends a personalized SMS to each selected invitee.
 7. Optionally select who the organizer is (from the profile list) and enable SMS notifications (intervals and/or thresholds)—neither is required.
-8. Later, open the website again to see who is coming, who is not, and related details (allergies, rides, etc.). Same data for every visitor.
+8. Later, open the website again and sign in when app auth is enabled to see who is coming, who is not, and related details (allergies, rides, etc.). The data is the same for every authenticated user.
 
 ### 4.2 Invitee: receive and reply
 
@@ -63,21 +63,21 @@ This document defines **what** the MVP must do from a user and system perspectiv
 
 ### 4.3 Organizer: stay updated
 
-1. At any time, open the website and view the full hangout picture (no login, no phone number required).
+1. At any time, open the website and sign in when app auth is enabled to view the full hangout picture. No phone number is required for site access.
 2. Optionally, if an organizer profile is selected for notifications, receive SMS updates at configured intervals and/or when thresholds are met (e.g. first confirmation, enough drivers, dietary-restriction flags).
 
 ---
 
 ## 5. Functional Requirements
 
-### 5.1 Access model (no auth, no multi-tenancy)
+### 5.1 Access model (Clerk authentication, no multi-tenancy)
 
 | ID | Requirement | Priority |
 |----|-------------|----------|
-| ACCESS-1 | The website requires **no authentication**. There is no login, signup, password, session-as-identity, or account concept in the MVP. | Must |
-| ACCESS-2 | Anyone who can open the website has full access to the same features and the same data (profiles, hangouts, status). | Must |
+| ACCESS-1 | When `CLERK_ENABLED=true`, the website requires a verified Clerk session for the UI and JSON API. Local development may leave the switch off until Clerk is configured. | Must |
+| ACCESS-2 | Every authenticated site user has full access to the same features and the same shared data (profiles, hangouts, status). | Must |
 | ACCESS-3 | There is **no multi-tenant** behavior: no per-user data partitions, no “my hangouts vs your hangouts,” no org/workspace isolation. One shared application state. | Must |
-| ACCESS-4 | Authentication and multi-tenancy are **out of scope** for this MVP and will be designed later. | Must |
+| ACCESS-4 | Clerk identity does not currently create account-owned records, private workspaces, or per-user data partitions; those remain deferred. | Must |
 
 ### 5.2 Organizer identity (optional)
 
@@ -189,7 +189,7 @@ Organizer SMS updates help the host stay current without constantly opening the 
 
 | ID | Requirement | Priority |
 |----|-------------|----------|
-| STAT-1 | Opening the website shows the **full picture** for hangouts: per-invitee status and relevant profile-derived logistics. No login required. | Must |
+| STAT-1 | Opening the website shows the **full picture** for hangouts: per-invitee status and relevant profile-derived logistics. Sign-in is required when Clerk auth is enabled. | Must |
 | STAT-2 | Status view shows at least: invited list; response state (confirmed / no response / declined if supported); send/follow-up history at a high level. | Must |
 | STAT-3 | Status view surfaces logistics derived from confirmed (or all invited) profiles where available: dietary restrictions, driving capability, drink/smoke preferences if relevant to planning. | Should |
 | STAT-4 | Status is the source of truth for detailed review; SMS notifications are optional summaries only. | Must |
@@ -199,7 +199,7 @@ Organizer SMS updates help the host stay current without constantly opening the 
 | ID | Requirement | Priority |
 |----|-------------|----------|
 | PRIV-1 | Invitees do not need a website account or login. | Must |
-| PRIV-2 | MVP data is **not private per user**: all site visitors share the same profiles and hangouts. Real isolation is deferred with auth/multi-tenancy. | Must |
+| PRIV-2 | MVP data is **not private per user**: all authenticated site users share the same profiles and hangouts. Real isolation is deferred with account ownership/multi-tenancy. | Must |
 | PRIV-3 | System only texts numbers that were explicitly added as profiles and selected for a hangout. | Must |
 | PRIV-4 | Automated outbound volume to an invitee is limited (initial invite + at most two follow-ups). | Must |
 
@@ -207,7 +207,7 @@ Organizer SMS updates help the host stay current without constantly opening the 
 
 ## 6. Data Concepts (logical model)
 
-Logical entities (not a database schema). **Single shared app state**—no `Account` or tenant root:
+Logical entities (not a database schema). **Single shared app state**—Clerk identities gate access but there is no local `Account` or tenant root:
 
 ```
 Application (single shared instance)
@@ -260,11 +260,11 @@ Application (single shared instance)
 
 The following are **out of scope** for the MVP unless explicitly added later:
 
-- **Authentication / accounts / login** (deferred; not part of MVP)
+- **Account-owned data / login-independent access** (Clerk login is supported; local account ownership is deferred)
 - **Multi-tenancy / per-user private data** (deferred; not part of MVP)
 - Invitee mobile app or invitee web accounts
 - Shared calendars, maps, or automatic venue booking
-- Multi-organizer *account* collaboration models (MVP is simply open shared access)
+- Multi-organizer *account* collaboration models (MVP is simply shared access for authenticated users)
 - Public/social discovery of hangouts outside this single app instance
 - Payments, tickets, or group expense splitting
 - Voice calls or email as primary invite channel
@@ -277,7 +277,7 @@ The following are **out of scope** for the MVP unless explicitly added later:
 
 MVP is successful when someone can:
 
-1. Open the website with **no login** and use all features against the **same shared data** as any other visitor.
+1. Open the website, sign in with Clerk when enabled, and use all features against the **same shared data** as any other authenticated user.
 2. Add contact profiles with name, phone, and optional attributes.
 3. Create a hangout with any combination of optional details (including none).
 4. Select profiles and launch the hangout so each invitee receives an individual SMS with reply instructions.
@@ -326,5 +326,6 @@ These items need product decisions before or during implementation:
 |------|--------|
 | 2026-08-05 | Initial functional specification from product description (MVP). |
 | 2026-08-05 | Organizer phone number is fully optional (not required for core flows). |
-| 2026-08-05 | Removed auth and multi-tenancy from MVP: open access, single shared dataset. |
+| 2026-08-05 | Removed per-user ownership and multi-tenancy from MVP: single shared dataset. |
 | 2026-08-05 | Implementation: FastAPI + SQLite MVP; Azure B1s VM via Terraform. |
+| 2026-08-08 | Added optional Clerk authentication for app/API access; shared data and Twilio webhook behavior remain unchanged. |

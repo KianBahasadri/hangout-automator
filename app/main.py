@@ -10,6 +10,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from app.config import get_settings
+from app.auth import ClerkAuthMiddleware
 from app.database import SessionLocal, init_db
 from app.event_logging import EventTraceMiddleware, audit_event, configure_logging, request_context
 from app.routers import api, web, webhooks
@@ -129,7 +130,7 @@ _docs_enabled = settings.enable_api_docs
 
 app = FastAPI(
     title="Hangout Automator",
-    description="MVP: plan hangouts and invite people via SMS (no auth).",
+    description="Plan hangouts and invite people via SMS with optional Clerk authentication.",
     version="0.1.0",
     lifespan=lifespan,
     docs_url="/docs" if _docs_enabled else None,
@@ -137,6 +138,9 @@ app = FastAPI(
     openapi_url="/openapi.json" if _docs_enabled else None,
 )
 
+# Keep request tracing outermost so rejected Clerk requests are still visible
+# in the structured audit log.
+app.add_middleware(ClerkAuthMiddleware)
 app.add_middleware(EventTraceMiddleware, body_limit=settings.log_body_max_bytes)
 
 static_dir = Path(__file__).resolve().parent / "static"

@@ -15,9 +15,21 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./hangout.db"
     public_base_url: str = "http://localhost:9000"
 
-    # Interactive OpenAPI UI (/docs, /redoc, /openapi.json). The app has no
-    # authentication, so deployments turn this off to avoid publishing a map of
-    # the state-changing endpoints.
+    # Clerk authentication is opt-in so a fresh local checkout remains usable
+    # before a Clerk application has been created. When enabled, all app and
+    # JSON API routes require a verified Clerk session; the SMS webhook and
+    # health check remain public server-to-server endpoints.
+    clerk_enabled: bool = False
+    clerk_publishable_key: str = ""
+    clerk_frontend_api_url: str = ""
+    clerk_secret_key: str = ""
+    clerk_jwt_key: str = ""
+    # Comma-separated browser origins allowed by Clerk's authorized-party
+    # (azp) check. An empty value falls back to PUBLIC_BASE_URL.
+    clerk_authorized_parties: str = ""
+
+    # Interactive OpenAPI UI (/docs, /redoc, /openapi.json). When Clerk is
+    # enabled, these routes are protected by the same auth middleware.
     enable_api_docs: bool = True
 
     # The application writes a structured JSONL audit stream in addition to
@@ -67,6 +79,27 @@ class Settings(BaseSettings):
                 )
         return self
 
+    @model_validator(mode="after")
+    def _validate_clerk_config(self) -> "Settings":
+        if not self.clerk_enabled:
+            return self
+
+        missing = [
+            name
+            for name, value in (
+                ("CLERK_PUBLISHABLE_KEY", self.clerk_publishable_key),
+                ("CLERK_FRONTEND_API_URL", self.clerk_frontend_api_url),
+            )
+            if not (value or "").strip()
+        ]
+        if not self.clerk_secret_key.strip() and not self.clerk_jwt_key.strip():
+            missing.append("CLERK_SECRET_KEY or CLERK_JWT_KEY")
+        if missing:
+            raise ValueError(
+                "CLERK_ENABLED=true requires: " + ", ".join(missing)
+            )
+        return self
+
     @property
     def followup_hour_list(self) -> list[float]:
         parts = [p.strip() for p in self.followup_hours.split(",") if p.strip()]
@@ -78,6 +111,16 @@ class Settings(BaseSettings):
                 logger.warning("Invalid followup hour %r — using 24", p)
                 hours.append(24.0)
         return hours or [24.0, 48.0]
+
+    @property
+    def clerk_authorized_party_list(self) -> list[str]:
+        """Return normalized origins for Clerk's authorized-party check."""
+        configured = [
+            part.strip().rstrip("/")
+            for part in self.clerk_authorized_parties.split(",")
+            if part.strip()
+        ]
+        return configured or [self.public_base_url.strip().rstrip("/")]
 
 
 @lru_cache

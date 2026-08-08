@@ -1,0 +1,93 @@
+from clerk_backend_api.security import AuthStatus, RequestState
+
+from app.config import Settings
+
+
+def _clerk_settings() -> Settings:
+    return Settings(
+        clerk_enabled=True,
+        clerk_publishable_key="pk_test_example",
+        clerk_frontend_api_url="https://example.clerk.accounts.dev",
+        clerk_secret_key="sk_test_example",
+        public_base_url="http://localhost:9000",
+        _env_file=None,
+    )
+
+
+def test_clerk_redirects_browser_requests_to_sign_in(client, monkeypatch):
+    settings = _clerk_settings()
+    monkeypatch.setattr("app.auth.get_settings", lambda: settings)
+
+    response = client.get("/profiles", follow_redirects=False)
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/sign-in?redirect_url=%2Fprofiles"
+
+
+def test_clerk_returns_json_401_for_api_requests(client, monkeypatch):
+    settings = _clerk_settings()
+    monkeypatch.setattr("app.auth.get_settings", lambda: settings)
+
+    response = client.get("/api/tags")
+
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Authentication required"}
+    assert response.headers["www-authenticate"] == "Bearer"
+
+
+def test_clerk_leaves_health_and_static_routes_public(client, monkeypatch):
+    settings = _clerk_settings()
+    monkeypatch.setattr("app.auth.get_settings", lambda: settings)
+
+    health = client.get("/api/health")
+    static = client.get("/static/style.css")
+
+    assert health.status_code == 200
+    assert static.status_code == 200
+
+
+def test_authenticated_clerk_request_reaches_app(client, monkeypatch):
+    settings = _clerk_settings()
+    monkeypatch.setattr("app.auth.get_settings", lambda: settings)
+    monkeypatch.setattr("app.routers.web.get_settings", lambda: settings)
+
+    async def fake_authenticate(request, settings):
+        return RequestState(
+            status=AuthStatus.SIGNED_IN,
+            payload={"sub": "user_test", "sid": "sess_test"},
+            token="test-token",
+        )
+
+    monkeypatch.setattr("app.auth.authenticate_clerk_request", fake_authenticate)
+
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert "data-clerk-publishable-key=\"pk_test_example\"" in response.text
+    assert 'id="clerk-user-button"' in response.text
+    assert "sk_test_example" not in response.text
+    assert "user_test" not in response.text
+
+
+def test_sign_in_rejects_external_redirect_destination(client, monkeypatch):
+    settings = _clerk_settings()
+    monkeypatch.setattr("app.routers.web.get_settings", lambda: settings)
+
+    response = client.get("/sign-in?redirect_url=https://evil.example/steal")
+
+    assert response.status_code == 200
+    assert 'data-redirect-url="/"' in response.text
+
+
+def test_clerk_verifier_exception_fails_closed(client, monkeypatch):
+    settings = _clerk_settings()
+    monkeypatch.setattr("app.auth.get_settings", lambda: settings)
+
+    async def broken_authenticate(request, settings):
+        raise RuntimeError("test verifier failure")
+
+    monkeypatch.setattr("app.auth.authenticate_clerk_request", broken_authenticate)
+
+    response = client.get("/profiles")
+
+    assert response.status_code == 503

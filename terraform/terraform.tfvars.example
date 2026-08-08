@@ -15,8 +15,8 @@ cloudflare_zone_id     = "00000000000000000000000000000000"
 cloudflare_hostname    = "hangout.example.com"
 cloudflare_tunnel_name = "hangout-automator"
 
-# Cloudflare Access is the only authentication in front of the app. The wrapper
-# builds this from the comma-separated CLOUDFLARE_ACCESS_EMAILS in .env.
+# Cloudflare Access remains the edge gate. The wrapper builds this from the
+# comma-separated CLOUDFLARE_ACCESS_EMAILS in .env.
 cloudflare_access_allowed_emails = ["you@example.com"]
 
 admin_username = "hangout"
@@ -36,3 +36,11 @@ twilio_from_number = ""
 
 # Canonical public URL for Twilio signatures. Defaults to https://<cloudflare_hostname>.
 # public_base_url = "https://hangout.example.com"
+
+# Optional in-app Clerk authentication. The wrapper reads these from the
+# ignored .env so no real credential belongs in this example file.
+# clerk_enabled            = true
+# clerk_publishable_key    = "pk_live_..."
+# clerk_frontend_api_url   = "https://...clerk.accounts.dev"
+# clerk_secret_key         = "sk_live_..."
+# clerk_authorized_parties = "https://hangout.example.com"

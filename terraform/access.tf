@@ -1,6 +1,6 @@
-# Cloudflare Access in front of the Tunnel hostname. The FastAPI app still has
-# no authentication of its own, so this is the only thing keeping the profile
-# list and the invite-sending actions off the open internet.
+# Cloudflare Access in front of the Tunnel hostname remains the edge gate. The
+# FastAPI app can additionally require Clerk when CLERK_ENABLED=true; both
+# layers protect the profile list and invite-sending actions.
 
 # allowed_idps is deliberately unset on the applications below, which lets every
 # login method configured on the account satisfy this policy. One-time PIN is

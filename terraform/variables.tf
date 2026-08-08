@@ -92,6 +92,44 @@ variable "public_base_url" {
   default     = ""
 }
 
+variable "clerk_enabled" {
+  description = "Require a verified Clerk session for the app UI and JSON API."
+  type        = bool
+  default     = false
+}
+
+variable "clerk_publishable_key" {
+  description = "Clerk publishable key exposed to the browser."
+  type        = string
+  default     = ""
+}
+
+variable "clerk_frontend_api_url" {
+  description = "Clerk Frontend API URL used to load ClerkJS and the UI package."
+  type        = string
+  default     = ""
+}
+
+variable "clerk_secret_key" {
+  description = "Clerk backend secret key used to verify browser sessions."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "clerk_jwt_key" {
+  description = "Optional Clerk PEM JWT public key for networkless session verification."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "clerk_authorized_parties" {
+  description = "Comma-separated browser origins accepted by Clerk's authorized-party check."
+  type        = string
+  default     = ""
+}
+
 variable "app_port" {
   description = "Port on which the app listens and the Cloudflare Tunnel connects. The dotenv-aware wrapper maps APP_PORT to this variable."
   type        = number
@@ -140,7 +178,7 @@ variable "cloudflare_tunnel_name" {
 }
 
 variable "cloudflare_access_allowed_emails" {
-  description = "Email addresses allowed through Cloudflare Access to the app. Supplied from the ignored .env by scripts/terraform.sh; no default, so no personal address is published in this repo. The app has no authentication of its own, so an empty list would expose it to anyone."
+  description = "Email addresses allowed through Cloudflare Access to the app. Supplied from the ignored .env by scripts/terraform.sh; no default, so no personal address is published in this repo. An empty list would expose the edge route to nobody allowed by Access."
   type        = list(string)
 
   validation {
