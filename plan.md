@@ -79,7 +79,7 @@ trustworthy green/red signal.
 ran a single test (it installed `requirements.txt`, which has no pytest, then
 called `pytest`). Do not repeat that. The self-check in P1.2 is mandatory.
 
-- [ ] **P1.1** Add `.github/workflows/ci.yml`: on push and pull_request, matrix
+- [x] **P1.1** Add `.github/workflows/ci.yml`: on push and pull_request, matrix
       on Python 3.12 and 3.13 (`pyproject.toml` pins `>=3.12,<3.14`). Install with
       `uv sync --group dev`, then run `uv run --group dev pytest`. Do **not**
       install from `requirements.txt` in the test job.
