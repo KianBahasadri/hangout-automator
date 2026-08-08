@@ -30,10 +30,10 @@ def test_preview_invite_sms_uses_form_fields(client_no_raise):
     assert "Hey Sam!" in body
     assert "You're invited:" in body
     assert "Dinner" in body
-    assert "When: 2026-08-15 at 19:00" in body
+    assert "When: August 15, 2026 at 7:00 PM" in body
     assert "Where: Sam's place" in body
     assert "Alcohol: yes" in body
-    assert "INFO — headcount" in body
+    assert "MORE INFO" in body
 
 
 def test_default_dietary_restrictions_are_seeded(client_no_raise):

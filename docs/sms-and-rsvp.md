@@ -35,18 +35,16 @@ provider, recorded as an unsuccessful message, and emitted as an
 
 Messages use short multi-line layout (labels + blank lines) so they read clearly on phones.
 
-- **Hangout summary** — motive; `When:` date / time / duration; `Where:` location; `Alcohol:` / `Weed:` only if set to yes/no; `Notes:`; fallback phrase `"a hangout"`
-- **Invite / follow-up** — greeting + summary + reply menu:
-  - **CONFIRM** — I'm in
-  - **REMIND** — remind me later
-  - **NO** — can't make it
-  - **INFO** — headcount
-  - **INFO 2** — full guest list
-- **Immediate remind** (on REMIND reply) — multi-line reminder + “Reply CONFIRM if you're still in!”
-- **RSVP acks** — confirm / decline / remind acknowledgements (confirm also points at INFO / INFO 2)
-- **INFO** — headcounts only (coming / pending / declined / invited) + the requester’s RSVP status
-- **INFO 2** — named lists for coming / pending / declined, plus confirmed logistics (restrictions, rides, drivers) + requester’s RSVP
-- **Organizer digest** — same named coming / pending / declined layout as INFO 2; dietary restrictions for confirmed; Needs ride / Can drive for confirmed with `drive` no/yes
+- **Hangout summary** — motive; `When:` long-form date (e.g. `August 8, 2026`) / 12-hour time (e.g. `7:00 PM`) / duration; `Where:` location; `Alcohol:` / `Weed:` only if set to yes/no; `Notes:`; fallback phrase `"a hangout"`. Storage stays ISO (`YYYY-MM-DD`, `HH:MM`); only SMS copy is reformatted.
+- **Invite / follow-up** — greeting + summary + reply menu (keywords only, no explanations):
+  - **CONFIRM**
+  - **NO**
+  - **INFO**
+  - **MORE INFO**
+- **RSVP acks** — confirm / decline acknowledgements (confirm also points at INFO / MORE INFO)
+- **INFO** — headcounts only (coming / pending / declined / invited) + the requester’s RSVP status; points at MORE INFO
+- **MORE INFO** — named lists for coming / pending / declined, plus confirmed logistics (restrictions, rides, drivers) + requester’s RSVP
+- **Organizer digest** — same named coming / pending / declined layout as MORE INFO; dietary restrictions for confirmed; Needs ride / Can drive for confirmed with `drive` no/yes
 
 ## Inbound webhook
 
@@ -60,18 +58,17 @@ Messages use short multi-line layout (labels + blank lines) so they read clearly
 
 ## Reply parsing
 
-`parse_reply_intent` lowercases the body and looks at the first token (and the second for INFO 2):
+`parse_reply_intent` lowercases the body and looks at the first token (and the second for MORE INFO):
 
 | Intent | Keywords |
 |--------|----------|
-| info2 | `info 2`, `info2`, `info two`, or `info` + `2`/`two`/`full`/`list`/`details` |
+| info2 | `more info`, `moreinfo`, legacy `info 2` / `info2` / `info two`, or `info` + `2`/`two`/`full`/`list`/`details` |
 | info | `info` (alone) |
 | confirm | `confirm`, `yes`, `y`, `in`, `attending`, `coming` |
-| remind | `remind`, `reminder`, `later` |
 | decline | `no`, `n`, `decline`, `can't`, `cant`, `out`, `nope`, plus the carrier opt-out words `stop`, `stopall`, `unsubscribe`, `cancel`, `end`, `quit` |
-| none | anything else → help reply listing CONFIRM / REMIND / NO / INFO / INFO 2 |
+| none | anything else → help reply listing CONFIRM / NO / INFO / MORE INFO |
 
-INFO and INFO 2 are **read-only**: they never change invite status.
+INFO and MORE INFO are **read-only**: they never change invite status.
 
 Opt-out keywords count as a decline because Twilio blocks the number at the
 provider; recording it as an answer stops the app retrying a number that can no
@@ -89,6 +86,6 @@ anything the app tried to send back would be rejected as Twilio error 21610.
 2. Find the invite on an **active** hangout for the normalized phone, ranked by most recent `last_outbound_at` (never-messaged invites last, then newest invite id) so a reply lands on the hangout that actually texted them (fallback: last-10-digit match)
 3. No invite → unmatched thanks message
 4. `info` / `info2` return headcount or guest-list text without changing status
-5. confirm / decline / remind update `status` + `responded_at`; remind also sends the immediate reminder SMS
+5. confirm / decline update `status` + `responded_at`
    (an opt-out body still records the decline, then suppresses the reply)
 6. Run organizer threshold evaluation for RSVP intents (see [organizer-notifications.md](./organizer-notifications.md))

@@ -70,18 +70,17 @@ def test_invitee_reply_decline_updates_status(db):
     assert invite.status == InviteStatus.declined
 
 
-def test_invitee_reply_remind_marks_remind_and_sends_reminder(db):
+def test_remind_keyword_is_unrecognized(db):
     invitee = _profile(db, "Sam", "+15551112222")
     _, invite = _active_hangout_with_invite(db, invitee)
     db.commit()
 
     reply = process_inbound_sms(db, "+15551112222", "remind")
 
-    assert "reminder" in reply.lower()
+    assert "CONFIRM" in reply
+    assert "REMIND" not in reply
     db.refresh(invite)
-    assert invite.status == InviteStatus.remind
-    logs = _outbound_logs(db, phone="+15551112222")
-    assert any("Reminder for Sam" in log.body for log in logs)
+    assert invite.status == InviteStatus.pending
 
 
 def test_unknown_phone_gets_unmatched_message(db):
@@ -218,14 +217,14 @@ def test_info_returns_headcounts_without_changing_status(db):
     assert "Coming: 1" in reply
     assert "Pending: 1" in reply
     assert "Declined: 1" in reply
-    assert "Lee" not in reply  # names only on INFO 2
+    assert "Lee" not in reply  # names only on MORE INFO
     assert "Your RSVP: pending" in reply
     db.refresh(sam_invite)
     assert sam_invite.status == InviteStatus.pending
     assert sam_invite.responded_at is None
 
 
-def test_info_2_returns_named_guest_list(db):
+def test_more_info_returns_named_guest_list(db):
     from app.models import Drive
 
     sam = _profile(db, "Sam", "+15551112222")
@@ -237,7 +236,7 @@ def test_info_2_returns_named_guest_list(db):
     lee.drive = Drive.yes
     db.commit()
 
-    reply = process_inbound_sms(db, "+15551112222", "info 2")
+    reply = process_inbound_sms(db, "+15551112222", "more info")
 
     assert "guest list" in reply.lower()
     assert "Coming (1): Lee" in reply
@@ -274,7 +273,12 @@ def test_invite_message_is_multiline_with_info_options(db):
         .body
     )
     assert "You're invited:" in body
-    assert "When: 2026-08-08 at 19:00" in body
+    assert "When: August 8, 2026 at 7:00 PM" in body
     assert "Where: Sam's place" in body
-    assert "INFO — headcount" in body
-    assert "INFO 2 — full guest list" in body
+    assert "CONFIRM" in body
+    assert "REMIND" not in body
+    assert "NO" in body
+    assert "INFO" in body
+    assert "MORE INFO" in body
+    assert "I'm in" not in body
+    assert "headcount" not in body

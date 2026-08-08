@@ -17,8 +17,6 @@ from app.messages import (
     craft_info_summary,
     craft_invite_message,
     craft_organizer_digest,
-    craft_remind_ack_reply,
-    craft_reminder_message,
     craft_unmatched_reply,
     is_opt_out,
     parse_reply_intent,
@@ -526,7 +524,7 @@ def _handle_inbound_sms(db: Session, from_phone: str, body: str) -> str:
         )
         return craft_help_reply()
 
-    # INFO / INFO 2 are read-only — do not change RSVP status
+    # INFO / MORE INFO are read-only — do not change RSVP status
     if intent in {"info", "info2"}:
         hangout = load_hangout(db, invite.hangout_id)
         db.commit()
@@ -555,19 +553,6 @@ def _handle_inbound_sms(db: Session, from_phone: str, body: str) -> str:
         invite.status = InviteStatus.confirmed
         invite.responded_at = now
         reply = craft_confirm_reply(invite.hangout)
-    elif intent == "remind":
-        invite.status = InviteStatus.remind
-        invite.responded_at = now
-        reply = craft_remind_ack_reply()
-        # Immediate short reminder + schedule via status
-        rem = craft_reminder_message(invite.hangout, invite.profile)
-        send_sms(
-            db,
-            to=invite.profile.phone,
-            body=rem,
-            invite_id=invite.id,
-            hangout_id=invite.hangout_id,
-        )
     else:  # decline
         invite.status = InviteStatus.declined
         invite.responded_at = now

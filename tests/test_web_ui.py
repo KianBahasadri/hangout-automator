@@ -178,7 +178,7 @@ def test_sms_simulator_page_renders_sample_messages(client):
     assert "SMS simulator" in response.text
     # Apostrophe is HTML-escaped in the preformatted body.
     assert "invited:" in response.text
-    assert "INFO — headcount" in response.text
+    assert "MORE INFO" in response.text
     assert "Organizer digest" in response.text
 
 

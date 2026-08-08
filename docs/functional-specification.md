@@ -24,7 +24,7 @@ This document defines **what** the MVP must do from a user and system perspectiv
 | Hangout planning | Create a hangout with optional details (time, day, location, motive, alcohol, weed, duration, etc.) |
 | Contacts | Maintain profiles (name + phone required; lifestyle/logistics fields optional) |
 | Invites | Select existing profiles and send individual SMS invites |
-| RSVP | Invitees reply by text (e.g. confirm / remind) |
+| RSVP | Invitees reply by text (e.g. confirm / decline) |
 | Follow-ups | Up to one or two follow-up texts if no response; then stop |
 | Organizer updates | Full status always available by reopening the site; optional SMS digests/alerts only if an organizer profile (with phone) is selected |
 
@@ -58,7 +58,7 @@ This document defines **what** the MVP must do from a user and system perspectiv
 ### 4.2 Invitee: receive and reply
 
 1. Receive an SMS invite describing the hangout (based on what was filled in on the site).
-2. Reply with a keyword (or equivalent short instruction) to **confirm**, request a **remind**, or otherwise respond as defined in the invite text.
+2. Reply with a keyword (or equivalent short instruction) to **confirm**, **decline**, or otherwise respond as defined in the invite text.
 3. If no reply, may receive up to one or two follow-up SMS messages; after that, the system stops asking that invitee.
 
 ### 4.3 Organizer: stay updated
@@ -156,7 +156,7 @@ Hangout details describe the plan. **All hangout detail fields are optional** so
 |----|-------------|----------|
 | SMS-1 | On hangout setup, the system crafts an SMS and sends it **individually** to each selected invitee’s phone number. | Must |
 | SMS-2 | Message content should include available hangout details (date/time, location, motive, alcohol, weed, duration, etc.) and clear reply instructions. | Must |
-| SMS-3 | Message instructs the invitee how to respond, including at least: **confirm**, **remind**, **decline**, plus **info** (headcount) and **info 2** (full guest list). Exact keywords and wording are implementation/copy decisions but must be documented in product copy. | Must |
+| SMS-3 | Message instructs the invitee how to respond, including at least: **confirm**, **decline**, plus **info** (headcount) and **more info** (full guest list). Exact keywords and wording are implementation/copy decisions but must be documented in product copy. | Must |
 | SMS-4 | Each invite is tracked per invitee (delivery/send status and response status). | Must |
 | SMS-5 | Failed sends (invalid number, provider error) are visible on the hangout status view. | Should |
 
@@ -165,7 +165,7 @@ Hangout details describe the plan. **All hangout detail fields are optional** so
 | ID | Requirement | Priority |
 |----|-------------|----------|
 | RSVP-1 | System accepts inbound SMS replies and maps them to the correct hangout invitee (by phone number / active invite context). | Must |
-| RSVP-2 | Recognized reply intents include: **confirm** (attending), **remind** (request a reminder), **decline**, **info** (headcount), and **info 2** (named guest list + logistics). Info intents are read-only. | Must |
+| RSVP-2 | Recognized reply intents include: **confirm** (attending), **decline**, **info** (headcount), and **more info** (named guest list + logistics). Info intents are read-only. | Must |
 | RSVP-3 | If an invitee does not respond, the system may send **one or two follow-up** SMS messages, then **stop** contacting that invitee for that hangout. | Must |
 | RSVP-4 | Follow-up cadence (timing between messages) is configurable or set to sensible defaults; exact schedule is an implementation/product setting. | Should |
 | RSVP-5 | Once the follow-up limit is reached with no response, invitee status remains **no response** (or equivalent) and no further automated asks are sent. | Must |
@@ -190,7 +190,7 @@ Organizer SMS updates help the host stay current without constantly opening the 
 | ID | Requirement | Priority |
 |----|-------------|----------|
 | STAT-1 | Opening the website shows the **full picture** for hangouts: per-invitee status and relevant profile-derived logistics. No login required. | Must |
-| STAT-2 | Status view shows at least: invited list; response state (confirmed / remind requested / no response / declined if supported); send/follow-up history at a high level. | Must |
+| STAT-2 | Status view shows at least: invited list; response state (confirmed / no response / declined if supported); send/follow-up history at a high level. | Must |
 | STAT-3 | Status view surfaces logistics derived from confirmed (or all invited) profiles where available: dietary restrictions, driving capability, drink/smoke preferences if relevant to planning. | Should |
 | STAT-4 | Status is the source of truth for detailed review; SMS notifications are optional summaries only. | Must |
 
@@ -234,7 +234,7 @@ Application (single shared instance)
 ### 7.1 Outbound invite SMS
 
 - Sent once per selected invitee when hangout is set up (unless resend is later specified).
-- Body includes: hangout details that were provided; reply instructions (`confirm`, `remind`, etc.).
+- Body includes: hangout details that were provided; reply instructions (`confirm`, `no`, etc.).
 - Individualized per number (no single group blast identity assumed).
 
 ### 7.2 Follow-ups
@@ -246,7 +246,7 @@ Application (single shared instance)
 ### 7.3 Inbound parsing
 
 - System matches reply keywords (case-insensitive, trimmed) to intents.
-- Unrecognized replies may be ignored, marked for review on the site, or trigger a short help SMS—behavior TBD; MVP minimum is reliable handling of confirm and remind.
+- Unrecognized replies may be ignored, marked for review on the site, or trigger a short help SMS—behavior TBD; MVP minimum is reliable handling of confirm and decline.
 
 ### 7.4 Organizer SMS
 
@@ -291,8 +291,8 @@ MVP is successful when someone can:
 
 These items need product decisions before or during implementation:
 
-1. **Exact RSVP keyword set** — confirm / remind only, or also decline / maybe / stop?
-2. **Remind behavior** — when is the reminder sent (e.g. day-of, N hours before)?
+1. **Exact RSVP keyword set** — confirm / decline only, or also maybe / stop?
+2. **Follow-up timing** — when are automatic unresponded nudges sent?
 3. **Editing after send** — can hangout details change, and do invitees get an update SMS?
 4. **Default follow-up timing** — e.g. +24h and +48h.
 5. **Threshold examples for organizer SMS** — ~~which events fire by default?~~ Defaults: new confirm, dietary restriction, ride needed; decline off; milestone off; no cooldown. Interval default 6h with skip-if-unchanged.
@@ -313,7 +313,7 @@ These items need product decisions before or during implementation:
 | **Invitee** | A profile selected for a specific hangout and messaged by SMS. |
 | **Organizer / site user** | Anyone using the website; no account identity in MVP. |
 | **Confirm** | Invitee reply intent meaning they plan to attend. |
-| **Remind** | Invitee reply intent requesting a later reminder SMS. |
+| **Follow-up** | Automatic nudge SMS to invitees who have not yet confirmed or declined. |
 | **Follow-up** | Automated re-prompt SMS when an invitee has not responded. |
 | **Organizer notification** | Optional SMS summarizing hangout progress to a configured number. |
 | **Shared instance** | Single app dataset; no per-user isolation in MVP. |

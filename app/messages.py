@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from types import SimpleNamespace
 from typing import Any
 
@@ -14,18 +15,51 @@ def _yn(value: YesNo | None) -> str | None:
     return None
 
 
+def format_day_date_for_sms(value: str | None) -> str | None:
+    """ISO-ish dates → long form (e.g. August 8, 2026). Unknown strings pass through."""
+    if value is None:
+        return None
+    raw = str(value).strip()
+    if not raw:
+        return None
+    for fmt in ("%Y-%m-%d", "%Y/%m/%d", "%m/%d/%Y", "%m-%d-%Y"):
+        try:
+            dt = datetime.strptime(raw, fmt)
+            return f"{dt.strftime('%B')} {dt.day}, {dt.year}"
+        except ValueError:
+            continue
+    return raw
+
+
+def format_time_for_sms(value: str | None) -> str | None:
+    """24h / ISO times → 12-hour (e.g. 7:00 PM). Unknown strings pass through."""
+    if value is None:
+        return None
+    raw = str(value).strip()
+    if not raw:
+        return None
+    for fmt in ("%H:%M", "%H:%M:%S", "%I:%M %p", "%I:%M%p", "%I:%M:%S %p"):
+        try:
+            dt = datetime.strptime(raw, fmt)
+            hour12 = dt.hour % 12 or 12
+            ampm = "AM" if dt.hour < 12 else "PM"
+            return f"{hour12}:{dt.minute:02d} {ampm}"
+        except ValueError:
+            continue
+    return raw
+
+
 def _reply_options_footer(*, include_info: bool = True) -> str:
     lines = [
         "Reply:",
-        "CONFIRM — I'm in",
-        "REMIND — remind me later",
-        "NO — can't make it",
+        "CONFIRM",
+        "NO",
     ]
     if include_info:
         lines.extend(
             [
-                "INFO — headcount",
-                "INFO 2 — full guest list",
+                "INFO",
+                "MORE INFO",
             ]
         )
     return "\n".join(lines)
@@ -38,10 +72,12 @@ def format_hangout_summary(hangout: Hangout) -> str:
         lines.append(hangout.motive)
 
     when_parts: list[str] = []
-    if hangout.day_date:
-        when_parts.append(hangout.day_date)
-    if hangout.time:
-        when_parts.append(f"at {hangout.time}")
+    day = format_day_date_for_sms(hangout.day_date)
+    if day:
+        when_parts.append(day)
+    time = format_time_for_sms(hangout.time)
+    if time:
+        when_parts.append(f"at {time}")
     if hangout.duration:
         when_parts.append(f"({hangout.duration})")
     if when_parts:
@@ -87,18 +123,6 @@ def craft_followup_message(hangout: Hangout, profile: Profile, attempt: int) -> 
             summary,
             "",
             _reply_options_footer(),
-        ]
-    )
-
-
-def craft_reminder_message(hangout: Hangout, profile: Profile) -> str:
-    summary = format_hangout_summary(hangout)
-    return "\n".join(
-        [
-            f"Reminder for {profile.name}:",
-            summary,
-            "",
-            "Reply CONFIRM if you're still in!",
         ]
     )
 
@@ -181,13 +205,13 @@ def craft_info_summary(hangout: Hangout, invite: HangoutInvite) -> str:
         "",
         f"Your RSVP: {_status_label(invite.status)}",
         "",
-        "Reply INFO 2 for the full guest list.",
+        "Reply MORE INFO.",
     ]
     return "\n".join(lines)
 
 
 def craft_info_detail(hangout: Hangout, invite: HangoutInvite) -> str:
-    """INFO 2 — names plus logistics for confirmed guests."""
+    """MORE INFO — names plus logistics for confirmed guests."""
     confirmed, pending, declined = _invite_groups(hangout)
     restrictions, rides_needed, can_drive = _confirmed_logistics(hangout)
 
@@ -219,7 +243,7 @@ def craft_confirm_reply(hangout: Hangout) -> str:
             f"You're confirmed for hangout #{hangout.id}.",
             "See you!",
             "",
-            "Reply INFO for headcount, INFO 2 for the guest list.",
+            "Reply INFO or MORE INFO.",
         ]
     )
 
@@ -231,10 +255,6 @@ def craft_decline_reply(hangout: Hangout) -> str:
             "Thanks for letting us know.",
         ]
     )
-
-
-def craft_remind_ack_reply() -> str:
-    return "Got it — we'll send you a reminder."
 
 
 def craft_help_reply() -> str:
@@ -365,12 +385,6 @@ def preview_message_catalog() -> list[dict[str, str]]:
             "body": craft_followup_message(hangout, profile, attempt=1),  # type: ignore[arg-type]
         },
         {
-            "key": "remind",
-            "title": "Immediate REMIND reply",
-            "description": "Sent right after they text REMIND.",
-            "body": craft_reminder_message(hangout, profile),  # type: ignore[arg-type]
-        },
-        {
             "key": "confirm_ack",
             "title": "CONFIRM acknowledgement",
             "description": "Auto-reply after they confirm.",
@@ -383,20 +397,14 @@ def preview_message_catalog() -> list[dict[str, str]]:
             "body": craft_decline_reply(hangout),  # type: ignore[arg-type]
         },
         {
-            "key": "remind_ack",
-            "title": "REMIND acknowledgement",
-            "description": "Short ack before the reminder SMS above.",
-            "body": craft_remind_ack_reply(),
-        },
-        {
             "key": "info",
-            "title": "INFO (headcount)",
+            "title": "INFO",
             "description": "Counts only — no names.",
             "body": craft_info_summary(hangout, invite),  # type: ignore[arg-type]
         },
         {
             "key": "info2",
-            "title": "INFO 2 (guest list)",
+            "title": "MORE INFO",
             "description": "Named lists plus logistics for confirmed guests.",
             "body": craft_info_detail(hangout, invite),  # type: ignore[arg-type]
         },
@@ -435,28 +443,42 @@ def is_opt_out(body: str) -> bool:
 
 
 def parse_reply_intent(body: str) -> str | None:
-    """Map free-text SMS to confirm | remind | decline | info | info2 | None."""
+    """Map free-text SMS to confirm | decline | info | info2 | None."""
     text = (body or "").strip().lower()
     tokens = text.replace(",", " ").replace("-", " ").split()
     token = tokens[0] if tokens else ""
 
-    # INFO / INFO 2 (multi-token before single-token confirm/decline sets)
-    if token in {"info", "info2"} or text in {"info 2", "info two", "info2"}:
+    # INFO / MORE INFO (multi-token before single-token confirm/decline sets)
+    # Legacy INFO 2 / info2 still accepted.
+    more_info_phrases = {
+        "more info",
+        "moreinfo",
+        "info 2",
+        "info two",
+        "info2",
+    }
+    if (
+        token in {"info", "info2", "moreinfo"}
+        or text in more_info_phrases
+        or (len(tokens) >= 2 and tokens[0] == "more" and tokens[1] == "info")
+    ):
         if (
-            token == "info2"
-            or text in {"info 2", "info two", "info2"}
-            or (len(tokens) >= 2 and tokens[0] == "info" and tokens[1] in {"2", "two", "full", "list", "details"})
+            token in {"info2", "moreinfo"}
+            or text in more_info_phrases
+            or (len(tokens) >= 2 and tokens[0] == "more" and tokens[1] == "info")
+            or (
+                len(tokens) >= 2
+                and tokens[0] == "info"
+                and tokens[1] in {"2", "two", "full", "list", "details"}
+            )
         ):
             return "info2"
         return "info"
 
     confirm_words = {"confirm", "yes", "y", "in", "attending", "coming"}
-    remind_words = {"remind", "reminder", "later"}
     decline_words = {"no", "n", "decline", "can't", "cant", "out", "nope"} | OPT_OUT_WORDS
     if token in confirm_words or text in confirm_words:
         return "confirm"
-    if token in remind_words or text in remind_words:
-        return "remind"
     if token in decline_words or text in decline_words:
         return "decline"
     return None
