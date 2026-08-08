@@ -49,6 +49,24 @@ class InviteSmsPreviewOut(BaseModel):
     body: str
 
 
+class PlaceSuggestionOut(BaseModel):
+    place_id: str
+    text: str
+    main_text: str
+    secondary_text: Optional[str] = None
+
+
+class PlacesAutocompleteOut(BaseModel):
+    suggestions: list[PlaceSuggestionOut] = Field(default_factory=list)
+
+
+class PlaceDetailsOut(BaseModel):
+    place_id: str
+    formatted_address: str
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+
+
 class ProfileCreate(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     phone: str = Field(min_length=5, max_length=32)

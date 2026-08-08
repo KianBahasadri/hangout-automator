@@ -1,6 +1,18 @@
 import pytest
 
 
+def _places_settings():
+    from app.config import Settings
+
+    return Settings(google_maps_api_key="places-test-key", sms_provider="mock", _env_file=None)
+
+
+def _no_places_settings():
+    from app.config import Settings
+
+    return Settings(google_maps_api_key="", sms_provider="mock", _env_file=None)
+
+
 def _create_profile(client, name="Sam", phone="+15551112222"):
     response = client.post("/api/profiles", json={"name": name, "phone": phone})
     assert response.status_code == 201
@@ -34,6 +46,122 @@ def test_preview_invite_sms_uses_form_fields(client_no_raise):
     assert "Where: Sam's place" in body
     assert "Alcohol: yes" in body
     assert "MORE INFO" in body
+
+
+def test_places_autocomplete_returns_renderable_place_predictions(client_no_raise, monkeypatch):
+    calls = {}
+    place_id = "ChIJ" + "x" * 300
+
+    async def fake_google_request(method, url, **kwargs):
+        calls.update(method=method, url=url, kwargs=kwargs)
+        return {
+            "suggestions": [
+                {
+                    "placePrediction": {
+                        "placeId": place_id,
+                        "text": {"text": "Central Park, New York, NY, USA"},
+                        "structuredFormat": {
+                            "mainText": {"text": "Central Park"},
+                            "secondaryText": {"text": "New York, NY, USA"},
+                        },
+                    }
+                },
+                {"queryPrediction": {"text": {"text": "parks near me"}}},
+            ]
+        }
+
+    monkeypatch.setattr("app.routers.api.get_settings", _places_settings)
+    monkeypatch.setattr("app.routers.api._google_places_request", fake_google_request)
+
+    response = client_no_raise.get(
+        "/api/places/autocomplete",
+        params={"input": "central", "session_token": "session-123"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "suggestions": [
+            {
+                "place_id": place_id,
+                "text": "Central Park, New York, NY, USA",
+                "main_text": "Central Park",
+                "secondary_text": "New York, NY, USA",
+            }
+        ]
+    }
+    assert calls["method"] == "POST"
+    assert calls["url"].endswith("/places:autocomplete")
+    assert calls["kwargs"]["field_mask"] == (
+        "suggestions.placePrediction.placeId,"
+        "suggestions.placePrediction.text.text,"
+        "suggestions.placePrediction.structuredFormat.mainText.text,"
+        "suggestions.placePrediction.structuredFormat.secondaryText.text"
+    )
+    assert calls["kwargs"]["json_body"] == {
+        "input": "central",
+        "sessionToken": "session-123",
+    }
+
+
+def test_place_details_returns_address_and_coordinates(client_no_raise, monkeypatch):
+    calls = {}
+
+    async def fake_google_request(method, url, **kwargs):
+        calls.update(method=method, url=url, kwargs=kwargs)
+        return {
+            "id": "ChIJexample_123",
+            "formattedAddress": "Central Park, New York, NY 10022, USA",
+            "location": {"latitude": 40.7829, "longitude": -73.9654},
+        }
+
+    monkeypatch.setattr("app.routers.api.get_settings", _places_settings)
+    monkeypatch.setattr("app.routers.api._google_places_request", fake_google_request)
+
+    response = client_no_raise.get(
+        "/api/places/details",
+        params={"place_id": "ChIJexample_123", "session_token": "session-123"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "place_id": "ChIJexample_123",
+        "formatted_address": "Central Park, New York, NY 10022, USA",
+        "latitude": 40.7829,
+        "longitude": -73.9654,
+    }
+    assert calls["method"] == "GET"
+    assert calls["url"].endswith("/places/ChIJexample_123?sessionToken=session-123")
+    assert calls["kwargs"]["field_mask"] == (
+        "id,formattedAddress,location.latitude,location.longitude"
+    )
+
+
+def test_place_details_rejects_path_like_place_ids(client_no_raise, monkeypatch):
+    calls = []
+
+    async def fake_google_request(*args, **kwargs):
+        calls.append((args, kwargs))
+        return {}
+
+    monkeypatch.setattr("app.routers.api.get_settings", _places_settings)
+    monkeypatch.setattr("app.routers.api._google_places_request", fake_google_request)
+
+    response = client_no_raise.get(
+        "/api/places/details", params={"place_id": "places/ChIJexample_123"}
+    )
+
+    assert response.status_code == 422
+    assert calls == []
+
+
+def test_places_routes_are_disabled_without_a_key(client_no_raise, monkeypatch):
+    monkeypatch.setattr("app.routers.api.get_settings", _no_places_settings)
+
+    response = client_no_raise.get(
+        "/api/places/autocomplete", params={"input": "central"}
+    )
+
+    assert response.status_code == 404
 
 
 def test_default_dietary_restrictions_are_seeded(client_no_raise):

@@ -20,6 +20,15 @@ def test_app_port_loads_from_env_file(tmp_path, monkeypatch):
     assert settings.app_port == 9123
 
 
+def test_google_maps_api_key_loads_from_env_file(tmp_path):
+    env_file = tmp_path / ".env"
+    env_file.write_text("GOOGLE_MAPS_API_KEY=places-test-key\n", encoding="utf-8")
+
+    settings = Settings(_env_file=env_file)
+
+    assert settings.google_maps_api_key == "places-test-key"
+
+
 def test_twilio_incomplete_raises():
     with pytest.raises(ValidationError, match="TWILIO_AUTH_TOKEN"):
         Settings(

@@ -19,9 +19,9 @@ Notable variables (`variables.tf` / `terraform.tfvars.example`): `prefix`,
 capacity](#region-and-vm-size-capacity)), required `ssh_public_key`, required Cloudflare
 account id, zone id, and `cloudflare_hostname`, optional `git_repo_url` /
 `git_branch` (default `main`), optional pinned `git_revision`, SMS/Twilio
-settings, `public_base_url`, `app_port`, `followup_hours`, and
-`organizer_interval_hours`. `scripts/terraform.sh` maps `APP_PORT` from the
-ignored `.env` to `app_port`.
+settings, optional `GOOGLE_MAPS_API_KEY`, `public_base_url`, `app_port`,
+`followup_hours`, and `organizer_interval_hours`. `scripts/terraform.sh` maps
+`APP_PORT` and `GOOGLE_MAPS_API_KEY` from the ignored `.env` to Terraform.
 
 `cloudflare_hostname` deliberately has **no default** and the example tfvars
 carries placeholders: the deployed hostname is the only thing standing between
@@ -337,6 +337,7 @@ only through environment variables or a secret manager:
 | Compute | Azure CLI login, region/VM size, repository URL/branch, and an SSH public key for the VM administrator (not direct public access) |
 | Public URL | `https://<app hostname>`, written to `PUBLIC_BASE_URL` for webhook signature validation |
 | SMS | `mock` by default; Twilio SID/token/number must be injected through secret environment variables before selecting `twilio` |
+| Google Places | Optional `GOOGLE_MAPS_API_KEY`, injected through the ignored `.env` when location autocomplete is enabled |
 | State | A locked remote Terraform backend should be configured before production apply |
 
 Never send a Twilio auth token, Cloudflare API token, Azure client secret,
@@ -396,7 +397,7 @@ Template `cloud-init.yaml.tftpl`:
 - Writes `/etc/hangout-automator.env` (app on `127.0.0.1:${APP_PORT}`, with
   `APP_PORT` supplied from the ignored `.env`; DB
   `sqlite:////var/lib/hangout-automator/app.db`, `ENABLE_API_DOCS=false`, SMS
-  settings from Terraform, and `LOG_*` settings for
+  settings and optional Google Places key from Terraform, and `LOG_*` settings for
   `/var/lib/hangout-automator/logs/server.log`)
 - systemd unit `hangout-automator.service` running Uvicorn, with
   `RequiresMountsFor=/var/lib/hangout-automator` so the app refuses to start

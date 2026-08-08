@@ -46,6 +46,7 @@ export TF_VAR_sms_provider="${TF_VAR_sms_provider:-${SMS_PROVIDER:-mock}}"
 export TF_VAR_twilio_account_sid="${TF_VAR_twilio_account_sid:-${TWILIO_ACCOUNT_SID:-}}"
 export TF_VAR_twilio_auth_token="${TF_VAR_twilio_auth_token:-${TWILIO_AUTH_TOKEN:-}}"
 export TF_VAR_twilio_from_number="${TF_VAR_twilio_from_number:-${TWILIO_FROM_NUMBER:-}}"
+export TF_VAR_google_maps_api_key="${TF_VAR_google_maps_api_key:-${GOOGLE_MAPS_API_KEY:-}}"
 if [[ -z "${TF_VAR_subscription_id:-}" ]]; then
   export TF_VAR_subscription_id="$(az account show --query id -o tsv)"
 fi

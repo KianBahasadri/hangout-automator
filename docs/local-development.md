@@ -51,12 +51,19 @@ the process environment), so changing `APP_PORT` changes the listening port.
 | OpenAPI UI | `ENABLE_API_DOCS` | `true` (deployments set `false`) |
 | SMS provider | `SMS_PROVIDER` | `mock` (`mock` or `twilio`) |
 | Twilio | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER` | empty |
+| Google Places autocomplete | `GOOGLE_MAPS_API_KEY` | empty (free-text location fallback) |
 | Follow-up delays (hours) | `FOLLOWUP_HOURS` | `24,48` (first `max_followups` values used) |
 | Organizer interval fallback | `ORGANIZER_INTERVAL_HOURS` | `6` |
 
 `max_followups` is fixed at `2` in settings. Invalid follow-up hour parts become `24.0`; empty list falls back to `[24.0, 48.0]`.
 
 `SMS_PROVIDER=twilio` without all three Twilio credentials is a startup error (fail-fast); `mock` is the default and needs nothing. `PUBLIC_BASE_URL` is used to validate Twilio webhook signatures when provider is twilio — see [sms-and-rsvp.md](./sms-and-rsvp.md).
+
+When `GOOGLE_MAPS_API_KEY` is set, the new-hangout Location field uses the
+Places API (New) through the app's server-side proxy. The key is never sent to
+the browser. The app requests only autocomplete prediction text and Place
+Details `formattedAddress` / `location`; without the key, the field remains
+ordinary free text.
 
 `.env`, `*.db`, `.venv`, and Terraform state are gitignored — do not put secrets in docs or commits.
 

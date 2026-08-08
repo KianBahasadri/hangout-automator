@@ -131,6 +131,7 @@ resource "azurerm_linux_virtual_machine" "main" {
     twilio_account_sid       = var.twilio_account_sid
     twilio_auth_token        = var.twilio_auth_token
     twilio_from_number       = var.twilio_from_number
+    google_maps_api_key      = var.google_maps_api_key
     followup_hours           = var.followup_hours
     organizer_interval_hours = var.organizer_interval_hours
     app_port                 = var.app_port

@@ -34,6 +34,10 @@ class Settings(BaseSettings):
     twilio_auth_token: str = ""
     twilio_from_number: str = ""
 
+    # Optional server-side key for Places API (New) location autocomplete.
+    # Keeping this empty preserves the free-text location field.
+    google_maps_api_key: str = ""
+
     # Up to two follow-up delays in hours after initial invite
     followup_hours: str = "24,48"
     organizer_interval_hours: int = 6

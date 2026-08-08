@@ -218,6 +218,20 @@ def test_new_hangout_has_preview_invite_button(client):
     assert "hangout_sms_preview.js" in response.text
 
 
+def test_new_hangout_enables_places_when_configured(client, monkeypatch):
+    monkeypatch.setattr(
+        "app.routers.web.get_settings",
+        lambda: Settings(google_maps_api_key="places-test-key", _env_file=None),
+    )
+
+    response = client.get("/hangouts/new")
+
+    assert response.status_code == 200
+    assert 'id="location-autocomplete"' in response.text
+    assert 'data-places-enabled="true"' in response.text
+    assert "location_autocomplete.js" in response.text
+
+
 def test_header_has_theme_toggle_after_settings(client):
     response = client.get("/")
     assert response.status_code == 200

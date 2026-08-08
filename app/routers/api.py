@@ -1,8 +1,15 @@
 from __future__ import annotations
 
+import logging
+import re
+from urllib.parse import quote
+
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import Query
 from sqlalchemy.orm import Session, joinedload
 
+from app.config import get_settings
 from app.database import get_db
 from app.ids import RowIdPath
 from app.models import Allergy, Hangout, HangoutInvite, HangoutStatus, Profile, Tag, not_null_columns
@@ -15,6 +22,8 @@ from app.schemas import (
     HangoutUpdate,
     InviteSmsPreviewIn,
     InviteSmsPreviewOut,
+    PlaceDetailsOut,
+    PlacesAutocompleteOut,
     ProfileCreate,
     ProfileOut,
     ProfileUpdate,
@@ -38,6 +47,181 @@ from app.services import (
 from app.sms import is_valid_phone, normalize_phone
 
 router = APIRouter(prefix="/api", tags=["api"])
+logger = logging.getLogger(__name__)
+
+_PLACES_BASE_URL = "https://places.googleapis.com/v1"
+_AUTOCOMPLETE_FIELD_MASK = (
+    "suggestions.placePrediction.placeId,"
+    "suggestions.placePrediction.text.text,"
+    "suggestions.placePrediction.structuredFormat.mainText.text,"
+    "suggestions.placePrediction.structuredFormat.secondaryText.text"
+)
+_DETAILS_FIELD_MASK = "id,formattedAddress,location.latitude,location.longitude"
+_SAFE_TOKEN = re.compile(r"^[A-Za-z0-9_-]{1,36}$")
+_SAFE_PLACE_ID = re.compile(r"^[^/\x00-\x1f\x7f]+$")
+_PLACE_ID_MAX_LENGTH = 4096
+
+
+class _PlacesUpstreamError(Exception):
+    """The upstream Places API did not return a usable response."""
+
+
+def _places_api_key() -> str:
+    return (get_settings().google_maps_api_key or "").strip()
+
+
+def _validate_session_token(session_token: str) -> str:
+    token = (session_token or "").strip()
+    if token and not _SAFE_TOKEN.fullmatch(token):
+        raise HTTPException(422, "Invalid Places session token")
+    return token
+
+
+def _is_safe_place_id(place_id: str) -> bool:
+    """Accept Google's opaque IDs with a generous request-size safety bound."""
+    return len(place_id) <= _PLACE_ID_MAX_LENGTH and bool(_SAFE_PLACE_ID.fullmatch(place_id))
+
+
+async def _google_places_request(
+    method: str,
+    url: str,
+    *,
+    api_key: str,
+    field_mask: str,
+    json_body: dict | None = None,
+) -> dict:
+    headers = {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": api_key,
+        "X-Goog-FieldMask": field_mask,
+    }
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.request(method, url, headers=headers, json=json_body)
+            response.raise_for_status()
+            payload = response.json()
+    except (httpx.HTTPError, ValueError) as exc:
+        logger.warning("Google Places request failed: %s %s", method, type(exc).__name__)
+        raise _PlacesUpstreamError from exc
+    if not isinstance(payload, dict):
+        logger.warning("Google Places returned a non-object response")
+        raise _PlacesUpstreamError
+    return payload
+
+
+@router.get("/places/autocomplete", response_model=PlacesAutocompleteOut)
+async def places_autocomplete(
+    input: str = Query(default="", max_length=255),
+    session_token: str = Query(default="", max_length=36),
+) -> dict[str, list[dict[str, str | None]]]:
+    """Return a small, safe-to-render subset of Google place predictions."""
+    api_key = _places_api_key()
+    if not api_key:
+        raise HTTPException(404, "Google Places is not configured")
+
+    query = input.strip()
+    if len(query) < 3:
+        return {"suggestions": []}
+    token = _validate_session_token(session_token)
+    body: dict[str, str] = {"input": query}
+    if token:
+        body["sessionToken"] = token
+
+    try:
+        payload = await _google_places_request(
+            "POST",
+            f"{_PLACES_BASE_URL}/places:autocomplete",
+            api_key=api_key,
+            field_mask=_AUTOCOMPLETE_FIELD_MASK,
+            json_body=body,
+        )
+    except _PlacesUpstreamError as exc:
+        raise HTTPException(502, "Google Places is temporarily unavailable") from exc
+
+    suggestions: list[dict[str, str | None]] = []
+    raw_suggestions = payload.get("suggestions", [])
+    if not isinstance(raw_suggestions, list):
+        raw_suggestions = []
+    for item in raw_suggestions:
+        if not isinstance(item, dict):
+            continue
+        prediction = item.get("placePrediction")
+        if not isinstance(prediction, dict):
+            continue
+        place_id = prediction.get("placeId")
+        text = prediction.get("text")
+        structured = prediction.get("structuredFormat")
+        if not isinstance(place_id, str):
+            continue
+        place_id = place_id.strip()
+        if not _is_safe_place_id(place_id):
+            continue
+        if not isinstance(text, dict) or not isinstance(text.get("text"), str):
+            continue
+        main_text = ""
+        secondary_text: str | None = None
+        if isinstance(structured, dict):
+            main = structured.get("mainText")
+            secondary = structured.get("secondaryText")
+            if isinstance(main, dict) and isinstance(main.get("text"), str):
+                main_text = main["text"]
+            if isinstance(secondary, dict) and isinstance(secondary.get("text"), str):
+                secondary_text = secondary["text"]
+        suggestions.append(
+            {
+                "place_id": place_id,
+                "text": text["text"],
+                "main_text": main_text or text["text"],
+                "secondary_text": secondary_text,
+            }
+        )
+    return {"suggestions": suggestions}
+
+
+@router.get("/places/details", response_model=PlaceDetailsOut)
+async def places_details(
+    place_id: str = Query(..., min_length=1, max_length=_PLACE_ID_MAX_LENGTH),
+    session_token: str = Query(default="", max_length=36),
+) -> dict[str, str | float | None]:
+    """Resolve the selected prediction to the address used by the form."""
+    api_key = _places_api_key()
+    if not api_key:
+        raise HTTPException(404, "Google Places is not configured")
+
+    place_id = place_id.strip()
+    if not _is_safe_place_id(place_id):
+        raise HTTPException(422, "Invalid Places place ID")
+    token = _validate_session_token(session_token)
+    url = f"{_PLACES_BASE_URL}/places/{quote(place_id, safe='')}"
+    if token:
+        # Place Details uses the session token as a query parameter to end the
+        # Autocomplete session for billing purposes.
+        url += f"?sessionToken={quote(token, safe='')}"
+
+    try:
+        payload = await _google_places_request(
+            "GET",
+            url,
+            api_key=api_key,
+            field_mask=_DETAILS_FIELD_MASK,
+        )
+    except _PlacesUpstreamError as exc:
+        raise HTTPException(502, "Google Places is temporarily unavailable") from exc
+
+    formatted_address = payload.get("formattedAddress")
+    if not isinstance(formatted_address, str) or not formatted_address.strip():
+        raise HTTPException(502, "Google Places returned no address")
+    location = payload.get("location")
+    if not isinstance(location, dict):
+        location = {}
+    latitude = location.get("latitude")
+    longitude = location.get("longitude")
+    return {
+        "place_id": payload.get("id") if isinstance(payload.get("id"), str) else place_id,
+        "formatted_address": formatted_address.strip(),
+        "latitude": latitude if isinstance(latitude, (int, float)) else None,
+        "longitude": longitude if isinstance(longitude, (int, float)) else None,
+    }
 
 
 @router.get("/health")

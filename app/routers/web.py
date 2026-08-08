@@ -298,6 +298,7 @@ def hangout_new(request: Request, db: Session = Depends(get_db)) -> HTMLResponse
         {
             "profiles": _profiles_with_tags(db),
             "tags": _all_tags(db),
+            "google_places_enabled": bool(get_settings().google_maps_api_key.strip()),
             "alcohol_opts": list(YesNo),
             "weed_opts": list(YesNo),
             "interval_hour_opts": INTERVAL_HOUR_OPTIONS,

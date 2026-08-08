@@ -171,6 +171,13 @@ variable "twilio_from_number" {
   default = ""
 }
 
+variable "google_maps_api_key" {
+  description = "Optional Google Maps Platform Places API (New) key for location autocomplete."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
 variable "followup_hours" {
   type    = string
   default = "24,48"

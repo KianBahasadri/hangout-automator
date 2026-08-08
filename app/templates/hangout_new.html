@@ -19,7 +19,23 @@
     </div>
     <div>
       <label for="location">Location</label>
-      <input id="location" name="location" type="text" maxlength="255" />
+      <div
+        class="places-autocomplete"
+        id="location-autocomplete"
+        data-places-enabled="{{ 'true' if google_places_enabled else 'false' }}"
+      >
+        <input
+          id="location"
+          name="location"
+          type="text"
+          maxlength="255"
+          autocomplete="off"
+          aria-autocomplete="list"
+          aria-controls="location-suggestions"
+          aria-expanded="false"
+        />
+        <ul class="places-list" id="location-suggestions" role="listbox" hidden></ul>
+      </div>
     </div>
   </div>
 
@@ -189,6 +205,6 @@
 {% block scripts %}
 <script src="/static/notify_panel.js"></script>
 <script src="/static/combobox.js"></script>
+<script src="/static/location_autocomplete.js"></script>
 <script src="/static/hangout_sms_preview.js"></script>
 {% endblock %}
-
