@@ -225,6 +225,17 @@ def test_draft_edit_autosave_returns_no_content(client, db):
     assert hangout.motive == "Autosaved"
 
 
+def test_draft_autosave_uses_the_form_action_attribute(client):
+    script = client.get("/static/hangout_draft_autosave.js")
+
+    assert script.status_code == 200
+    assert 'form.getAttribute("action")' in script.text
+    assert "fetch(saveUrl" in script.text
+    assert "fetch(form.action" not in script.text
+    assert 'window.__hangoutToast.show("Draft saved")' in script.text
+    assert 'setStatus("Saved"' not in script.text
+
+
 def test_draft_edit_can_set_up_the_saved_invitees(client, db):
     from app.models import Hangout, HangoutStatus, Profile
 

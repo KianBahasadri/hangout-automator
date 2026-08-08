@@ -4,10 +4,10 @@
 
   const status = form.querySelector("[data-draft-autosave-status]");
   const setupButton = form.querySelector('button[name="action"][value="setup"]');
+  const saveUrl = form.getAttribute("action") || window.location.pathname;
   const DEBOUNCE_MS = 450;
   let timer = null;
   let saveQueue = Promise.resolve(true);
-  let savedClearTimer = null;
   let submitting = false;
   let setupRequested = false;
 
@@ -19,17 +19,16 @@
   }
 
   function showSaved() {
-    setStatus("Saved", "is-saved");
-    window.clearTimeout(savedClearTimer);
-    savedClearTimer = window.setTimeout(() => {
-      if (status?.textContent === "Saved") setStatus("", null);
-    }, 1600);
+    setStatus("", null);
+    if (window.__hangoutToast && typeof window.__hangoutToast.show === "function") {
+      window.__hangoutToast.show("Draft saved");
+    }
   }
 
   async function saveDraft(body) {
     setStatus("Saving…", "is-saving");
     try {
-      const response = await fetch(form.action, {
+      const response = await fetch(saveUrl, {
         method: "POST",
         headers: { Accept: "application/json" },
         body,

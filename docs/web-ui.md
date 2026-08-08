@@ -100,7 +100,7 @@ Partial `_invitee_picker.html` + `invitee_picker.js` (new/edit hangout form and 
 ## Draft editing
 
 - Opening a visible draft through its home-list link or its detail URL sends the visitor to `/hangouts/{id}/edit`
-- The edit form preloads saved detail, organizer-notification, and invitee selections; it has no manual save button and saves field changes in the background (with Saving/Saved feedback)
+- The edit form preloads saved detail, organizer-notification, and invitee selections; it has no manual save button and saves field changes in the background, showing successful saves in a toast and save failures inline
 - **Set up hangout** waits for the latest draft save, then activates it and sends the selected invites
 - Non-draft or hidden hangouts cannot be edited through the draft edit routes and return to their detail page
 
