@@ -65,6 +65,10 @@ _PLACE_ID_MAX_LENGTH = 4096
 class _PlacesUpstreamError(Exception):
     """The upstream Places API did not return a usable response."""
 
+    def __init__(self, status_code: int | None = None):
+        super().__init__()
+        self.status_code = status_code
+
 
 def _places_api_key() -> str:
     return (get_settings().google_maps_api_key or "").strip()
@@ -100,8 +104,17 @@ async def _google_places_request(
             response = await client.request(method, url, headers=headers, json=json_body)
             response.raise_for_status()
             payload = response.json()
-    except (httpx.HTTPError, ValueError) as exc:
-        logger.warning("Google Places request failed: %s %s", method, type(exc).__name__)
+    except httpx.HTTPError as exc:
+        status_code = exc.response.status_code if isinstance(exc, httpx.HTTPStatusError) else None
+        logger.warning(
+            "Google Places request failed: %s %s status=%s",
+            method,
+            type(exc).__name__,
+            status_code or "unknown",
+        )
+        raise _PlacesUpstreamError(status_code) from exc
+    except ValueError as exc:
+        logger.warning("Google Places request returned invalid JSON: %s", method)
         raise _PlacesUpstreamError from exc
     if not isinstance(payload, dict):
         logger.warning("Google Places returned a non-object response")
@@ -136,6 +149,11 @@ async def places_autocomplete(
             json_body=body,
         )
     except _PlacesUpstreamError as exc:
+        if exc.status_code in {401, 403}:
+            raise HTTPException(
+                503,
+                "Google Places is not enabled for the configured API key",
+            ) from exc
         raise HTTPException(502, "Google Places is temporarily unavailable") from exc
 
     suggestions: list[dict[str, str | None]] = []
@@ -206,6 +224,11 @@ async def places_details(
             field_mask=_DETAILS_FIELD_MASK,
         )
     except _PlacesUpstreamError as exc:
+        if exc.status_code in {401, 403}:
+            raise HTTPException(
+                503,
+                "Google Places is not enabled for the configured API key",
+            ) from exc
         raise HTTPException(502, "Google Places is temporarily unavailable") from exc
 
     formatted_address = payload.get("formattedAddress")

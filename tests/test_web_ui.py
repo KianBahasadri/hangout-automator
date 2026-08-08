@@ -449,7 +449,9 @@ def test_new_hangout_enables_places_when_configured(client, monkeypatch):
 
     assert response.status_code == 200
     assert 'id="location-autocomplete"' in response.text
+    assert 'class="location-field"' in response.text
     assert 'data-places-enabled="true"' in response.text
+    assert 'id="location-status"' in response.text
     assert "location_autocomplete.js" in response.text
 
 

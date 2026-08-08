@@ -103,6 +103,23 @@ def test_places_autocomplete_returns_renderable_place_predictions(client_no_rais
     }
 
 
+def test_places_autocomplete_reports_permission_errors(client_no_raise, monkeypatch):
+    from app.routers.api import _PlacesUpstreamError
+
+    async def fake_google_request(*args, **kwargs):
+        raise _PlacesUpstreamError(403)
+
+    monkeypatch.setattr("app.routers.api.get_settings", _places_settings)
+    monkeypatch.setattr("app.routers.api._google_places_request", fake_google_request)
+
+    response = client_no_raise.get(
+        "/api/places/autocomplete", params={"input": "central"}
+    )
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Google Places is not enabled for the configured API key"
+
+
 def test_place_details_returns_address_and_coordinates(client_no_raise, monkeypatch):
     calls = {}
 

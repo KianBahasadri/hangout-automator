@@ -614,8 +614,19 @@ th {
   margin-bottom: 0.85rem;
 }
 
+.field-row > .location-field {
+  flex: 1.5;
+  min-width: min(240px, 100%);
+}
+
 .places-autocomplete input {
   margin-bottom: 0 !important;
+}
+
+.places-status {
+  margin: 0.35rem 0 0;
+  color: var(--save-err);
+  font-size: 0.8rem;
 }
 
 .places-list {

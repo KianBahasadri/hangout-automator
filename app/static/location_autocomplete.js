@@ -4,6 +4,7 @@
 
   const input = root.querySelector("#location");
   const list = root.querySelector("#location-suggestions");
+  const status = root.querySelector("#location-status");
   if (!input || !list) return;
 
   const MIN_QUERY_LENGTH = 3;
@@ -13,6 +14,18 @@
   let requestSequence = 0;
   let activeIndex = -1;
   let options = [];
+
+  function clearStatus() {
+    if (!status) return;
+    status.hidden = true;
+    status.textContent = "";
+  }
+
+  function showStatus(message) {
+    if (!status) return;
+    status.textContent = message;
+    status.hidden = false;
+  }
 
   function newSessionToken() {
     if (window.crypto && typeof window.crypto.randomUUID === "function") {
@@ -113,13 +126,28 @@
 
     try {
       const response = await fetch("/api/places/autocomplete?" + params.toString(), request);
-      if (!response.ok || sequence !== requestSequence) return;
+      if (sequence !== requestSequence) return;
+      if (!response.ok) {
+        closeList();
+        if (response.status === 503) {
+          showStatus("Location suggestions are unavailable. Check that Places API (New) is enabled for this key.");
+        } else if (response.status === 404) {
+          showStatus("Location suggestions are not configured.");
+        } else {
+          showStatus("Location suggestions are unavailable right now.");
+        }
+        return;
+      }
       const data = await response.json();
       if (sequence !== requestSequence) return;
+      clearStatus();
       renderSuggestions(Array.isArray(data.suggestions) ? data.suggestions : []);
     } catch (error) {
       if (error && error.name === "AbortError") return;
-      if (sequence === requestSequence) closeList();
+      if (sequence === requestSequence) {
+        closeList();
+        showStatus("Could not load location suggestions.");
+      }
     }
   }
 
@@ -165,6 +193,8 @@
         ) {
           input.value = String(data.formatted_address).slice(0, 255);
         }
+      } else if (!response.ok && selectionSequence === requestSequence) {
+        showStatus("Location details are unavailable; using the selected suggestion.");
       }
     } catch (error) {
       // The prediction text remains a useful fallback when details fail.
@@ -181,6 +211,7 @@
     const sequence = requestSequence;
     cancelAutocomplete();
     closeList();
+    clearStatus();
     input.removeAttribute("aria-busy");
 
     const query = input.value.trim();
