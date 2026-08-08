@@ -20,6 +20,20 @@ HTML routes: `app/routers/web.py`. Templates: `app/templates/`. Styles/scripts: 
   `window.__hangoutTheme.toggle()` (no external JS required)
 - Light palette is `html[data-theme="light"]` overrides only
 
+## Destructive-action confirmations
+
+Delete forms (profile, tag, dietary restriction) carry the prompt text in a
+`data-confirm` attribute; `static/confirm.js` binds one delegated `submit`
+listener on `document` and cancels the event when the user declines.
+
+The message must never be interpolated into an inline
+`onsubmit="return confirm('…')"`. Jinja escapes for HTML, not for JavaScript,
+so a name containing an apostrophe (`O'Brien` → `O&#39;Brien`) was decoded by
+the HTML parser back into a bare quote that closed the string literal early:
+the handler failed to parse, never ran, and the form submitted **with no
+prompt at all**. A `data-` attribute read back through `dataset` stays a
+string whatever characters it holds.
+
 ## Routes
 
 | Method | Path | Page / action |

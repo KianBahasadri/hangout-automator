@@ -234,3 +234,33 @@ def test_settings_logs_download_missing_file_is_404(client, tmp_path, monkeypatc
     response = client.get("/settings/logs")
 
     assert response.status_code == 404
+
+
+def test_delete_confirmations_survive_an_apostrophe(client, db):
+    """Names with apostrophes must not break out of the confirm() string literal.
+
+    Rendering the message into `onsubmit="return confirm('…')"` meant Jinja's
+    HTML escaping turned O'Brien into O&#39;Brien, which the parser decoded back
+    to a bare quote — the handler then failed to parse and the form deleted the
+    row with no prompt at all.
+    """
+    from app.models import Allergy, Profile, Tag
+
+    db.add(Profile(name="Kian O'Brien", phone="+15551234567"))
+    db.add(Tag(name="Sam's crew"))
+    db.add(Allergy(name="Cow's milk"))
+    db.commit()
+
+    for path in ("/profiles", "/settings"):
+        html = client.get(path).text
+        assert "onsubmit" not in html, f"{path} still builds JS by string interpolation"
+        assert "confirm('" not in html
+
+    profiles_html = client.get("/profiles").text
+    assert 'data-confirm="Delete Kian O&#39;Brien?"' in profiles_html
+    assert 'data-confirm="Delete tag Sam&#39;s crew?"' in profiles_html
+    assert 'data-confirm="Delete restriction Cow&#39;s milk?"' in client.get("/settings").text
+
+
+def test_confirm_script_is_loaded_on_every_page(client):
+    assert '<script src="/static/confirm.js"></script>' in client.get("/").text

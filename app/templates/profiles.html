@@ -17,7 +17,7 @@
     {% for t in tags %}
     <span class="tag-list-item">
       {{ t.name }}
-      <form method="post" action="/tags/{{ t.id }}/delete" onsubmit="return confirm('Delete tag {{ t.name }}?');">
+      <form method="post" action="/tags/{{ t.id }}/delete" data-confirm="Delete tag {{ t.name }}?">
         <button class="tag-remove" type="submit" title="Delete tag" aria-label="Delete tag">×</button>
       </form>
     </span>
@@ -98,7 +98,7 @@
         </div>
         <div class="profile-editor-actions">
           <span class="save-status muted" aria-live="polite"></span>
-          <form method="post" action="/profiles/{{ p.id }}/delete" onsubmit="return confirm('Delete {{ p.name }}?');">
+          <form method="post" action="/profiles/{{ p.id }}/delete" data-confirm="Delete {{ p.name }}?">
             <button class="btn btn-danger btn-sm" type="submit">Delete</button>
           </form>
         </div>

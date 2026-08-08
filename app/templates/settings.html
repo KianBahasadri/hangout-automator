@@ -10,7 +10,7 @@
     {% for a in allergies %}
     <span class="tag-list-item">
       {{ a.name }}
-      <form method="post" action="/allergies/{{ a.id }}/delete" onsubmit="return confirm('Delete restriction {{ a.name }}?');">
+      <form method="post" action="/allergies/{{ a.id }}/delete" data-confirm="Delete restriction {{ a.name }}?">
         <button class="tag-remove" type="submit" title="Delete restriction" aria-label="Delete restriction">×</button>
       </form>
     </span>
