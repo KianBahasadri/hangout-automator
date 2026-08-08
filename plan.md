@@ -83,7 +83,7 @@ called `pytest`). Do not repeat that. The self-check in P1.2 is mandatory.
       on Python 3.12 and 3.13 (`pyproject.toml` pins `>=3.12,<3.14`). Install with
       `uv sync --group dev`, then run `uv run --group dev pytest`. Do **not**
       install from `requirements.txt` in the test job.
-- [ ] **P1.2** Prove the workflow can fail. Add a test file containing a
+- [x] **P1.2** Prove the workflow can fail. Add a test file containing a
       deliberately failing assertion, push to a scratch branch, confirm the run
       goes red, then delete the file and confirm green. Record both run URLs in
       the commit message for P1.2. If you cannot reach GitHub, mark `[!]` and
