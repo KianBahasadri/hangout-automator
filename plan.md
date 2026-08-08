@@ -91,7 +91,7 @@ called `pytest`). Do not repeat that. The self-check in P1.2 is mandatory.
 - [x] **P1.3** Add `ruff` to the `dev` dependency group with a `[tool.ruff]`
       section in `pyproject.toml` (line-length 100, target py312). Fix what it
       flags. Add `ruff check` and `ruff format --check` as a CI job.
-- [ ] **P1.4** Create `scripts/verify_plan.sh` — the loop's terminal condition.
+- [x] **P1.4** Create `scripts/verify_plan.sh` — the loop's terminal condition.
       It must exit non-zero unless **all** of these hold, each as a separate
       labelled check with its own message:
       1. `uv run --group dev pytest` exits 0
