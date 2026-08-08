@@ -1,6 +1,6 @@
 # Plan: make Hangout Automator survive growth
 
-Status: **not started**
+Status: **Phase 1 complete** (2026-08-08) — CI, ruff, verify_plan.sh, testing docs. Phase 2 in progress.
 Owner: unattended agent loop
 Baseline commit: `5891d75` (2026-08-08)
 
@@ -159,7 +159,7 @@ exists and fails only on checks 3–6.
 
 ### Tasks
 
-- [ ] **P2.1** Add `alembic`, `psycopg[binary]` to both dependency files. Remove
+- [x] **P2.1** Add `alembic`, `psycopg[binary]` to both dependency files. Remove
       nothing yet. Run `alembic init migrations`; point `env.py` at
       `app.database.Base.metadata` and read the URL from
       `app.config.get_settings().database_url` rather than `alembic.ini`.
