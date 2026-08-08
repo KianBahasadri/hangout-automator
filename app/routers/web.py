@@ -233,11 +233,7 @@ def profiles_new_page(request: Request, db: Session = Depends(get_db)) -> HTMLRe
 def tags_create(name: str = Form(...), db: Session = Depends(get_db)) -> RedirectResponse:
     cleaned = normalize_tag_name(name)
     if cleaned:
-        existing = (
-            db.query(Tag)
-            .filter(Tag.name.ilike(cleaned))
-            .first()
-        )
+        existing = db.query(Tag).filter(Tag.name.ilike(cleaned)).first()
         if not existing:
             db.add(Tag(name=cleaned))
             db.commit()
@@ -254,7 +250,9 @@ def tags_delete(tag_id: RowIdPath, db: Session = Depends(get_db)) -> RedirectRes
 
 
 @router.post("/profiles", response_model=None)
-async def profiles_create(request: Request, db: Session = Depends(get_db)) -> RedirectResponse | HTMLResponse:
+async def profiles_create(
+    request: Request, db: Session = Depends(get_db)
+) -> RedirectResponse | HTMLResponse:
     form = await request.form()
     rows, is_batch = _profile_rows_from_form(form)
     if not rows:
@@ -311,7 +309,9 @@ async def profiles_create(request: Request, db: Session = Depends(get_db)) -> Re
             smokes=_optional_enum_form(row["smokes"], YesNo),
             drive=_optional_enum_form(row["drive"], Drive),
         )
-        tag_ids = [parsed for value in row["tag_ids"] if (parsed := parse_row_id(value)) is not None]
+        tag_ids = [
+            parsed for value in row["tag_ids"] if (parsed := parse_row_id(value)) is not None
+        ]
         allergy_ids = [
             parsed for value in row["allergy_ids"] if (parsed := parse_row_id(value)) is not None
         ]
@@ -498,13 +498,17 @@ def hangout_create(
         try:
             setup_hangout(db, hangout, ids)
         except ValueError:
-            return RedirectResponse(f"/hangouts/{hangout.id}/edit?error=need_profiles", status_code=303)
+            return RedirectResponse(
+                f"/hangouts/{hangout.id}/edit?error=need_profiles", status_code=303
+            )
 
     return RedirectResponse(f"/hangouts/{hangout.id}/edit", status_code=303)
 
 
 @router.get("/hangouts/{hangout_id}/edit", response_class=HTMLResponse)
-def hangout_edit(request: Request, hangout_id: RowIdPath, db: Session = Depends(get_db)) -> HTMLResponse:
+def hangout_edit(
+    request: Request, hangout_id: RowIdPath, db: Session = Depends(get_db)
+) -> HTMLResponse:
     hangout = load_hangout(db, hangout_id)
     if not hangout or hangout.status != HangoutStatus.draft or hangout.deleted_at is not None:
         return RedirectResponse(f"/hangouts/{hangout_id}" if hangout else "/", status_code=303)
@@ -586,7 +590,9 @@ def hangout_update_draft(
         try:
             setup_hangout(db, hangout, ids)
         except ValueError:
-            return RedirectResponse(f"/hangouts/{hangout_id}/edit?error=need_profiles", status_code=303)
+            return RedirectResponse(
+                f"/hangouts/{hangout_id}/edit?error=need_profiles", status_code=303
+            )
         return RedirectResponse(f"/hangouts/{hangout_id}", status_code=303)
 
     if "application/json" in request.headers.get("accept", ""):
@@ -595,7 +601,9 @@ def hangout_update_draft(
 
 
 @router.get("/hangouts/{hangout_id}", response_class=HTMLResponse)
-def hangout_detail(request: Request, hangout_id: RowIdPath, db: Session = Depends(get_db)) -> HTMLResponse:
+def hangout_detail(
+    request: Request, hangout_id: RowIdPath, db: Session = Depends(get_db)
+) -> HTMLResponse:
     hangout = load_hangout(db, hangout_id)
     if not hangout:
         return RedirectResponse("/", status_code=303)

@@ -89,7 +89,9 @@ def test_batch_validation_keeps_entered_values_for_correction(client, db):
 
 
 def test_form_rejects_unusable_phone(client, db):
-    response = client.post("/profiles", data={"name": "Bad", "phone": "abc"}, follow_redirects=False)
+    response = client.post(
+        "/profiles", data={"name": "Bad", "phone": "abc"}, follow_redirects=False
+    )
 
     assert response.status_code == 303
     assert response.headers["location"] == "/profiles?error=bad_phone"

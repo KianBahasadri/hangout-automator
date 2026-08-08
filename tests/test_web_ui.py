@@ -16,7 +16,9 @@ def test_index_new_hangout_button_in_header_row(client):
         r"\s*</div>",
         html,
     )
-    assert header_row is not None, "New hangout button must sit directly beside the 'Hangouts' heading"
+    assert header_row is not None, (
+        "New hangout button must sit directly beside the 'Hangouts' heading"
+    )
 
 
 def test_index_lists_hangouts(client, db):
@@ -119,7 +121,9 @@ def test_draft_hangout_opens_a_prefilled_edit_form(client, db):
     assert 'name="time" type="time" value="19:30"' in html
     assert 'name="duration" type="number" min="0" step="0.5" value="2.5"' in html
     assert 'name="location"' in html and 'value="Central Park"' in html
-    assert 'name="motive" type="text" placeholder="Dinner, game night, beach…" value="Picnic"' in html
+    assert (
+        'name="motive" type="text" placeholder="Dinner, game night, beach…" value="Picnic"' in html
+    )
     assert '<option value="yes" selected>yes</option>' in html
     assert '<option value="no" selected>no</option>' in html
     assert "Bring a blanket" in html

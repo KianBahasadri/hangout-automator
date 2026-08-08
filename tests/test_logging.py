@@ -35,8 +35,7 @@ def test_http_trace_writes_source_body_and_correlation_id(client, tmp_path):
     completed = next(
         event
         for event in reversed(events)
-        if event["event"] == "http.request.completed"
-        and event["data"]["path"] == "/webhooks/sms"
+        if event["event"] == "http.request.completed" and event["data"]["path"] == "/webhooks/sms"
     )
     assert completed["request_id"] == request_id
     assert completed["data"]["source"]["cf_connecting_ip"] == "198.51.100.10"
@@ -61,10 +60,7 @@ def test_http_trace_writes_source_body_and_correlation_id(client, tmp_path):
 
     assert any(
         event["event"] == "database.transaction.committed"
-        and any(
-            change["model"] == "MessageLog"
-            for change in event["data"]["changes"]
-        )
+        and any(change["model"] == "MessageLog" for change in event["data"]["changes"])
         for event in events
     )
 

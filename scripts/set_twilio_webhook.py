@@ -133,7 +133,9 @@ def main() -> int:
     sys.stdout.flush()
 
     if not number.capabilities.get("sms"):
-        print("This number is not SMS-capable; inbound messages will never arrive.", file=sys.stderr)
+        print(
+            "This number is not SMS-capable; inbound messages will never arrive.", file=sys.stderr
+        )
         return 1
 
     # A TwiML app binding takes precedence over SmsUrl, so setting the URL alone
@@ -177,8 +179,7 @@ def main() -> int:
 
     if confirmed.sms_url != target_url:
         print(
-            f"Verification failed: Twilio reports {confirmed.sms_url!r}, "
-            f"expected {target_url!r}",
+            f"Verification failed: Twilio reports {confirmed.sms_url!r}, expected {target_url!r}",
             file=sys.stderr,
         )
         return 1

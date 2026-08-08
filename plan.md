@@ -88,7 +88,7 @@ called `pytest`). Do not repeat that. The self-check in P1.2 is mandatory.
       goes red, then delete the file and confirm green. Record both run URLs in
       the commit message for P1.2. If you cannot reach GitHub, mark `[!]` and
       say so — do not claim the workflow works unverified.
-- [ ] **P1.3** Add `ruff` to the `dev` dependency group with a `[tool.ruff]`
+- [x] **P1.3** Add `ruff` to the `dev` dependency group with a `[tool.ruff]`
       section in `pyproject.toml` (line-length 100, target py312). Fix what it
       flags. Add `ruff check` and `ruff format --check` as a CI job.
 - [ ] **P1.4** Create `scripts/verify_plan.sh` — the loop's terminal condition.

@@ -38,9 +38,7 @@ def _setup_invitee(db, phone="+15551112222"):
     hangout = Hangout(status=HangoutStatus.active, motive="Beach day")
     db.add(hangout)
     db.flush()
-    db.add(
-        HangoutInvite(hangout_id=hangout.id, profile_id=profile.id, status=InviteStatus.pending)
-    )
+    db.add(HangoutInvite(hangout_id=hangout.id, profile_id=profile.id, status=InviteStatus.pending))
     db.commit()
     return profile, hangout
 
@@ -99,11 +97,7 @@ def test_form_with_valid_signature_accepted(client, db, twilio_settings):
     assert response.status_code == 200
     assert "confirmed" in response.text
     db.expire_all()
-    invite = (
-        db.query(HangoutInvite)
-        .filter(HangoutInvite.profile_id == profile.id)
-        .first()
-    )
+    invite = db.query(HangoutInvite).filter(HangoutInvite.profile_id == profile.id).first()
     assert invite.status == InviteStatus.confirmed
 
 

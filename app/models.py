@@ -115,9 +115,7 @@ class Tag(Base):
     name: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-    profiles: Mapped[list[Profile]] = relationship(
-        secondary=profile_tags, back_populates="tags"
-    )
+    profiles: Mapped[list[Profile]] = relationship(secondary=profile_tags, back_populates="tags")
 
 
 class Allergy(Base):
@@ -145,16 +143,12 @@ class Profile(Base):
     # Legacy free-text column; kept for SQLite migration. Prefer allergies relationship.
     food_allergies: Mapped[str | None] = mapped_column(Text, nullable=True)
     drive: Mapped[Drive | None] = mapped_column(
-        _optional_enum_column(
-            Drive, legacy={"can_drive": "yes", "cannot": "no", "can": "yes"}
-        ),
+        _optional_enum_column(Drive, legacy={"can_drive": "yes", "cannot": "no", "can": "yes"}),
         nullable=True,
     )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-    tags: Mapped[list[Tag]] = relationship(
-        secondary=profile_tags, back_populates="profiles"
-    )
+    tags: Mapped[list[Tag]] = relationship(secondary=profile_tags, back_populates="profiles")
     allergies: Mapped[list[Allergy]] = relationship(
         secondary=profile_allergies, back_populates="profiles"
     )
@@ -192,9 +186,7 @@ class Hangout(Base):
     alcohol_involved: Mapped[YesNo | None] = mapped_column(
         _optional_enum_column(YesNo), nullable=True
     )
-    weed_involved: Mapped[YesNo | None] = mapped_column(
-        _optional_enum_column(YesNo), nullable=True
-    )
+    weed_involved: Mapped[YesNo | None] = mapped_column(_optional_enum_column(YesNo), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[HangoutStatus] = mapped_column(
         Enum(HangoutStatus, values_callable=lambda x: [e.value for e in x]),
@@ -212,7 +204,9 @@ class Hangout(Base):
     notify_threshold: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     # Interval digest customization
     notify_interval_hours: Mapped[int] = mapped_column(Integer, default=6, nullable=False)
-    notify_interval_only_if_changed: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    notify_interval_only_if_changed: Mapped[bool] = mapped_column(
+        Boolean, default=True, nullable=False
+    )
     last_digest_fingerprint: Mapped[str | None] = mapped_column(String(512), nullable=True)
     # Threshold alert customization
     notify_on_new_confirm: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
@@ -221,8 +215,12 @@ class Hangout(Base):
     notify_on_ride_needed: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     notify_confirm_goal: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     notify_confirm_goal_sent: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    notify_threshold_cooldown_minutes: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    last_organizer_notify_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    notify_threshold_cooldown_minutes: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False
+    )
+    last_organizer_notify_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     activated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # Soft-delete: set when hidden from the main list (closed hangouts only in UI).
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -238,15 +236,21 @@ class HangoutInvite(Base):
     __tablename__ = "hangout_invites"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    hangout_id: Mapped[int] = mapped_column(ForeignKey("hangouts.id", ondelete="CASCADE"), nullable=False)
-    profile_id: Mapped[int] = mapped_column(ForeignKey("profiles.id", ondelete="CASCADE"), nullable=False)
+    hangout_id: Mapped[int] = mapped_column(
+        ForeignKey("hangouts.id", ondelete="CASCADE"), nullable=False
+    )
+    profile_id: Mapped[int] = mapped_column(
+        ForeignKey("profiles.id", ondelete="CASCADE"), nullable=False
+    )
     status: Mapped[InviteStatus] = mapped_column(
         Enum(InviteStatus, values_callable=lambda x: [e.value for e in x]),
         default=InviteStatus.pending,
         nullable=False,
     )
     followups_sent: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    last_outbound_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_outbound_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     responded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

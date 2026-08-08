@@ -49,7 +49,9 @@ def _valid_twilio_request(request: Request, params: dict | str) -> bool:
     skips the check because the provider is not twilio.
     """
     settings = get_settings()
-    if (settings.sms_provider or "mock").lower().strip() != "twilio" or not settings.twilio_auth_token:
+    if (
+        settings.sms_provider or "mock"
+    ).lower().strip() != "twilio" or not settings.twilio_auth_token:
         return True
     from twilio.request_validator import RequestValidator
 
@@ -79,9 +81,8 @@ async def inbound_sms(request: Request, db: Session = Depends(get_db)) -> Respon
     phone, text = "", ""
     signature_valid: bool | None = None
     signature_required = (
-        (get_settings().sms_provider or "mock").lower().strip() == "twilio"
-        and bool(get_settings().twilio_auth_token)
-    )
+        get_settings().sms_provider or "mock"
+    ).lower().strip() == "twilio" and bool(get_settings().twilio_auth_token)
     if "application/json" in content_type:
         raw = await request.body()
         try:

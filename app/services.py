@@ -76,7 +76,11 @@ def profile_allergies_label(profile: Profile) -> str | None:
 def resolve_organizer_phone(db: Session, hangout: Hangout) -> str | None:
     """Phone for organizer SMS: selected profile, then legacy hangout phone."""
     if hangout.organizer_profile_id:
-        profile = hangout.organizer if hangout.organizer is not None else db.get(Profile, hangout.organizer_profile_id)
+        profile = (
+            hangout.organizer
+            if hangout.organizer is not None
+            else db.get(Profile, hangout.organizer_profile_id)
+        )
         if profile and profile.phone:
             return profile.phone
     if hangout.organizer_phone:
@@ -177,7 +181,11 @@ def evaluate_organizer_threshold_for_reply(
         if hangout.notify_on_allergy and profile_has_allergies(profile):
             reasons.append("dietary restriction")
             high_priority = True
-        if hangout.notify_on_ride_needed and profile.drive is not None and profile.drive.value == "no":
+        if (
+            hangout.notify_on_ride_needed
+            and profile.drive is not None
+            and profile.drive.value == "no"
+        ):
             reasons.append("ride needed")
             high_priority = True
 
@@ -194,9 +202,7 @@ def evaluate_organizer_threshold_for_reply(
     if not reasons:
         return
 
-    ok = maybe_send_organizer_threshold(
-        db, hangout, reasons=reasons, high_priority=high_priority
-    )
+    ok = maybe_send_organizer_threshold(db, hangout, reasons=reasons, high_priority=high_priority)
     if ok and goal_hit:
         hangout.notify_confirm_goal_sent = True
         db.commit()
@@ -326,9 +332,7 @@ def load_hangout(db: Session, hangout_id: int) -> Hangout | None:
             joinedload(Hangout.invites)
             .joinedload(HangoutInvite.profile)
             .joinedload(Profile.allergies),
-            joinedload(Hangout.invites)
-            .joinedload(HangoutInvite.profile)
-            .joinedload(Profile.tags),
+            joinedload(Hangout.invites).joinedload(HangoutInvite.profile).joinedload(Profile.tags),
             joinedload(Hangout.organizer),
         )
         .filter(Hangout.id == hangout_id)
@@ -352,10 +356,10 @@ def setup_hangout(db: Session, hangout: Hangout, profile_ids: list[int] | None =
         )
         raise ValueError("Hangout is closed")
 
-    requested_ids = profile_ids if profile_ids is not None else [i.profile_id for i in hangout.invites]
-    ids = list(
-        dict.fromkeys(pid for pid in requested_ids if db.get(Profile, pid) is not None)
+    requested_ids = (
+        profile_ids if profile_ids is not None else [i.profile_id for i in hangout.invites]
     )
+    ids = list(dict.fromkeys(pid for pid in requested_ids if db.get(Profile, pid) is not None))
     if not ids:
         audit_event(
             "hangout.setup.rejected",
@@ -594,14 +598,19 @@ def _failed_send_count(db: Session, invite_id: int) -> int:
     successful send resets the streak. (The session has autoflush off.)
     """
     db.flush()
-    outbound = (MessageLog.invite_id == invite_id, MessageLog.direction == MessageDirection.outbound)
+    outbound = (
+        MessageLog.invite_id == invite_id,
+        MessageLog.direction == MessageDirection.outbound,
+    )
     last_ok = (
         db.query(func.max(MessageLog.id))
         .filter(*outbound)
         .filter(MessageLog.success.is_(True))
         .scalar()
     )
-    query = db.query(func.count(MessageLog.id)).filter(*outbound).filter(MessageLog.success.is_(False))
+    query = (
+        db.query(func.count(MessageLog.id)).filter(*outbound).filter(MessageLog.success.is_(False))
+    )
     if last_ok is not None:
         query = query.filter(MessageLog.id > last_ok)
     return query.scalar() or 0
@@ -664,7 +673,9 @@ def process_followups(db: Session) -> int:
 
         attempt = inv.followups_sent + 1
         body = craft_followup_message(inv.hangout, inv.profile, attempt)
-        ok, err = send_sms(db, to=inv.profile.phone, body=body, invite_id=inv.id, hangout_id=inv.hangout_id)
+        ok, err = send_sms(
+            db, to=inv.profile.phone, body=body, invite_id=inv.id, hangout_id=inv.hangout_id
+        )
         # Always advance the clock: a number that permanently rejects SMS (an
         # opt-out, say) must not be retried on every scheduler tick.
         inv.last_outbound_at = now

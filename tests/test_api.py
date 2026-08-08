@@ -112,9 +112,7 @@ def test_places_autocomplete_reports_permission_errors(client_no_raise, monkeypa
     monkeypatch.setattr("app.routers.api.get_settings", _places_settings)
     monkeypatch.setattr("app.routers.api._google_places_request", fake_google_request)
 
-    response = client_no_raise.get(
-        "/api/places/autocomplete", params={"input": "central"}
-    )
+    response = client_no_raise.get("/api/places/autocomplete", params={"input": "central"})
 
     assert response.status_code == 503
     assert response.json()["detail"] == "Google Places is not enabled for the configured API key"
@@ -174,9 +172,7 @@ def test_place_details_rejects_path_like_place_ids(client_no_raise, monkeypatch)
 def test_places_routes_are_disabled_without_a_key(client_no_raise, monkeypatch):
     monkeypatch.setattr("app.routers.api.get_settings", _no_places_settings)
 
-    response = client_no_raise.get(
-        "/api/places/autocomplete", params={"input": "central"}
-    )
+    response = client_no_raise.get("/api/places/autocomplete", params={"input": "central"})
 
     assert response.status_code == 404
 

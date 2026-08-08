@@ -105,7 +105,7 @@ def test_authenticated_clerk_request_reaches_app(client, monkeypatch):
     response = client.get("/")
 
     assert response.status_code == 200
-    assert "data-clerk-publishable-key=\"pk_test_example\"" in response.text
+    assert 'data-clerk-publishable-key="pk_test_example"' in response.text
     assert 'id="clerk-user-button"' in response.text
     assert "sk_test_example" not in response.text
     assert "user_test" not in response.text
@@ -113,10 +113,14 @@ def test_authenticated_clerk_request_reaches_app(client, monkeypatch):
 
 def test_clerk_jwt_key_authentication_reaches_app(client, monkeypatch):
     private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-    public_key = private_key.public_key().public_bytes(
-        serialization.Encoding.PEM,
-        serialization.PublicFormat.SubjectPublicKeyInfo,
-    ).decode("ascii")
+    public_key = (
+        private_key.public_key()
+        .public_bytes(
+            serialization.Encoding.PEM,
+            serialization.PublicFormat.SubjectPublicKeyInfo,
+        )
+        .decode("ascii")
+    )
     settings = Settings(
         clerk_enabled=True,
         clerk_publishable_key="pk_test_example",

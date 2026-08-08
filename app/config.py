@@ -74,8 +74,7 @@ class Settings(BaseSettings):
             ]
             if missing:
                 raise ValueError(
-                    "SMS_PROVIDER=twilio requires all Twilio credentials: "
-                    + ", ".join(missing)
+                    "SMS_PROVIDER=twilio requires all Twilio credentials: " + ", ".join(missing)
                 )
         return self
 
@@ -95,9 +94,7 @@ class Settings(BaseSettings):
         if not self.clerk_secret_key.strip() and not self.clerk_jwt_key.strip():
             missing.append("CLERK_SECRET_KEY or CLERK_JWT_KEY")
         if missing:
-            raise ValueError(
-                "CLERK_ENABLED=true requires: " + ", ".join(missing)
-            )
+            raise ValueError("CLERK_ENABLED=true requires: " + ", ".join(missing))
         return self
 
     @property

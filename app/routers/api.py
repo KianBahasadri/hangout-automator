@@ -12,7 +12,15 @@ from sqlalchemy.orm import Session, joinedload
 from app.config import get_settings
 from app.database import get_db
 from app.ids import RowIdPath
-from app.models import Allergy, Hangout, HangoutInvite, HangoutStatus, Profile, Tag, not_null_columns
+from app.models import (
+    Allergy,
+    Hangout,
+    HangoutInvite,
+    HangoutStatus,
+    Profile,
+    Tag,
+    not_null_columns,
+)
 from app.messages import craft_invite_preview
 from app.schemas import (
     AllergyCreate,
@@ -371,7 +379,9 @@ def create_profile(payload: ProfileCreate, db: Session = Depends(get_db)) -> Pro
 
 
 @router.patch("/profiles/{profile_id}", response_model=ProfileOut)
-def update_profile(profile_id: RowIdPath, payload: ProfileUpdate, db: Session = Depends(get_db)) -> Profile:
+def update_profile(
+    profile_id: RowIdPath, payload: ProfileUpdate, db: Session = Depends(get_db)
+) -> Profile:
     profile = db.get(Profile, profile_id)
     if not profile:
         raise HTTPException(404, "Profile not found")
@@ -384,7 +394,11 @@ def update_profile(profile_id: RowIdPath, payload: ProfileUpdate, db: Session = 
         data["phone"] = normalize_phone(data["phone"])
         if not is_valid_phone(data["phone"]):
             raise HTTPException(400, "Phone number is not usable")
-        clash = db.query(Profile).filter(Profile.phone == data["phone"], Profile.id != profile_id).first()
+        clash = (
+            db.query(Profile)
+            .filter(Profile.phone == data["phone"], Profile.id != profile_id)
+            .first()
+        )
         if clash:
             raise HTTPException(400, "A profile with this phone already exists")
     if "name" in data:
@@ -450,9 +464,7 @@ def create_hangout(payload: HangoutCreate, db: Session = Depends(get_db)) -> Han
         notify_enabled=payload.notify_enabled,
         notify_interval=payload.notify_enabled and payload.notify_interval,
         notify_threshold=payload.notify_enabled and payload.notify_threshold,
-        notify_interval_hours=clamp_choice(
-            payload.notify_interval_hours, INTERVAL_HOUR_OPTIONS, 6
-        ),
+        notify_interval_hours=clamp_choice(payload.notify_interval_hours, INTERVAL_HOUR_OPTIONS, 6),
         notify_interval_only_if_changed=payload.notify_interval_only_if_changed,
         notify_on_new_confirm=payload.notify_on_new_confirm,
         notify_on_decline=payload.notify_on_decline,
@@ -481,7 +493,9 @@ def get_hangout(hangout_id: RowIdPath, db: Session = Depends(get_db)) -> Hangout
 
 
 @router.patch("/hangouts/{hangout_id}", response_model=HangoutOut)
-def update_hangout(hangout_id: RowIdPath, payload: HangoutUpdate, db: Session = Depends(get_db)) -> Hangout:
+def update_hangout(
+    hangout_id: RowIdPath, payload: HangoutUpdate, db: Session = Depends(get_db)
+) -> Hangout:
     hangout = db.get(Hangout, hangout_id)
     if not hangout:
         raise HTTPException(404, "Hangout not found")
@@ -510,7 +524,10 @@ def update_hangout(hangout_id: RowIdPath, payload: HangoutUpdate, db: Session = 
         data["notify_confirm_goal"] = clamp_choice(
             data["notify_confirm_goal"], CONFIRM_GOAL_OPTIONS, hangout.notify_confirm_goal or 0
         )
-    if "notify_threshold_cooldown_minutes" in data and data["notify_threshold_cooldown_minutes"] is not None:
+    if (
+        "notify_threshold_cooldown_minutes" in data
+        and data["notify_threshold_cooldown_minutes"] is not None
+    ):
         data["notify_threshold_cooldown_minutes"] = clamp_choice(
             data["notify_threshold_cooldown_minutes"],
             COOLDOWN_MINUTE_OPTIONS,

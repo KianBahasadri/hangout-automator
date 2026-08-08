@@ -236,11 +236,7 @@ def _migrate_legacy_food_allergies() -> None:
                 continue
             linked: list[Allergy] = []
             for name in names:
-                allergy = (
-                    db.query(Allergy)
-                    .filter(Allergy.name.ilike(name))
-                    .first()
-                )
+                allergy = db.query(Allergy).filter(Allergy.name.ilike(name)).first()
                 if not allergy:
                     allergy = Allergy(name=name)
                     db.add(allergy)

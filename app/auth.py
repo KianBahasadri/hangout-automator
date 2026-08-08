@@ -27,9 +27,7 @@ def _clerk_client(secret_key: str) -> Clerk:
     return Clerk(bearer_auth=secret_key or None)
 
 
-async def authenticate_clerk_request(
-    request: Request, settings: Settings
-) -> RequestState:
+async def authenticate_clerk_request(request: Request, settings: Settings) -> RequestState:
     """Verify the request's Clerk session without blocking the event loop."""
     options = AuthenticateRequestOptions(
         secret_key=settings.clerk_secret_key.strip() or None,
@@ -76,9 +74,7 @@ def _authentication_failure(request: Request) -> Response:
 class ClerkAuthMiddleware(BaseHTTPMiddleware):
     """Require Clerk for the app while leaving integrations public as needed."""
 
-    async def dispatch(
-        self, request: Request, call_next: RequestResponseEndpoint
-    ) -> Response:
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         settings = get_settings()
         if not settings.clerk_enabled or _is_public_path(request.url.path, settings):
             return await call_next(request)
@@ -93,13 +89,17 @@ class ClerkAuthMiddleware(BaseHTTPMiddleware):
                 "Clerk request verification failed",
                 extra={"path": request.url.path},
             )
-            return JSONResponse(
-                {"detail": "Authentication service unavailable"},
-                status_code=503,
-            ) if request.url.path.startswith("/api/") else Response(
-                "Authentication service unavailable",
-                status_code=503,
-                media_type="text/plain",
+            return (
+                JSONResponse(
+                    {"detail": "Authentication service unavailable"},
+                    status_code=503,
+                )
+                if request.url.path.startswith("/api/")
+                else Response(
+                    "Authentication service unavailable",
+                    status_code=503,
+                    media_type="text/plain",
+                )
             )
 
         if not request_state.is_authenticated:

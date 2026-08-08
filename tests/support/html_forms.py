@@ -92,7 +92,9 @@ class _FormParser(HTMLParser):
             kind = a.get("type", "text").lower()
             name = a.get("name", "")
             if kind == "submit":
-                self._form.submits.append(SubmitControl(name or None, a.get("value", ""), a.get("value", "")))
+                self._form.submits.append(
+                    SubmitControl(name or None, a.get("value", ""), a.get("value", ""))
+                )
             elif kind in TOGGLE_INPUT_TYPES:
                 if "checked" in a:
                     self._add(name, a.get("value", "on"))
@@ -101,7 +103,11 @@ class _FormParser(HTMLParser):
         elif tag == "button":
             # A <button> with no type attribute submits the form.
             if a.get("type", "submit").lower() == "submit":
-                self._button = {"name": a.get("name") or None, "value": a.get("value", ""), "text": []}
+                self._button = {
+                    "name": a.get("name") or None,
+                    "value": a.get("value", ""),
+                    "text": [],
+                }
         elif tag == "select":
             self._select = {"name": a.get("name", ""), "selected": None, "first": None}
         elif tag == "option" and self._select is not None:

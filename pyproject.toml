@@ -27,6 +27,7 @@ dev = "app.dev:main"
 [dependency-groups]
 dev = [
     "pytest>=8.3,<9",
+    "ruff==0.11.10",
 ]
 
 [tool.pytest.ini_options]
@@ -36,6 +37,10 @@ addopts = "-q --strict-markers --strict-config"
 # client quietly not sending a form, say) turns a passing test into a test of
 # nothing. Add a targeted "ignore::..." entry when a dependency forces one.
 filterwarnings = ["error"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
 
 [tool.setuptools.packages.find]
 include = ["app*"]

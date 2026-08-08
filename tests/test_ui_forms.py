@@ -77,7 +77,9 @@ def test_the_expected_forms_are_found(client, sample_data):
         for form in forms_in(client.get(url).text)
     }
 
-    assert EXPECTED_ACTIONS <= actions, f"forms found on no page: {sorted(EXPECTED_ACTIONS - actions)}"
+    assert EXPECTED_ACTIONS <= actions, (
+        f"forms found on no page: {sorted(EXPECTED_ACTIONS - actions)}"
+    )
 
 
 @pytest.mark.parametrize("label", PAGE_LABELS)

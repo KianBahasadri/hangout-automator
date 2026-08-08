@@ -25,7 +25,11 @@ class TwilioSmsProvider(SmsProvider):
     def __init__(self, settings: Settings) -> None:
         from twilio.rest import Client
 
-        if not settings.twilio_account_sid or not settings.twilio_auth_token or not settings.twilio_from_number:
+        if (
+            not settings.twilio_account_sid
+            or not settings.twilio_auth_token
+            or not settings.twilio_from_number
+        ):
             raise ValueError("Twilio credentials incomplete (SID, token, from number required)")
         self._client = Client(settings.twilio_account_sid, settings.twilio_auth_token)
         self._from = settings.twilio_from_number
@@ -56,7 +60,9 @@ def get_sms_provider(settings: Settings | None = None) -> SmsProvider:
     cached = _provider_cache.get(key)
     if cached is not None:
         return cached
-    instance: SmsProvider = TwilioSmsProvider(settings) if provider == "twilio" else MockSmsProvider()
+    instance: SmsProvider = (
+        TwilioSmsProvider(settings) if provider == "twilio" else MockSmsProvider()
+    )
     _provider_cache[key] = instance
     return instance
 

@@ -138,9 +138,7 @@ def _owned_handlers() -> set[logging.Handler]:
     for logger_name in _FILE_LOGGERS:
         logger = logging.getLogger(logger_name)
         handlers.update(
-            handler
-            for handler in logger.handlers
-            if getattr(handler, _FILE_HANDLER_MARKER, False)
+            handler for handler in logger.handlers if getattr(handler, _FILE_HANDLER_MARKER, False)
         )
     return handlers
 
@@ -213,9 +211,7 @@ def configure_logging(settings: Any) -> None:
             if file_handler not in logger.handlers:
                 logger.addHandler(file_handler)
 
-        if not any(
-            getattr(handler, _CONSOLE_HANDLER_MARKER, False) for handler in root.handlers
-        ):
+        if not any(getattr(handler, _CONSOLE_HANDLER_MARKER, False) for handler in root.handlers):
             console_handler = logging.StreamHandler(sys.stderr)
             setattr(console_handler, _CONSOLE_HANDLER_MARKER, True)
             console_handler.setLevel(level)
@@ -284,11 +280,7 @@ def _header_map(headers: list[tuple[bytes, bytes]]) -> dict[str, str]:
 
 
 def _safe_headers(headers: dict[str, str]) -> dict[str, str]:
-    return {
-        name: value
-        for name, value in headers.items()
-        if name not in _SENSITIVE_HEADERS
-    }
+    return {name: value for name, value in headers.items() if name not in _SENSITIVE_HEADERS}
 
 
 def _scope_request_data(scope: Scope) -> dict[str, Any]:
@@ -320,9 +312,7 @@ def _scope_request_data(scope: Scope) -> dict[str, Any]:
         "host": headers.get("host"),
         "content_type": headers.get("content-type"),
         "headers": _safe_headers(headers),
-        "sensitive_header_names": sorted(
-            name for name in headers if name in _SENSITIVE_HEADERS
-        ),
+        "sensitive_header_names": sorted(name for name in headers if name in _SENSITIVE_HEADERS),
     }
 
 
