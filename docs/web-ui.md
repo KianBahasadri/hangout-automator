@@ -102,15 +102,20 @@ drive/allergies/drinks/smokes, follow-up count), setup/re-invite form, end
 action. **Closed** hangouts show **Delete hangout** (soft-delete). Soft-deleted
 hangouts show a restore control instead of setup/end.
 
+Home list, hangout detail, and deleted-hangouts list humanize `day_date` /
+`time` / `duration` with the same helpers as SMS (`August 8, 2026` · `7:00 PM` ·
+`3 hours`). Storage remains ISO / raw numeric duration.
+
 Home list and `GET /api/hangouts` omit rows with `deleted_at` set.
 
 ## Settings
 
 Dietary Restrictions catalog (same pill list pattern as tags; defaults
-`meat` and `pork` are seeded on startup). **Deleted hangouts** lists soft-deleted
-rows with motive search (`?q=`). **SMS simulator** card links to
-`GET /settings/sms-simulator`, which renders sample invite / follow-up /
-RSVP / INFO / organizer copy in phone-style bubbles (nothing is sent).
+`meat` and `pork` are seeded once into an empty catalog — deletions persist).
+**Deleted hangouts** lists soft-deleted rows with motive search (`?q=`).
+**SMS simulator** card links to `GET /settings/sms-simulator`, which renders
+sample invite / follow-up / RSVP / INFO / organizer copy in phone-style
+bubbles (nothing is sent).
 Logs card links to `GET /settings/logs`, which returns the active
 `LOG_FILE` as an attachment (404 if the file does not exist yet). See
 [logging.md](./logging.md).

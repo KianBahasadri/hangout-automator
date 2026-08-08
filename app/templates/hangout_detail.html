@@ -12,9 +12,9 @@
       {% if hangout.motive %}{{ hangout.motive }}{% else %}Hangout #{{ hangout.id }}{% endif %}
     </h1>
     <p class="lead" style="margin-bottom:0.25rem;">
-      {% if hangout.day_date %}{{ hangout.day_date }}{% endif %}
-      {% if hangout.time %} · {{ hangout.time }}{% endif %}
-      {% if hangout.duration %} · {{ hangout.duration }}{% endif %}
+      {% if hangout.day_date %}{{ hangout.day_date|day_date }}{% endif %}
+      {% if hangout.time %} · {{ hangout.time|time_fmt }}{% endif %}
+      {% if hangout.duration %} · {{ hangout.duration|duration }}{% endif %}
       {% if hangout.location %} · {{ hangout.location }}{% endif %}
       {% if not hangout.day_date and not hangout.time and not hangout.location %}<span class="muted">No date/time set</span>{% endif %}
     </p>

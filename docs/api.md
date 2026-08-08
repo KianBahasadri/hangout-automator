@@ -11,7 +11,7 @@ JSON routes in `app/routers/api.py`, prefix `/api`. Schemas in `app/schemas.py`.
 | GET | `/api/tags` | List tags |
 | POST | `/api/tags` | 201; normalized name; case-insensitive unique |
 | DELETE | `/api/tags/{id}` | 204 |
-| GET | `/api/allergies` | List dietary restrictions (catalog defaults: meat, pork) |
+| GET | `/api/allergies` | List dietary restrictions (fresh catalogs seed meat, pork once) |
 | POST | `/api/allergies` | 201; same uniqueness rules as tags |
 | DELETE | `/api/allergies/{id}` | 204 |
 | GET | `/api/profiles` | Includes `tags` and `allergies` |

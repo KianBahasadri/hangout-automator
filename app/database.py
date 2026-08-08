@@ -125,8 +125,9 @@ def get_db() -> Generator[Session, None, None]:
         db.close()
 
 
-# Default dietary-restriction catalog entries (seeded on every init if missing).
+# Default dietary-restriction catalog entries (seeded once for an empty catalog).
 DEFAULT_DIETARY_RESTRICTIONS = ("meat", "pork")
+_DIETARY_DEFAULTS_SEEDED_FLAG = "dietary_defaults_seeded"
 
 
 def init_db() -> None:
@@ -134,6 +135,7 @@ def init_db() -> None:
 
     Base.metadata.create_all(bind=engine)
     _ensure_sqlite_columns()
+    _ensure_schema_flags_table()
     _migrate_legacy_food_allergies()
     _ensure_default_dietary_restrictions()
 
@@ -143,22 +145,65 @@ def _table_cols(conn, table: str) -> set[str]:  # type: ignore[no-untyped-def]
     return {row[1] for row in rows}
 
 
+def _ensure_schema_flags_table() -> None:
+    """Lightweight key/value flags for one-time bootstrap steps."""
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS schema_flags (
+                    key VARCHAR(64) PRIMARY KEY NOT NULL,
+                    value VARCHAR(256) NOT NULL
+                )
+                """
+            )
+        )
+
+
+def _schema_flag_get(key: str) -> str | None:
+    with engine.connect() as conn:
+        row = conn.execute(
+            text("SELECT value FROM schema_flags WHERE key = :key"),
+            {"key": key},
+        ).fetchone()
+    return row[0] if row else None
+
+
+def _schema_flag_set(key: str, value: str) -> None:
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                INSERT INTO schema_flags (key, value) VALUES (:key, :value)
+                ON CONFLICT(key) DO UPDATE SET value = excluded.value
+                """
+            ),
+            {"key": key, "value": value},
+        )
+
+
 def _ensure_default_dietary_restrictions() -> None:
-    """Ensure default dietary-restriction catalog rows exist (idempotent)."""
+    """Seed default dietary restrictions once; user deletions then persist.
+
+    Fresh / empty catalogs get ``meat`` and ``pork``. After the one-time seed
+    flag is set, missing defaults are not re-created on startup (PROF-8b).
+    """
     from app.models import Allergy
+
+    if _schema_flag_get(_DIETARY_DEFAULTS_SEEDED_FLAG):
+        return
 
     db = SessionLocal()
     try:
-        added = False
-        for name in DEFAULT_DIETARY_RESTRICTIONS:
-            exists = db.query(Allergy).filter(Allergy.name.ilike(name)).first()
-            if not exists:
+        count = db.query(Allergy).count()
+        if count == 0:
+            for name in DEFAULT_DIETARY_RESTRICTIONS:
                 db.add(Allergy(name=name))
-                added = True
-        if added:
             db.commit()
     finally:
         db.close()
+
+    _schema_flag_set(_DIETARY_DEFAULTS_SEEDED_FLAG, "1")
 
 
 def _migrate_legacy_food_allergies() -> None:

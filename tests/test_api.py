@@ -44,6 +44,43 @@ def test_default_dietary_restrictions_are_seeded(client_no_raise):
     assert "pork" in names
 
 
+def test_deleted_default_dietary_restriction_stays_gone(client_no_raise):
+    """Deleting a default must not come back on the next init_db()."""
+    from app.database import init_db
+
+    listed = client_no_raise.get("/api/allergies")
+    assert listed.status_code == 200
+    meat = next(row for row in listed.json() if row["name"].lower() == "meat")
+
+    deleted = client_no_raise.delete(f"/api/allergies/{meat['id']}")
+    assert deleted.status_code == 204
+
+    init_db()
+
+    after = client_no_raise.get("/api/allergies")
+    assert after.status_code == 200
+    names = {row["name"].lower() for row in after.json()}
+    assert "meat" not in names
+    assert "pork" in names
+
+
+def test_preview_invite_sms_formats_duration_with_hours(client_no_raise):
+    response = client_no_raise.post(
+        "/api/sms/preview-invite",
+        json={
+            "recipient_name": "Sam",
+            "motive": "Dinner",
+            "day_date": "2026-08-15",
+            "time": "19:00",
+            "duration": "3",
+            "location": "Sam's place",
+        },
+    )
+    assert response.status_code == 200
+    body = response.json()["body"]
+    assert "When: August 15, 2026 at 7:00 PM (3 hours)" in body
+
+
 def test_empty_hangout_payload_creates_a_draft(client_no_raise):
     hangout = _create_hangout(client_no_raise)
 

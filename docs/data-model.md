@@ -20,7 +20,10 @@ Optional enums use a string `TypeDecorator`: empty string and `"unknown"` bind/r
 
 Catalog rows: `id`, unique `name` (64), `created_at`. Dietary restrictions (table/API name: allergies) are managed in Settings; tags on the Profiles page.
 
-Default catalog seeds on `init_db()` (idempotent, case-insensitive): `meat`, `pork`.
+Default catalog seeds once on `init_db()` when the allergies table is empty and
+the one-time `schema_flags.dietary_defaults_seeded` flag is unset: `meat`,
+`pork`. After that flag is set, deleting restrictions (including the defaults)
+persists across restarts.
 
 ### Association tables
 
@@ -84,6 +87,7 @@ Values outside these sets are clamped to the defaults used at create time.
 2. **`_rebuild_profiles_if_needed`** — recreate `profiles` if `drinks`/`smokes` were `NOT NULL` or `car_access` still exists (SQLite cannot drop nullability in place). It runs on its **own autocommit connection**, outside the surrounding `engine.begin()` block, because SQLite silently ignores `PRAGMA foreign_keys` inside a transaction: with enforcement left on, `DROP TABLE profiles` does an implicit `DELETE FROM` that cascades into invites, tag links, and allergy links and destroys the data the migration exists to preserve. The table swap still gets its own explicit `BEGIN`/`COMMIT` so a crash mid-rebuild cannot leave the database with no `profiles` table, and the pool is disposed afterwards. Regression coverage: `tests/test_migrations.py`
 3. **`_rebuild_hangouts_if_needed`** — same pattern for `hangouts` when `alcohol_involved` / `weed_involved` are still `NOT NULL` (legacy schema). Blank optional enums are stored as `NULL`; without this rebuild, empty create/setup hits a SQLite integrity error. Dependent invite/message rows are preserved with foreign keys off during the swap.
 4. **`_migrate_legacy_food_allergies`** — split comma/semicolon free-text into `Allergy` rows + M2M links, clear legacy text
-5. **`_ensure_default_dietary_restrictions`** — seed `meat` and `pork` if missing
+5. **`_ensure_schema_flags_table`** — `schema_flags` key/value table for one-time bootstrap markers
+6. **`_ensure_default_dietary_restrictions`** — seed `meat` and `pork` once into an empty catalog, then set `dietary_defaults_seeded` so user deletions stick
 
 Connection PRAGMAs (SQLite): `foreign_keys=ON`, `journal_mode=WAL`, `busy_timeout=5000`.

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from datetime import datetime
 from types import SimpleNamespace
 from typing import Any
@@ -15,7 +16,7 @@ def _yn(value: YesNo | None) -> str | None:
     return None
 
 
-def format_day_date_for_sms(value: str | None) -> str | None:
+def format_day_date(value: str | None) -> str | None:
     """ISO-ish dates → long form (e.g. August 8, 2026). Unknown strings pass through."""
     if value is None:
         return None
@@ -31,7 +32,7 @@ def format_day_date_for_sms(value: str | None) -> str | None:
     return raw
 
 
-def format_time_for_sms(value: str | None) -> str | None:
+def format_time(value: str | None) -> str | None:
     """24h / ISO times → 12-hour (e.g. 7:00 PM). Unknown strings pass through."""
     if value is None:
         return None
@@ -47,6 +48,35 @@ def format_time_for_sms(value: str | None) -> str | None:
         except ValueError:
             continue
     return raw
+
+
+def format_duration(value: str | None) -> str | None:
+    """Bare numeric durations → hours label (e.g. 3 → 3 hours). Other text passes through."""
+    if value is None:
+        return None
+    raw = str(value).strip()
+    if not raw:
+        return None
+    try:
+        hours = float(raw)
+    except ValueError:
+        return raw
+    # Reject nan/inf — float() accepts them but int() raises.
+    if not math.isfinite(hours):
+        return raw
+    if hours == int(hours):
+        number = str(int(hours))
+        whole = int(hours)
+    else:
+        number = str(hours)
+        whole = None
+    unit = "hour" if whole == 1 else "hours"
+    return f"{number} {unit}"
+
+
+# Back-compat aliases (SMS was the first consumer).
+format_day_date_for_sms = format_day_date
+format_time_for_sms = format_time
 
 
 def _reply_options_footer(*, include_info: bool = True) -> str:
@@ -72,14 +102,15 @@ def format_hangout_summary(hangout: Hangout) -> str:
         lines.append(hangout.motive)
 
     when_parts: list[str] = []
-    day = format_day_date_for_sms(hangout.day_date)
+    day = format_day_date(hangout.day_date)
     if day:
         when_parts.append(day)
-    time = format_time_for_sms(hangout.time)
+    time = format_time(hangout.time)
     if time:
         when_parts.append(f"at {time}")
-    if hangout.duration:
-        when_parts.append(f"({hangout.duration})")
+    duration = format_duration(hangout.duration)
+    if duration:
+        when_parts.append(f"({duration})")
     if when_parts:
         lines.append("When: " + " ".join(when_parts))
 

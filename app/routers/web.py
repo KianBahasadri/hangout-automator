@@ -23,7 +23,7 @@ from app.models import (
     Tag,
     YesNo,
 )
-from app.messages import preview_message_catalog
+from app.messages import format_day_date, format_duration, format_time, preview_message_catalog
 from app.services import (
     COOLDOWN_MINUTE_OPTIONS,
     CONFIRM_GOAL_OPTIONS,
@@ -42,6 +42,9 @@ router = APIRouter(tags=["web"])
 # Resolved from this file so the app does not depend on the working directory.
 templates = Jinja2Templates(directory=str(Path(__file__).resolve().parents[1] / "templates"))
 templates.env.filters["phone"] = format_phone
+templates.env.filters["day_date"] = format_day_date
+templates.env.filters["time_fmt"] = format_time
+templates.env.filters["duration"] = format_duration
 
 
 def _optional_enum_form(value: str | None, enum_cls):  # type: ignore[no-untyped-def]

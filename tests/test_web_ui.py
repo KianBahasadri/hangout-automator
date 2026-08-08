@@ -38,6 +38,34 @@ def test_index_lists_hangouts(client, db):
     assert f"#{active_hangout.id}" not in response.text
 
 
+def test_hangout_ui_humanizes_date_time_duration(client, db):
+    from app.models import Hangout, HangoutStatus
+
+    hangout = Hangout(
+        status=HangoutStatus.draft,
+        motive="Dinner",
+        day_date="2026-08-15",
+        time="19:00",
+        duration="3",
+    )
+    db.add(hangout)
+    db.commit()
+
+    index = client.get("/")
+    assert index.status_code == 200
+    assert "August 15, 2026" in index.text
+    assert "7:00 PM" in index.text
+    assert "3 hours" in index.text
+    assert "2026-08-15" not in index.text
+    assert "19:00" not in index.text
+
+    detail = client.get(f"/hangouts/{hangout.id}")
+    assert detail.status_code == 200
+    assert "August 15, 2026" in detail.text
+    assert "7:00 PM" in detail.text
+    assert "3 hours" in detail.text
+
+
 def test_active_hangout_uses_end_label(client, sample_data):
     response = client.get(f"/hangouts/{sample_data['hangouts']['active']}")
 

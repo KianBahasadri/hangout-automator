@@ -30,11 +30,16 @@ def db():
 @pytest.fixture(autouse=True)
 def _clean_tables(db):
     yield
+    from sqlalchemy import text
+
     from app.database import Base, engine
 
     with engine.begin() as conn:
         for table in reversed(Base.metadata.sorted_tables):
             conn.execute(table.delete())
+        # One-time bootstrap flags (not an ORM model); clear so the next
+        # init_db() re-seeds default dietary restrictions for empty catalogs.
+        conn.execute(text("DELETE FROM schema_flags"))
 
 
 @pytest.fixture

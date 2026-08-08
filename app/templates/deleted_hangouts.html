@@ -32,9 +32,9 @@
           {% if h.motive %}{{ h.motive }}{% else %}<span class="muted">Untitled hangout</span>{% endif %}
         </a>
         <div class="muted">
-          {% if h.day_date %}{{ h.day_date }}{% endif %}
-          {% if h.time %} · {{ h.time }}{% endif %}
-          {% if h.duration %} · {{ h.duration }}{% endif %}
+          {% if h.day_date %}{{ h.day_date|day_date }}{% endif %}
+          {% if h.time %} · {{ h.time|time_fmt }}{% endif %}
+          {% if h.duration %} · {{ h.duration|duration }}{% endif %}
           {% if h.location %} · {{ h.location }}{% endif %}
         </div>
         {% if h.deleted_at %}
