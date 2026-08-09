@@ -398,3 +398,12 @@ def test_closed_hangout_cannot_be_set_up_again(client_no_raise):
 
     assert response.status_code == 400
     assert response.json() == {"detail": "Hangout is closed"}
+
+
+def test_deep_health_reports_database_migrations_and_worker(client_no_raise, db):
+    response = client_no_raise.get("/api/health/deep")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["database"] == "ok"
+    assert payload["migrations"]["up_to_date"] is True
+    assert payload["worker"]["status"] in ("ok", "stale", "no_tick_observed")

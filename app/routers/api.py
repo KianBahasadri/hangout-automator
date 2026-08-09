@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import json
 import logging
 import re
+from pathlib import Path
 from urllib.parse import quote
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Response
 from fastapi import Query
+from sqlalchemy import text
 from sqlalchemy.orm import Session, joinedload
 
 from app.config import get_settings
@@ -260,6 +263,78 @@ async def places_details(
 @router.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+def _worker_last_tick_age() -> dict:
+    """Age of the last background_job.completed audit event, read off the tail
+    of the JSONL audit stream (the worker ticks every 5 minutes, so the latest
+    completed event is always near the end of the file)."""
+    from datetime import datetime, timezone
+
+    path = Path(get_settings().log_file).expanduser()
+    latest: float | None = None
+    if path.is_file() and path.stat().st_size:
+        # Only the tail: the file rotates at 50 MB and the last tick is recent.
+        with path.open(encoding="utf-8", errors="replace") as fh:
+            if path.stat().st_size > 262_144:
+                fh.seek(path.stat().st_size - 262_144)
+                fh.readline()  # drop the partial first line
+            for line in fh:
+                try:
+                    event = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if event.get("event") == "background_job.completed":
+                    timestamp = event.get("timestamp")
+                    if timestamp:
+                        try:
+                            latest = datetime.fromisoformat(timestamp).timestamp()
+                        except ValueError:
+                            continue
+    if latest is None:
+        return {"last_tick": None, "age_seconds": None, "status": "no_tick_observed"}
+    age = max(0.0, datetime.now(timezone.utc).timestamp() - latest)
+    return {
+        "last_tick": datetime.fromtimestamp(latest, timezone.utc).isoformat(),
+        "age_seconds": round(age, 1),
+        "status": "ok" if age < 3600 else "stale",
+    }
+
+
+@router.get("/health/deep")
+def health_deep(db: Session = Depends(get_db)) -> dict:
+    """Authenticated deep health: database reachability, pending Alembic
+    revision vs head, and worker last-tick age. The shallow /api/health stays
+    public for the Cloudflare probe; this one is protected by the auth
+    middleware when Clerk is enabled."""
+    checks: dict = {}
+
+    try:
+        db.execute(text("SELECT 1"))
+        checks["database"] = "ok"
+    except Exception as exc:  # noqa: BLE001 — report any failure shape
+        checks["database"] = f"error: {type(exc).__name__}"
+
+    try:
+        from alembic.config import Config
+        from alembic.runtime.migration import MigrationContext
+        from alembic.script import ScriptDirectory
+
+        script = ScriptDirectory.from_config(
+            Config(str(Path(__file__).resolve().parents[2] / "alembic.ini"))
+        )
+        heads = script.get_heads()
+        current = MigrationContext.configure(db.connection()).get_current_revision()
+        checks["migrations"] = {
+            "current": current,
+            "head": heads[0] if heads else None,
+            "up_to_date": bool(heads) and current == heads[0],
+        }
+    except Exception as exc:  # noqa: BLE001
+        checks["migrations"] = f"error: {type(exc).__name__}"
+
+    checks["worker"] = _worker_last_tick_age()
+    return checks
 
 
 @router.post("/sms/preview-invite", response_model=InviteSmsPreviewOut)

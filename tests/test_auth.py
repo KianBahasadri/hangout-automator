@@ -180,3 +180,18 @@ def test_clerk_verifier_exception_fails_closed(client, monkeypatch):
     response = client.get("/profiles")
 
     assert response.status_code == 503
+
+
+def test_deep_health_requires_auth_but_shallow_stays_public(client, monkeypatch):
+    """The Cloudflare probe hits /api/health unauthenticated; the deep variant
+    is protected like every other /api route."""
+    from tests.test_tenant_isolation import _clerk_settings
+
+    settings = _clerk_settings()
+    monkeypatch.setattr("app.auth.get_settings", lambda: settings)
+
+    shallow = client.get("/api/health")
+    assert shallow.status_code == 200
+
+    deep = client.get("/api/health/deep")
+    assert deep.status_code == 401
