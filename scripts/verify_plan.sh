@@ -108,6 +108,20 @@ else
     checks_pass=0
 fi
 
+# --- Check 7: advisory lock regression test exists and passes ---------------
+section "Check 7: advisory lock regression test"
+if [ -f tests/test_advisory_lock.py ]; then
+    if uv run --group dev pytest tests/test_advisory_lock.py; then
+        echo "PASS: advisory lock regression test exists and passes."
+    else
+        echo "FAIL: tests/test_advisory_lock.py exists but fails."
+        checks_pass=0
+    fi
+else
+    echo "FAIL: tests/test_advisory_lock.py missing (post-plan audit F3)."
+    checks_pass=0
+fi
+
 # --- Summary ----------------------------------------------------------------
 section "Result"
 if [ "$checks_pass" -eq 1 ]; then

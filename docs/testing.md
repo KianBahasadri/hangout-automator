@@ -97,11 +97,12 @@ non-zero unless **all** of these hold, each as a separate labelled check:
 5. no `sqlite`/`PRAGMA` reference anywhere in `app/`
 6. `tests/test_tenant_isolation.py` and `tests/test_worker_concurrency.py`
    both exist and pass
+7. `tests/test_advisory_lock.py` exists and passes
 
-Checks 3–6 depend on later phases of the plan and are expected to fail until
-those land. Check 3 writes to a database, so the script refuses to run (exit 2)
-unless `TEST_DATABASE_URL` is set or `DATABASE_URL` points at localhost — never
-point it at anything else.
+Checks 3–7 depend on later phases of the plan (and, for 7, the post-plan
+audit) and are expected to fail until those land. Check 3 writes to a
+database, so the script refuses to run (exit 2) unless `TEST_DATABASE_URL` is
+set or `DATABASE_URL` points at localhost — never point it at anything else.
 
 Terraform has its own checks (`terraform fmt -check`, `terraform validate`);
 they are an operator step, described in [deploy.md](./deploy.md).

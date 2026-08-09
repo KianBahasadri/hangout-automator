@@ -30,6 +30,18 @@ insufficient:
    `background_job.skipped_locked`. This stops two workers from running the
    same sweep at the same moment — but it is **not** held across a
    crash-and-restart within the same tick, so alone it can still double-send.
+
+   The lock is acquired and released on a **dedicated connection**
+   (`engine.connect()` inside `advisory_lock`) held open for the whole tick —
+   never on the sweep session's own connection. The sweeps commit mid-tick;
+   a lock taken on the sweep session's connection would be stranded when the
+   first commit returns that connection to the pool: another session checks
+   it out, the unlock runs on a different connection, silently fails, and
+   the lock survives for the life of the pooled connection. That is liveness,
+   not safety — the row claiming below still prevents double-sends — but a
+   stranded lock starves every later tick. `pg_try_advisory_xact_lock` was
+   rejected because it releases at the first COMMIT inside the sweep, which
+   is exactly what must not happen.
 2. **`FOR UPDATE SKIP LOCKED` row claiming** (`app/services.py`) — inside the
    sweep, each candidate row is claimed in its own short transaction: a worker
    that loses the claim walks away. The row's clock (`last_outbound_at` for
