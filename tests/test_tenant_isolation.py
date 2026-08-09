@@ -29,6 +29,15 @@ from tests.support.routes import ALL_ROUTES, fill_path
 
 _IDS_IN_BODY = ("profile_ids", "tag_ids", "allergy_ids", "organizer_profile_id")
 
+# Which row a web POST route's id path parameter refers to, for the
+# foreign-row-survives check below.
+_MODEL_FOR_ID_PARAM = {
+    "profile_id": Profile,
+    "tag_id": Tag,
+    "allergy_id": Allergy,
+    "hangout_id": Hangout,
+}
+
 
 def _clerk_settings() -> Settings:
     return Settings(
@@ -167,7 +176,7 @@ def _b_strings(data_b: dict) -> set[str]:
     "spec", [spec for spec in ALL_ROUTES if spec.path_params], ids=lambda s: s.label
 )
 def test_foreign_ids_never_answer_200_or_leak_data(
-    client, monkeypatch, workspace_a_data, workspace_b_data, spec
+    db, client, monkeypatch, workspace_a_data, workspace_b_data, spec
 ):
     """Every route that takes an id, hit with workspace B's ids as user A."""
     auth_client = _as_user_a(client, monkeypatch)
@@ -193,8 +202,29 @@ def test_foreign_ids_never_answer_200_or_leak_data(
     check_body = response.text
     if response.status_code in (301, 302, 303, 307, 308):
         check_body = auth_client.request(spec.method, url, follow_redirects=True, **kwargs).text
-    leaked = _b_strings(workspace_b_data) & set(check_body.split())
-    assert not leaked, f"{spec.method} {url} leaked workspace B content: {sorted(leaked)}"
+    # Substring match, not whitespace tokens: a multi-word string like
+    # "Bree Torres" or a phone number wrapped in tags would tokenise into
+    # fragments that never equal the stored strings. The response must not
+    # contain B's strings anywhere.
+    leaked = [s for s in _b_strings(workspace_b_data) if s in check_body]
+    assert not leaked, f"{spec.method} {url} leaked workspace B content: {leaked}"
+
+    # A destructive web POST answers 303 no matter what, so the status and
+    # body checks above cannot see whether B's row was touched. With correct
+    # scoping the request is a no-op, so B's row must still exist afterwards.
+    # (The response body never shows the leak: the redirect lands on A's
+    # pages.) Expire the session first so a deleted row is not served back
+    # from the identity map.
+    if spec.method == "POST" and not spec.path.startswith("/api/"):
+        db.expire_all()
+        for param, model in _MODEL_FOR_ID_PARAM.items():
+            if param in spec.path_params:
+                row_id = workspace_b_data[param]
+                assert db.get(model, row_id) is not None, (
+                    f"{spec.method} {url} destroyed workspace B's "
+                    f"{model.__name__} (id {row_id}) — a foreign-id request "
+                    f"must be a no-op"
+                )
 
 
 @pytest.mark.parametrize(
@@ -216,8 +246,8 @@ def test_creates_never_adopt_foreign_ids_or_leak_data(
 
     response = auth_client.request(spec.method, spec.path, follow_redirects=True, **kwargs)
 
-    leaked = _b_strings(workspace_b_data) & set(response.text.split())
-    assert not leaked, f"{spec.method} {spec.path} leaked workspace B content: {sorted(leaked)}"
+    leaked = [s for s in _b_strings(workspace_b_data) if s in response.text]
+    assert not leaked, f"{spec.method} {spec.path} leaked workspace B content: {leaked}"
 
 
 def test_route_inventory_covers_the_tenant_matrix():
