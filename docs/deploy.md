@@ -661,13 +661,40 @@ remaining external or operator-controlled steps:
    the zone as a whole, so *hand-adding* a record is safe; it is specifically
    the delete-and-recreate integration that breaks state.
 
+   **Wait for the certificate before swapping keys — "verified" is not it.**
+   Clerk go-live has two stages and only the first is visible: the dashboard
+   turns green once it has *read* the CNAMEs, then Clerk provisions the TLS
+   certificate for `clerk.<host>` some time later. `GET /v1/domains` carries no
+   status field and its `updated_at` does not move when the certificate lands,
+   so the dashboard cannot tell you the difference. Before the certificate
+   exists the host answers TLS with `alert 40` / `no peer certificate
+   available`, and deploying live keys into that window is a **total outage**:
+   `app/auth.py` fails closed, so an unreachable JWKS makes every protected
+   route a 503.
+
+   The only honest readiness check is the endpoint itself:
+
+   ```bash
+   curl -s -o /dev/null -w '%{http_code}\n' \
+     https://clerk.<host>/v1/environment   # 200 = ready; 000 = certificate pending
+   ```
+
+   Do not run that check through a resolver that cached `NXDOMAIN` before the
+   records existed. The zone's SOA sets a 1800s negative TTL, and a stale
+   local resolver makes curl fail with `Could not resolve host`, which is
+   indistinguishable from "not ready" if you only look at the status code. Pin
+   the lookup when in doubt:
+   `--resolve clerk.<host>:443:$(dig +short clerk.<host> @1.1.1.1 | grep -E '^[0-9]' | head -1)`.
+
    Afterwards set `CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, and
    `CLERK_FRONTEND_API_URL` (which becomes `https://clerk.hangout.bahasadri.com`)
-   in the ignored `.env`. **These reach the VM only through cloud-init**, whose
-   `custom_data` is under `ignore_changes` — a plain `apply` will not deliver
-   new keys. Either replace the VM or edit `/etc/hangout-automator.env` on the
-   host and restart the units; a replace is the one that keeps the VM matching
-   what Terraform would build.
+   in the ignored `.env`. The wrapper refuses to apply if `CLERK_ENABLED=true`
+   with a `pk_test_` key, or if the publishable key's encoded host disagrees
+   with `CLERK_FRONTEND_API_URL`. **These reach the VM only through
+   cloud-init**, whose `custom_data` is under `ignore_changes` — a plain
+   `apply` will not deliver new keys. Either replace the VM or edit
+   `/etc/hangout-automator.env` on the host and restart the units; a replace is
+   the one that keeps the VM matching what Terraform would build.
 
 ### Verifying a fresh deploy
 

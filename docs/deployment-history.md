@@ -132,6 +132,17 @@ Things that have bitten, or would have. Keep this list short and real.
   2026-08-09 came from concluding something was missing or broken on the
   strength of output that had been cut short, or of a check that could not see
   the thing being asked about.
+- **Clerk "verified" is DNS detection, not a working Frontend API.** The
+  dashboard turning green means Clerk read the five CNAMEs. Issuing the
+  certificate for `clerk.<host>` is a separate, later stage on their side, and
+  nothing in the dashboard or the API distinguishes the two —
+  `GET /v1/domains` has no status field at all, and its `updated_at` does not
+  move when issuance completes. Until the certificate exists the host answers
+  TLS with `alert 40` / `no peer certificate available`. Deploying live keys in
+  that window takes the whole app down, because `app/auth.py` fails closed and
+  every protected route becomes a 503 when JWKS is unreachable. Test the
+  endpoint, never the dashboard: `curl https://clerk.<host>/v1/environment`
+  must return `200`.
 - **`GET /user/tokens/verify` reports a healthy deployment token as invalid.**
   It needs a User-level scope that the deployment token deliberately does not
   carry, so it answers `401` / `1000 Invalid API Token` no matter how healthy
