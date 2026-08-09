@@ -12,14 +12,14 @@ sending a form as a form, say) turns a passing test into a test of nothing.
 
 | File | Covers |
 |------|--------|
-| `conftest.py` | Temp SQLite per session, table wipe after each test, clients, `sample_data` |
+| `conftest.py` | Postgres test database at `alembic upgrade head`, table wipe after each test, clients, `sample_data`, workspace fixtures |
 | `support/routes.py` | Route inventory read off the live FastAPI router |
 | `support/html_forms.py` | HTML form parser: what a browser would submit untouched |
 | `test_route_surface.py` | Every route × blank and hostile input |
 | `test_ui_forms.py` | Every page, every button, form left untouched |
 | `test_api.py`, `test_profiles.py`, `test_web_ui.py`, `test_hangout_setup.py` | Endpoint behaviour |
 | `test_rsvp_flow.py`, `test_followups.py`, `test_sms_guard.py`, `test_webhook_security.py` | SMS in, invites/follow-ups out, webhook signatures |
-| `test_config.py`, `test_logging.py`, `test_migrations.py` | Settings, audit log, SQLite migrations |
+| `test_config.py`, `test_logging.py`, `test_migrations.py` | Settings, audit log, Alembic upgrade/downgrade/check |
 
 Fixtures: `client` (raises server exceptions), `client_no_raise` (returns the
 500 so it can be asserted on), `db`, and `sample_data` — one row of everything,

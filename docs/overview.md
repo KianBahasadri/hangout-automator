@@ -15,7 +15,7 @@ is how local development behaves until Clerk is configured.
 - **Authentication** — `app/auth.py` verifies Clerk sessions in middleware; `/sign-in` is rendered with ClerkJS when enabled
 - **SMS webhook** — `POST /webhooks/sms` in `app/routers/webhooks.py`
 - **Background jobs** — separate `hangout-worker` process, follow-ups every 5 minutes, organizer interval digests every 10 minutes ([background-jobs.md](./background-jobs.md))
-- **Persistence** — SQLAlchemy + SQLite by default (`DATABASE_URL`)
+- **Persistence** — PostgreSQL via SQLAlchemy + Alembic (`DATABASE_URL`)
 
 Entry points: settings-aware launcher `python -m app.server` (production),
 console script `dev` → `app.dev:main` (reload), and the ASGI app

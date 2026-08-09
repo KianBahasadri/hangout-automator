@@ -49,8 +49,9 @@ output.
 
 “Hosted on Cloudflare” can mean either Cloudflare at the edge or a full
 Cloudflare Workers rewrite. The current application is a long-running FastAPI
-process with a SQLite file and APScheduler jobs, so the low-risk deployment
-keeps the Azure VM as the compute layer and puts Cloudflare in front of it.
+process with a PostgreSQL database and a separate worker process for scheduled
+jobs, so the low-risk deployment keeps the Azure VM as the compute layer and
+puts Cloudflare in front of it.
 
 ### Target path: Cloudflare Tunnel + Azure compute (no VM public IP)
 
@@ -86,10 +87,11 @@ are not required for the normal Terraform/cloud-init deployment.
 Pages/Workers are not a drop-in target for this repository. Cloudflare Python
 Workers use a `fetch` entrypoint, are currently beta, do not provide persistent
 local files, and do not support functional `threading`; the current app relies
-on a Python process, SQLite persistence, and APScheduler. A Workers deployment
-would therefore require a deliberate rewrite to a Worker entrypoint, D1/KV or
-Durable Objects for state, and Cron Triggers/Queues/Workflows for scheduled
-jobs. See Cloudflare’s [Python Workers overview](https://developers.cloudflare.com/workers/languages/python/)
+on a Python process, PostgreSQL persistence, and a worker process for scheduled
+jobs. A Workers deployment would therefore require a deliberate rewrite to a
+Worker entrypoint, D1/KV or Durable Objects for state, and Cron
+Triggers/Queues/Workflows for scheduled jobs. See Cloudflare’s [Python Workers
+overview](https://developers.cloudflare.com/workers/languages/python/)
 and [Python runtime limitations](https://developers.cloudflare.com/workers/languages/python/stdlib/).
 
 Do not select this path unless a platform rewrite is intended.

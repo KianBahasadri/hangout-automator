@@ -39,10 +39,10 @@ Enabling `notify_enabled` without a resolvable organizer phone (selected profile
 
 ## Row ids
 
-Ids in a path or payload are bounded to `1 .. 2^63-1` (`app/ids.py`). SQLite
-cannot bind anything larger, so an unbounded id crashed the lookup it could
-never match; out-of-range ids now return **422**. Form fields that carry an id
-as free text (the organizer combobox) read as blank instead.
+Ids in a path or payload are bounded to `1 .. 2^63-1` (`app/ids.py`). An id no
+row could ever have should miss, not crash, so out-of-range ids return
+**422**. Form fields that carry an id as free text (the organizer combobox)
+read as blank instead.
 
 ## Phone handling
 
