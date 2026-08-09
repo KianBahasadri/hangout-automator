@@ -580,6 +580,32 @@ remaining external or operator-controlled steps:
    must be in the ignored `.env` before any plan/apply. cloud-init runs
    `alembic upgrade head` during bootstrap, so the schema is already applied by
    the time the app starts.
+7. **Clerk production instance**: the deployment runs Clerk *development* keys
+   (`pk_test_` / `sk_test_`, on a `*.clerk.accounts.dev` frontend API). Those
+   are user-capped and not intended for production traffic, so a production
+   instance is required before real tenants exist.
+
+   It is registered as a **secondary application** on `hangout.bahasadri.com`,
+   not as the primary application for `bahasadri.com`. The apex zone serves
+   other things, and a primary registration would have Clerk claim
+   `clerk.bahasadri.com` and send verification mail as `@bahasadri.com` — a
+   zone-wide commitment this one app should not make. As a secondary
+   application Clerk's API is hosted at `clerk.hangout.bahasadri.com` and
+   verification mail comes from `@hangout.bahasadri.com`, keeping the whole
+   footprint under the subdomain the app already owns.
+
+   Clerk then issues a set of CNAME records (frontend API, account portal, and
+   the mail/DKIM entries) to add to the `bahasadri.com` zone. Terraform manages
+   individual `cloudflare_dns_record` resources rather than the zone as a
+   whole, so adding these by hand does not create drift.
+
+   Afterwards set `CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, and
+   `CLERK_FRONTEND_API_URL` (which becomes `https://clerk.hangout.bahasadri.com`)
+   in the ignored `.env`. **These reach the VM only through cloud-init**, whose
+   `custom_data` is under `ignore_changes` — a plain `apply` will not deliver
+   new keys. Either replace the VM or edit `/etc/hangout-automator.env` on the
+   host and restart the units; a replace is the one that keeps the VM matching
+   what Terraform would build.
 
 ### Verifying a fresh deploy
 
