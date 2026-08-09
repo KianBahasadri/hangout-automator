@@ -66,3 +66,62 @@ def test_send_sms_logs_provider_exception(db, monkeypatch):
     assert entry.body == "failed"
     assert entry.success is False
     assert entry.error == "provider exploded"
+
+
+def test_webhook_rate_limits_per_phone(client, monkeypatch):
+    """Past the per-phone ceiling, the webhook answers 429."""
+    from app.config import Settings
+
+    settings = Settings(sms_rate_limit_per_phone_per_minute=3, _env_file=None)
+    monkeypatch.setattr("app.routers.webhooks.get_settings", lambda: settings)
+
+    for _ in range(3):
+        response = client.post("/webhooks/sms", data={"From": "+15551112222", "Body": "confirm"})
+        assert response.status_code == 200
+
+    blocked = client.post("/webhooks/sms", data={"From": "+15551112222", "Body": "confirm"})
+    assert blocked.status_code == 429
+
+    # A different source phone is unaffected by that bucket.
+    other = client.post("/webhooks/sms", data={"From": "+15553334444", "Body": "confirm"})
+    assert other.status_code == 200
+
+
+def test_webhook_global_rate_limit(client, monkeypatch):
+    """The global ceiling applies across all source phones."""
+    from app.config import Settings
+
+    settings = Settings(sms_rate_limit_global_per_minute=2, _env_file=None)
+    monkeypatch.setattr("app.routers.webhooks.get_settings", lambda: settings)
+
+    assert (
+        client.post("/webhooks/sms", data={"From": "+15551110001", "Body": "hi"}).status_code == 200
+    )
+    assert (
+        client.post("/webhooks/sms", data={"From": "+15551110002", "Body": "hi"}).status_code == 200
+    )
+    blocked = client.post("/webhooks/sms", data={"From": "+15551110003", "Body": "hi"})
+    assert blocked.status_code == 429
+
+
+def test_signature_verification_runs_before_rate_limit(client, monkeypatch):
+    """Unsigned floods die at the cheaper signature check, never the limiter."""
+    from app.config import Settings
+
+    settings = Settings(
+        sms_provider="twilio",
+        twilio_account_sid="AC123",
+        twilio_auth_token="test-token",
+        twilio_from_number="+15005550006",
+        public_base_url="https://hangout.example.com",
+        sms_rate_limit_per_phone_per_minute=1,
+        _env_file=None,
+    )
+    monkeypatch.setattr("app.routers.webhooks.get_settings", lambda: settings)
+
+    for _ in range(5):
+        response = client.post(
+            "/webhooks/sms",
+            data={"From": "+15551112222", "Body": "confirm"},
+        )
+        assert response.status_code == 403  # invalid signature, not 429

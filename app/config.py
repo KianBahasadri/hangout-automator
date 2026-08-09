@@ -55,6 +55,13 @@ class Settings(BaseSettings):
     organizer_interval_hours: int = 6
     max_followups: int = 2
 
+    # SMS webhook rate limits (per fixed one-minute window). The webhook is
+    # publicly reachable by design, so every hit can cost money; signature
+    # verification still runs before the rate limiter, so unsigned floods die
+    # at the cheaper check.
+    sms_rate_limit_per_phone_per_minute: int = 30
+    sms_rate_limit_global_per_minute: int = 300
+
     @model_validator(mode="after")
     def _validate_sms_config(self) -> "Settings":
         provider = (self.sms_provider or "mock").lower().strip()

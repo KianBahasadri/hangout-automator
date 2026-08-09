@@ -349,6 +349,24 @@ class HangoutInvite(Base):
     )
 
 
+class SmsRateLimit(Base):
+    """Fixed-window counters for SMS webhook rate limiting.
+
+    One row per (bucket, minute); the webhook increments a bucket per request
+    and answers 429 past the ceiling. Rows older than an hour are pruned on
+    write. This is the only state the rate limiter uses — no new infrastructure.
+    """
+
+    __tablename__ = "sms_rate_limits"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    bucket: Mapped[str] = mapped_column(String(120), nullable=False)
+    window_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+    __table_args__ = (UniqueConstraint("bucket", "window_start"),)
+
+
 class MessageLog(Base):
     __tablename__ = "message_logs"
 

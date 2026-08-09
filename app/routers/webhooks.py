@@ -2,18 +2,53 @@ from __future__ import annotations
 
 import json
 import logging
+from datetime import timedelta
 
 from fastapi import APIRouter, Depends, Request, Response
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.database import get_db
 from app.event_logging import BodyCapture, audit_event
-from app.services import process_inbound_sms
+from app.services import process_inbound_sms, utcnow
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
+
+
+def _rate_limited(db: Session, phone: str) -> bool:
+    """Count this request in the fixed one-minute windows; True when over the
+    ceiling. Per-source-phone and global buckets, backed only by Postgres."""
+    settings = get_settings()
+    now = utcnow()
+    window_start = now.replace(second=0, microsecond=0)
+    # Prune old windows cheaply on write (indexed on window_start).
+    db.execute(
+        text("DELETE FROM sms_rate_limits WHERE window_start < :cutoff"),
+        {"cutoff": now - timedelta(hours=1)},
+    )
+    for bucket, ceiling in (
+        (f"phone:{phone}", settings.sms_rate_limit_per_phone_per_minute),
+        ("global", settings.sms_rate_limit_global_per_minute),
+    ):
+        count = db.execute(
+            text(
+                """
+                INSERT INTO sms_rate_limits (bucket, window_start, count)
+                VALUES (:bucket, :window, 1)
+                ON CONFLICT (bucket, window_start)
+                DO UPDATE SET count = sms_rate_limits.count + 1
+                RETURNING count
+                """
+            ),
+            {"bucket": bucket, "window": window_start},
+        ).scalar()
+        if int(count) > ceiling:
+            return True
+    db.commit()
+    return False
 
 
 def _twiml(message: str) -> Response:
@@ -157,6 +192,21 @@ async def inbound_sms(request: Request, db: Session = Depends(get_db)) -> Respon
             signature_valid=signature_valid,
         )
         return Response(status_code=400, content="Missing From")
+
+    # Signature verification ran first, so unsigned floods never reach the
+    # database. The limiter then protects against signed floods and abuse of
+    # the publicly reachable endpoint.
+    if _rate_limited(db, phone):
+        logger.warning("Rate-limited webhook from %s", phone)
+        audit_event(
+            "sms.webhook.rejected",
+            reason="rate_limited",
+            from_phone=phone,
+            body=text,
+            signature_required=signature_required,
+            signature_valid=signature_valid,
+        )
+        return Response(status_code=429, content="Rate limit exceeded")
 
     logger.info("Inbound SMS from=%s body=%s", phone, text)
     reply = process_inbound_sms(db, phone, text)
