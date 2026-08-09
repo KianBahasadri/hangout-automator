@@ -521,10 +521,11 @@ Exit criteria, all of them, before deleting `terraform/access.tf`:
 1. ~~`current_workspace` fails closed — no `sub` claim is a 401, never a
    fallback to `default`.~~ **Done**; see
    [tenancy.md](./tenancy.md#how-a-request-resolves-to-a-workspace).
-2. Clerk is on a **production** instance with live keys (a development instance
-   accepts any signer and is not an authentication boundary). The wrapper now
-   refuses `apply` when `CLERK_ENABLED=true` with a `pk_test_` key, and when
-   the publishable key's encoded host disagrees with `CLERK_FRONTEND_API_URL`.
+2. ~~Clerk is on a **production** instance with live keys (a development
+   instance accepts any signer and is not an authentication boundary).~~
+   **Done 2026-08-09**; the wrapper also refuses `apply` when
+   `CLERK_ENABLED=true` with a `pk_test_` key, and when the publishable key's
+   encoded host disagrees with `CLERK_FRONTEND_API_URL`.
 3. Clerk sign-up is restricted to whoever should actually have accounts, or the
    app is genuinely happy to provision a workspace for any signup.
 4. The isolation matrix in `tests/test_tenant_isolation.py` is green, since it

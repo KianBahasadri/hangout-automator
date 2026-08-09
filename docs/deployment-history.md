@@ -11,6 +11,64 @@ Dates are UTC.
 
 ---
 
+## 2026-08-09 — Clerk production cutover: live keys delivered to the VM
+
+Commit: `33d818a`
+Command: `./scripts/deploy/terraform.sh apply -replace=azurerm_linux_virtual_machine.main`
+Plan: 2 to add, 0 to change, 2 to destroy
+
+The development Clerk instance (`pk_test_`) was replaced by a production one.
+Because `main.tf:156` sets `ignore_changes = [custom_data]`, a plain apply would
+have delivered nothing — the keys only reach the VM through a deliberate
+replace. The fail-closed tenancy fix rode along in the same rebuild.
+
+**Most of the elapsed time was spent waiting on a stage with no status field.**
+Clerk's go-live is two stages: DNS verification, then certificate issuance for
+`clerk.<host>`. The dashboard shows only the first. It went green at roughly
+`05:15Z`; the certificate did not land until `05:51:33Z` — 36 minutes later,
+during which `clerk.hangout.bahasadri.com` answered TLS with
+`alert 40` / `no peer certificate available`. Deploying in that window would
+have taken the app down, since `app/auth.py` fails closed and every protected
+route 503s when JWKS is unreachable. The readiness gate that worked was polling
+`GET /v1/environment` for a `200`, nothing in the dashboard or API.
+
+**A readiness poll spent 30 cycles measuring the wrong thing.** It reported
+status `000`, read as "certificate not issued". The actual error was
+`curl: (6) Could not resolve host`: this machine's resolver had cached
+`NXDOMAIN` from before the records existed, and the zone SOA sets a 1800s
+negative TTL. The `dig` half of the poll used `@1.1.1.1` and was fine; the
+`curl` half went through the stale system resolver. Pinning with
+`--resolve <host>:443:<ip>` against the IP from `dig @1.1.1.1` fixed it. A
+failing DNS lookup and an unissued certificate are indistinguishable by status
+code alone.
+
+**Clerk's "configure automatically" button broke Terraform state.** The
+dashboard integration *deletes and recreates* the five CNAMEs rather than
+updating them, so every record ID in state pointed at a deleted record.
+`terraform plan` reported `5 to add` with `Warning: Resource not found`; an
+apply would have tried to create records that already exist (Cloudflare 81053)
+and died partway. Repaired with `state rm` then `import` for all five, reading
+live IDs from `GET /zones/<id>/dns_records`. `cloudflare.tf` now pins
+`ttl = 3600` to match what the integration writes, so a future re-sync is not
+drift. Note the distinction: hand-adding a record alongside Terraform is safe;
+it is specifically the integration's delete-recreate that breaks state.
+
+Two guards were added to `terraform.sh` for failure modes that are silent at
+apply time: it refuses `CLERK_ENABLED=true` with a `pk_test_` key, and refuses
+a publishable key whose encoded host disagrees with `CLERK_FRONTEND_API_URL`.
+Both passed on this apply.
+
+Verification: cloud-init `done` with `errors: []`; `hangout-automator`,
+`hangout-worker`, `cloudflared` all active; local `GET /` → 303; external
+`/webhooks/sms` → 405, `/` and `/api/health` → 302; data disk mounted;
+`alembic_version = db04909245fd` (local head), 12 tables. The two that matter
+for this cutover: JWKS fetched **from the VM** → `200`, and `/sign-in` serves a
+`pk_live_` key pointing at `clerk.hangout.bahasadri.com`. Unauthenticated
+`/api/hangouts` → `401`, confirming the fail-closed tenancy fix is live.
+
+Follow-up: `CLERK_SECRET_KEY` and `POSTGRES_ADMIN_PASSWORD` were both exposed in
+an operator chat transcript during this work and need rotating.
+
 ## 2026-08-09 — Postgres cutover: Flexible Server created, VM rebuilt
 
 App commit deployed: `f20812c`. Three applies, all succeeded.
@@ -143,6 +201,20 @@ Things that have bitten, or would have. Keep this list short and real.
   every protected route becomes a 503 when JWKS is unreachable. Test the
   endpoint, never the dashboard: `curl https://clerk.<host>/v1/environment`
   must return `200`.
+- **Clerk's "configure automatically" button deletes and recreates the DNS
+  records.** It is not idempotent and not additive, so every record ID
+  Terraform holds goes stale the moment it runs. Symptom is a plan that says
+  `N to add` with `Warning: Resource not found`; applying it hits Cloudflare
+  `81053` (record already exists) partway through. Recover with `state rm` +
+  `import` per record. Hand-adding a record alongside Terraform does *not*
+  cause this — only the integration does.
+- **A cached `NXDOMAIN` makes a readiness poll lie.** Curl reports status `000`
+  for "could not resolve host" and for "host is up but TLS failed" alike, and
+  this zone's SOA sets a 1800s negative TTL, so a resolver that cached the
+  miss before the records existed stays wrong for half an hour. Any poll for a
+  freshly created hostname must pin the lookup —
+  `--resolve <host>:443:$(dig +short @1.1.1.1 <host> | tail -1)` — or it is
+  measuring the local resolver, not the service.
 - **`GET /user/tokens/verify` reports a healthy deployment token as invalid.**
   It needs a User-level scope that the deployment token deliberately does not
   carry, so it answers `401` / `1000 Invalid API Token` no matter how healthy
