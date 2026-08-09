@@ -705,12 +705,17 @@ def process_followups(db: Session) -> int:
         budget=budget,
     )
 
+    # SKIP LOCKED claims the due rows so two workers cannot both dispatch the
+    # same invite: whichever process selects a row owns it for this tick.
     invites = (
         db.query(HangoutInvite)
         .join(Hangout)
         .options(joinedload(HangoutInvite.profile), joinedload(HangoutInvite.hangout))
         .filter(Hangout.status == HangoutStatus.active)
         .filter(HangoutInvite.status.in_([InviteStatus.pending, InviteStatus.remind]))
+        # of= limits locking to the invite rows: the eager-load LEFT OUTER
+        # JOINs are the nullable side and Postgres rejects locking them.
+        .with_for_update(of=HangoutInvite, skip_locked=True)
         .all()
     )
 
@@ -738,6 +743,7 @@ def process_followups(db: Session) -> int:
                     previous_status=previous_status,
                     new_status=inv.status,
                 )
+                db.commit()
             continue
 
         next_delay = delays[inv.followups_sent]
@@ -746,19 +752,28 @@ def process_followups(db: Session) -> int:
         if now < due_at:
             continue
 
+        # CLAIM: advance and commit the clock BEFORE dispatching to Twilio. A
+        # crash between send and commit must not re-send on the next tick. A
+        # number that permanently rejects SMS (an opt-out, say) is likewise
+        # never retried on every scheduler tick.
+        inv.last_outbound_at = now
+        db.commit()
+
         attempt = inv.followups_sent + 1
         body = craft_followup_message(inv.hangout, inv.profile, attempt)
-        ok, err = send_sms(
-            db,
-            to=inv.profile.phone,
-            body=body,
-            invite_id=inv.id,
-            hangout_id=inv.hangout_id,
-            workspace_id=inv.workspace_id,
-        )
-        # Always advance the clock: a number that permanently rejects SMS (an
-        # opt-out, say) must not be retried on every scheduler tick.
-        inv.last_outbound_at = now
+        try:
+            ok, err = send_sms(
+                db,
+                to=inv.profile.phone,
+                body=body,
+                invite_id=inv.id,
+                hangout_id=inv.hangout_id,
+                workspace_id=inv.workspace_id,
+            )
+        except Exception:
+            # Persist the failure log row even though the send raised.
+            db.commit()
+            raise
         if ok:
             # Only advance the follow-up budget on a successful send, otherwise
             # an outage would burn the budget and mark invitees no_response
@@ -771,7 +786,10 @@ def process_followups(db: Session) -> int:
             logger.warning(
                 "Giving up on follow-ups for invite %s after repeated failures: %s", inv.id, err
             )
-
+        db.commit()
+    # Close the sweep transaction even when every invite was skipped: the
+    # FOR UPDATE row locks must not outlive the tick, or the next write
+    # against those rows (the per-test wipe included) blocks forever.
     db.commit()
     audit_event(
         "followups.scan.completed",
@@ -787,6 +805,9 @@ def process_organizer_intervals(db: Session) -> int:
     now = utcnow()
     sent = 0
     audit_event("organizer_intervals.scan.started", at=now)
+    # SKIP LOCKED claims the hangout rows: two workers must not both dispatch
+    # the same digest. The lock target here is hangouts, not hangout_invites —
+    # the clock this sweep advances is Hangout.last_organizer_notify_at.
     hangouts = (
         db.query(Hangout)
         .options(
@@ -798,6 +819,8 @@ def process_organizer_intervals(db: Session) -> int:
         .filter(Hangout.status == HangoutStatus.active)
         .filter(Hangout.notify_enabled.is_(True))
         .filter(Hangout.notify_interval.is_(True))
+        # of= limits locking to the hangout rows (see process_followups).
+        .with_for_update(of=Hangout, skip_locked=True)
         .all()
     )
     for h in hangouts:
@@ -818,14 +841,26 @@ def process_organizer_intervals(db: Session) -> int:
             # Advance the clock so we don't re-check every scheduler tick forever,
             # but do not SMS when nothing meaningful changed.
             h.last_organizer_notify_at = now
+            db.commit()
             continue
 
+        # CLAIM: commit the clock before dispatching, so a crash between send
+        # and commit cannot double-send on the next tick.
+        h.last_organizer_notify_at = now
+        db.commit()
+
         body = craft_organizer_digest(h)
-        ok, _ = send_sms(db, to=phone, body=body, hangout_id=h.id, workspace_id=h.workspace_id)
+        try:
+            ok, _ = send_sms(db, to=phone, body=body, hangout_id=h.id, workspace_id=h.workspace_id)
+        except Exception:
+            db.commit()  # persist the failure log row even though the send raised.
+            raise
         if ok:
-            h.last_organizer_notify_at = now
             h.last_digest_fingerprint = fingerprint
             sent += 1
+        db.commit()
+    # Close the sweep transaction so the FOR UPDATE row locks never outlive
+    # the tick (see process_followups).
     db.commit()
     audit_event(
         "organizer_intervals.scan.completed",
