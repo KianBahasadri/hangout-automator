@@ -1,4 +1,9 @@
+# .env holds live secrets. The variant patterns matter: a plain ".env" line
+# leaves .env.bak, .env.local, .env.prod and friends committable, which is
+# exactly the shape a hurried backup takes.
 .env
+.env.*
+!.env.example
 .venv/
 .venv-box/
 venv/
