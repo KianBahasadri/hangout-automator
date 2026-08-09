@@ -25,6 +25,10 @@ ssh "$HOST" 'set -e
   cd /opt/hangout-automator
   python3 -m venv .venv
   .venv/bin/pip install -q -r requirements.txt
+  # Migrate before restarting, never after: the running code tolerates a schema
+  # that is ahead of it, but new code meeting an old schema fails on its first
+  # query. Cloud-init does the same at first boot.
+  .venv/bin/alembic upgrade head
   sudo systemctl restart hangout-automator
   sudo systemctl --no-pager status hangout-automator | head -20
 '

@@ -654,6 +654,36 @@ remaining external or operator-controlled steps:
    `/etc/hangout-automator.env` on the host and restart the units; a replace is
    the one that keeps the VM matching what Terraform would build.
 
+### Updating a running VM
+
+The VM has no inbound SSH, so a code update goes through Run Command and
+mirrors what cloud-init does at first boot — pull, install, **migrate, then
+restart**:
+
+```bash
+az vm run-command invoke -g <rg> -n <vm> --command-id RunShellScript --scripts "
+set -e
+cd /opt/hangout-automator
+git -c safe.directory=/opt/hangout-automator fetch --all --prune
+git -c safe.directory=/opt/hangout-automator pull --ff-only origin main
+.venv/bin/pip install -q -r requirements.txt
+chown -R <admin_username>:<admin_username> /opt/hangout-automator
+set -a; . /etc/hangout-automator.env; set +a
+.venv/bin/alembic upgrade head
+systemctl restart hangout-automator hangout-worker
+" --query "value[0].message" -o tsv
+```
+
+That order is not stylistic. Running code tolerates a schema that is ahead of
+it; new code meeting an old schema does not — the access-list bootstrap reads
+`access_grants` before the first request, so restarting ahead of its migration
+leaves a process that starts but refuses every sign-in (see
+[tenancy.md](./tenancy.md)). Migrating first keeps that window at zero.
+
+New *environment variables* are a separate problem with a separate answer:
+they live in `/etc/hangout-automator.env`, and Terraform cannot deliver them to
+a running VM (see the `custom_data` note above).
+
 ### Verifying a fresh deploy
 
 The VM has no inbound access, so smoke-test from two directions. On the VM,
@@ -693,7 +723,9 @@ Command or another private management path for updates.
 
 It excludes `.env`, `terraform.tfvars`, `backend.hcl`, state files, and all
 `*.db*` files, so running it cannot copy local secrets or a development
-database onto a VM.
+database onto a VM. It runs `alembic upgrade head` before the restart, for the
+same ordering reason as above; it had synced code and restarted without ever
+migrating, which is survivable only while no release carries a migration.
 
 It also runs `rsync --delete` against `/opt/hangout-automator`, so whatever
 `ROOT` resolves to *becomes* the deployed tree and everything else there is

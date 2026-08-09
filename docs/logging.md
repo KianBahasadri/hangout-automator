@@ -62,8 +62,10 @@ Domain events additionally cover:
 
 - server startup/shutdown, scheduler start, each background-job run and error;
 - access-list bootstrap at startup (`access.bootstrap_admins_granted` with the
-  seeded emails, `access.bootstrap_complete` with the admin count) and a
-  warning for every signed-in user refused for holding no grant;
+  seeded emails, `access.bootstrap_complete` with the admin count, or
+  `access.bootstrap_unavailable` when the database could not be read at all —
+  the app still starts) and a warning for every signed-in user refused for
+  holding no grant;
 - ORM-created/updated/deleted records and commit/rollback outcomes;
 - outbound SMS provider, destination, full body, result, and error;
 - inbound webhook payload, signature presence/validity, rejection reason,

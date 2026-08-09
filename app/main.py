@@ -22,6 +22,11 @@ def _bootstrap_access(settings) -> None:
 
     An empty access list with Clerk enabled locks everyone out, including the
     operator, and the symptom (a 403 on every page) does not name its cause.
+
+    Nothing in here may stop the server. It is the first thing to touch the
+    database, so a Postgres that is down — or a deploy that lands the code
+    before `alembic upgrade head` — would otherwise turn a startup convenience
+    into a boot loop that takes `/api/health` with it.
     """
     from app.access import admin_count, sync_bootstrap_admins
     from app.database import SessionLocal
@@ -30,11 +35,25 @@ def _bootstrap_access(settings) -> None:
     if created:
         audit_event("access.bootstrap_admins_granted", emails=created)
 
-    db = SessionLocal()
     try:
-        admins = admin_count(db)
-    finally:
-        db.close()
+        db = SessionLocal()
+        try:
+            admins = admin_count(db)
+        finally:
+            db.close()
+    except Exception:
+        # "Could not count" is not "counted zero" — the same distinction the
+        # middleware draws between a Clerk outage and a missing grant. Naming
+        # the two likely causes matters: the raw traceback is a wall of
+        # SQLAlchemy frames that never mentions Postgres or migrations.
+        logger.exception(
+            "Could not read the access list at startup, so sign-in will fail: the "
+            "database is unreachable or its migrations have not been applied "
+            "(alembic upgrade head)"
+        )
+        audit_event("access.bootstrap_unavailable", level=logging.ERROR)
+        return
+
     if admins == 0:
         logger.error(
             "No admin access grants exist and ACCESS_BOOTSTRAP_ADMINS is empty — "

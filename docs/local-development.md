@@ -25,6 +25,28 @@ app:
 uv run alembic upgrade head
 ```
 
+### Without Docker (native Postgres)
+
+Some dev machines have no Docker — the shared `.venv-box` checkout is one. Any
+Postgres reachable at the `DATABASE_URL` works; it just has to be created by
+hand, including the **separate `hangout_test` database** the suite needs:
+
+```bash
+sudo -u postgres initdb --locale=C.UTF-8 --encoding=UTF8 -D /var/lib/postgres/data  # first time only
+sudo systemctl enable --now postgresql
+sudo -u postgres psql -c "CREATE USER hangout WITH PASSWORD 'hangout' CREATEDB;"
+sudo -u postgres psql -c "CREATE DATABASE hangout OWNER hangout;"
+sudo -u postgres psql -c "CREATE DATABASE hangout_test OWNER hangout;"
+```
+
+`initdb`'s `-D` must match the path the packaged unit already expects, or the
+service starts against an empty data directory.
+
+If Postgres is not running, the app still starts and `/api/health` still
+answers 200 — but every sign-in fails and startup logs one error naming the
+cause. That is deliberate; see
+[tenancy.md](./tenancy.md#bootstrapping-and-lockout).
+
 ## Run
 
 Preferred:

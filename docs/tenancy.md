@@ -105,6 +105,17 @@ apply with `CLERK_ENABLED=true` and an empty `ACCESS_BOOTSTRAP_ADMINS`. With no
 admins at all the app still starts, logging an error, because refusing to boot
 would turn a bootstrap problem into an outage.
 
+**Nothing in the bootstrap may stop the server.** It is the first thing in
+`lifespan` to touch the database, so an unreachable Postgres — or a deploy that
+restarts the app before `alembic upgrade head` has created `access_grants` —
+would otherwise crash startup, take `/api/health` down with it, and under
+systemd restart forever. Both cases now log an error naming the two likely
+causes and continue; sign-in stays broken until the database is fixed, but the
+process stays up and recovers on the next restart. This is also why the error
+is *not* the "no admins exist" one: "could not count" is not "counted zero",
+the same distinction the middleware draws between a Clerk outage and a missing
+grant. `test_startup_survives_a_database_it_cannot_read` pins it.
+
 ### What the list does and does not protect
 
 - It stops a stranger from using the organizer features, which send SMS

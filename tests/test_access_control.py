@@ -9,6 +9,7 @@ from types import SimpleNamespace
 
 import pytest
 from clerk_backend_api.security import AuthStatus, RequestState
+from sqlalchemy.exc import OperationalError
 
 from app.access import IdentityLookupFailed, _verified_primary_email, sync_bootstrap_admins
 from app.config import Settings
@@ -330,6 +331,31 @@ def test_startup_logs_an_error_when_nobody_can_sign_in(db, caplog):
 
     assert db.query(AccessGrant).count() == 0
     assert "No admin access grants exist" in caplog.text
+
+
+def test_startup_survives_a_database_it_cannot_read(db, caplog, monkeypatch):
+    """A boot-time convenience must never become a boot loop.
+
+    Both real causes reach here as an exception out of `admin_count`: Postgres
+    down, and a deploy that restarts the service before `alembic upgrade head`
+    creates `access_grants`. Crashing on either takes /api/health down too, and
+    under systemd restarts forever.
+    """
+    from app import access
+    from app.main import _bootstrap_access
+
+    def explode(_db):
+        raise OperationalError("SELECT 1", {}, Exception("connection refused"))
+
+    monkeypatch.setattr(access, "admin_count", explode)
+
+    _bootstrap_access(_clerk_settings(access_bootstrap_admins="boot@example.test"))
+
+    assert "alembic upgrade head" in caplog.text
+    # Not "counted zero": never claim the list is empty when nothing answered.
+    assert "No admin access grants exist" not in caplog.text
+    # The seeding half still ran, so a transient outage does not lose the seed.
+    assert db.query(AccessGrant).filter(AccessGrant.email == "boot@example.test").count() == 1
 
 
 def test_bootstrap_never_deletes_what_an_admin_added(db):
