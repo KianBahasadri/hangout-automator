@@ -134,5 +134,4 @@ scripts/
   db_up.sh              start the local compose Postgres
   check.sh              aggregate local gate (pytest, ruff, alembic, invariants)
   deploy/               Terraform wrapper, state bootstrap, Twilio webhook, rsync
-  sqlite-cutover/       one-time SQLite → Postgres migration; delete after go-live
 ```

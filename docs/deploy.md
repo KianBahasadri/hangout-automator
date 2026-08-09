@@ -545,13 +545,9 @@ remaining external or operator-controlled steps:
 5. **Azure**: `az login`, then review `./scripts/deploy/terraform.sh plan` and run `./scripts/deploy/terraform.sh apply`.
 6. **Postgres**: after the server exists (the flexible server, private DNS
    zone, and private endpoint are Terraform resources), `POSTGRES_ADMIN_PASSWORD`
-   must be in the ignored `.env` before any plan/apply. For a **fresh**
-   deployment, cloud-init runs `alembic upgrade head` during bootstrap. For an
-   **existing** SQLite deployment, migrate the data before starting the app:
-   `uv run scripts/sqlite-cutover/migrate.py --dry-run <backup.db>`, review the
-   row-count table, then run it for real against the new server, and confirm
-   `alembic check` is clean (the exact order is in the Operator runbook section
-   of [archive/postgres-migration-plan.md](./archive/postgres-migration-plan.md)).
+   must be in the ignored `.env` before any plan/apply. cloud-init runs
+   `alembic upgrade head` during bootstrap, so the schema is already applied by
+   the time the app starts.
 
 ### Verifying a fresh deploy
 

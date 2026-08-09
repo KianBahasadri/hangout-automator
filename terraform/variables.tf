@@ -36,7 +36,7 @@ variable "vm_size" {
 }
 
 variable "data_disk_size_gb" {
-  description = "Persistent managed-disk size for the SQLite database."
+  description = "Persistent managed-disk size for /var/lib/hangout-automator, which holds the audit log stream."
   type        = number
   default     = 32
 

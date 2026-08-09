@@ -1,13 +1,16 @@
 # Plan: make Hangout Automator survive growth
 
-> **Archived, point-in-time record.** This plan is complete and is kept only
-> for its Operator runbook (the SQLite → Postgres cutover, which has not been
-> executed yet) and as a record of why the current architecture looks the way
-> it does. It is **not maintained**: paths below predate the `scripts/`
-> reorganisation — `scripts/verify_plan.sh` is now `scripts/check.sh`, and
-> `scripts/migrate_sqlite_to_postgres.py` is now
-> `scripts/sqlite-cutover/migrate.py`. For current behavior, use the topic
-> files in [../README.md](../README.md).
+> **Archived, point-in-time record.** This plan is complete and is kept as a
+> record of why the current architecture looks the way it does. It is **not
+> maintained**, and parts of it describe things that no longer exist:
+> `scripts/verify_plan.sh` is now `scripts/check.sh`, and the SQLite → Postgres
+> cutover tooling referenced throughout (`scripts/migrate_sqlite_to_postgres.py`
+> plus the vendored legacy schema module) has been deleted without ever being
+> run — no SQLite deployment was ever cut over, and a fresh deployment starts
+> on Postgres via `alembic upgrade head`. The Operator runbook below is
+> therefore historical; recover the tooling from git history if it is ever
+> needed. For current behavior, use the topic files in
+> [../README.md](../README.md).
 
 Status: **complete** (2026-08-08) — all phases landed; the aggregate gate exits 0 with all checks green.
 Owner: unattended agent loop
