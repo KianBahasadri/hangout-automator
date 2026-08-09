@@ -3,82 +3,18 @@ from __future__ import annotations
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
-from time import perf_counter
 
-from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from app.config import get_settings
 from app.auth import ClerkAuthMiddleware
-from app.database import SessionLocal
-from app.event_logging import EventTraceMiddleware, audit_event, configure_logging, request_context
+from app.event_logging import EventTraceMiddleware, audit_event, configure_logging
 from app.routers import api, web, webhooks
-from app.services import process_followups, process_organizer_intervals
 
 settings = get_settings()
 configure_logging(settings)
 logger = logging.getLogger(__name__)
-
-scheduler = BackgroundScheduler()
-
-
-def _job_followups() -> None:
-    with request_context() as job_id:
-        started = perf_counter()
-        audit_event("background_job.started", job="followups", job_id=job_id)
-        db = SessionLocal()
-        try:
-            n = process_followups(db)
-            logger.info("Sent %s follow-up SMS", n)
-            audit_event(
-                "background_job.completed",
-                job="followups",
-                job_id=job_id,
-                sent_count=n,
-                duration_ms=round((perf_counter() - started) * 1000, 3),
-            )
-        except Exception:
-            logger.exception("Follow-up job failed")
-            audit_event(
-                "background_job.failed",
-                level=logging.ERROR,
-                exc_info=True,
-                job="followups",
-                job_id=job_id,
-                duration_ms=round((perf_counter() - started) * 1000, 3),
-            )
-        finally:
-            db.close()
-
-
-def _job_organizer() -> None:
-    with request_context() as job_id:
-        started = perf_counter()
-        audit_event("background_job.started", job="organizer_intervals", job_id=job_id)
-        db = SessionLocal()
-        try:
-            n = process_organizer_intervals(db)
-            logger.info("Sent %s organizer interval SMS", n)
-            audit_event(
-                "background_job.completed",
-                job="organizer_intervals",
-                job_id=job_id,
-                sent_count=n,
-                duration_ms=round((perf_counter() - started) * 1000, 3),
-            )
-        except Exception:
-            logger.exception("Organizer interval job failed")
-            audit_event(
-                "background_job.failed",
-                level=logging.ERROR,
-                exc_info=True,
-                job="organizer_intervals",
-                job_id=job_id,
-                duration_ms=round((perf_counter() - started) * 1000, 3),
-            )
-        finally:
-            db.close()
 
 
 @asynccontextmanager
@@ -93,23 +29,15 @@ async def lifespan(_app: FastAPI):
         log_level=settings.log_level,
     )
     try:
-        scheduler.add_job(
-            _job_followups, "interval", minutes=5, id="followups", replace_existing=True
-        )
-        scheduler.add_job(
-            _job_organizer,
-            "interval",
-            minutes=10,
-            id="organizer",
-            replace_existing=True,
-        )
-        scheduler.start()
+        logger.info("Hangout Automator started (SMS provider=%s)", settings.sms_provider)
         audit_event(
-            "scheduler.started",
+            "server.started",
+            # Background jobs run in the separate `hangout-worker` process;
+            # scheduling is external. A deploy without the worker is visible
+            # here: followups/organizer events simply never appear.
+            scheduling="external_worker",
             jobs={"followups": "5 minutes", "organizer_intervals": "10 minutes"},
         )
-        logger.info("Hangout Automator started (SMS provider=%s)", settings.sms_provider)
-        audit_event("server.started")
     except Exception:
         audit_event("server.startup_failed", level=logging.CRITICAL, exc_info=True)
         raise
@@ -117,7 +45,6 @@ async def lifespan(_app: FastAPI):
     yield
 
     audit_event("server.stopping")
-    scheduler.shutdown(wait=False)
     audit_event("server.stopped")
 
 
