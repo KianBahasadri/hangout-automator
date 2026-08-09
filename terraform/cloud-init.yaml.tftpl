@@ -6,7 +6,6 @@ packages:
   - python3-pip
   - git
   - curl
-  - sqlite3
 
 write_files:
   - path: /etc/hangout-automator.env
@@ -139,7 +138,7 @@ write_files:
       DATA_DEVICE=/dev/disk/azure/scsi1/lun0
 
       # The data disk is attached by Terraform immediately after the VM. Wait
-      # for udev so VM replacement does not erase the SQLite database.
+      # for udev so VM replacement does not erase the audit logs it carries.
       for _attempt in $(seq 1 60); do
         if [ -b "$DATA_DEVICE" ]; then
           break
