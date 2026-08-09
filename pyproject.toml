@@ -43,6 +43,9 @@ filterwarnings = ["error"]
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+# Frozen artifact vendored verbatim from git 5891d75 — formatting it would
+# silently break the byte-identical provenance of the legacy SQLite machinery.
+extend-exclude = ["scripts/_legacy_sqlite_database.py"]
 
 [tool.setuptools.packages.find]
 include = ["app*"]

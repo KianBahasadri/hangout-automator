@@ -213,7 +213,7 @@ exists and fails only on checks 3–6.
       from empty succeeds; `downgrade base` then `upgrade head` succeeds;
       `alembic check` reports no diff between models and head. That last one is
       what keeps a model edit from shipping without a migration.
-- [ ] **P2.7** Write `scripts/migrate_sqlite_to_postgres.py` — a one-shot,
+- [x] **P2.7** Write `scripts/migrate_sqlite_to_postgres.py` — a one-shot,
       **read-only-on-the-source** export/import. It must: open the SQLite file
       read-only, run the legacy `init_db()` helpers one final time on a *copy*
       (recover them from git history at `5891d75`), then insert every row into
