@@ -403,7 +403,7 @@ workspace filter.
       `Hangout.last_organizer_notify_at` (`app/models.py:225`, written at
       `app/services.py:729` and `:735`). Lock the hangout row, commit the
       timestamp, then send.
-- [ ] **P4.5** Write `tests/test_worker_concurrency.py`: seed an active hangout
+- [x] **P4.5** Write `tests/test_worker_concurrency.py`: seed an active hangout
       with N due invites, run two sweeps concurrently against the same Postgres
       database (threads with separate sessions), and assert exactly N sends were
       recorded in `message_logs` — not 2N. Add a second case that asserts a

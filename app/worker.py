@@ -122,3 +122,7 @@ def main() -> None:
         pass
     finally:
         audit_event("worker.stopped")
+
+
+if __name__ == "__main__":
+    main()

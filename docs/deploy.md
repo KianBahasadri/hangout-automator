@@ -555,7 +555,7 @@ three units active, and the app answering locally:
 
 ```bash
 az vm run-command invoke -g <rg> -n <vm> --command-id RunShellScript \
-  --scripts "set -a; . /etc/hangout-automator.env; set +a; cloud-init status --long; systemctl is-active hangout-automator cloudflared hangout-backup.timer; curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:\${APP_PORT}/" \
+  --scripts "set -a; . /etc/hangout-automator.env; set +a; cloud-init status --long; systemctl is-active hangout-automator hangout-worker cloudflared hangout-backup.timer; curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:\${APP_PORT}/" \
   --query "value[0].message" -o tsv
 ```
 

@@ -66,6 +66,31 @@ write_files:
       [Install]
       WantedBy=multi-user.target
 
+  - path: /etc/systemd/system/hangout-worker.service
+    owner: root:root
+    permissions: "0644"
+    content: |
+      [Unit]
+      Description=Hangout Automator background jobs
+      After=network-online.target hangout-automator.service
+      Wants=network-online.target
+
+      [Service]
+      Type=simple
+      User=${admin_username}
+      Group=${admin_username}
+      WorkingDirectory=/opt/hangout-automator
+      EnvironmentFile=/etc/hangout-automator.env
+      ExecStart=/opt/hangout-automator/.venv/bin/python -m app.worker
+      Restart=always
+      RestartSec=5
+      UMask=0077
+      NoNewPrivileges=true
+      PrivateTmp=true
+
+      [Install]
+      WantedBy=multi-user.target
+
   - path: /usr/local/bin/hangout-backup.sh
     owner: root:root
     permissions: "0755"
@@ -223,6 +248,8 @@ write_files:
       systemctl daemon-reload
       systemctl enable hangout-automator
       systemctl restart hangout-automator
+      systemctl enable --now hangout-worker
+      systemctl restart hangout-worker
       systemctl enable --now hangout-backup.timer
 
 runcmd:
