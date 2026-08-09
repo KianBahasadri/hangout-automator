@@ -1,6 +1,6 @@
 # Plan: make Hangout Automator survive growth
 
-Status: **Phases 1-2 complete** (2026-08-08) — CI/ruff/verify_plan.sh; Postgres + Alembic landed, suite green on Postgres, sqlite purged from app/. Phases 1-3 complete (2026-08-08) — tenancy landed with isolation matrix green. Phases 1-4 complete (2026-08-08) — worker process with two-layer send locking, concurrency tests green. Phase 5 (ops) in progress...
+Status: **Phases 1-2 complete** (2026-08-08) — CI/ruff/verify_plan.sh; Postgres + Alembic landed, suite green on Postgres, sqlite purged from app/. Phases 1-3 complete (2026-08-08) — tenancy landed with isolation matrix green. Phases 1-4 complete (2026-08-08) — worker process with two-layer send locking, concurrency tests green. Phases 1-5 complete (2026-08-08) — rate limiting, Azure PITR backups, deep health. Phase 6 (final docs) in progress....
 Owner: unattended agent loop
 Baseline commit: `5891d75` (2026-08-08)
 
@@ -440,7 +440,7 @@ already flags the first one.
       the script, its `.service`, and its `.timer` from `cloud-init.yaml.tftpl`,
       and rewrite the "Backups" section of `docs/deploy.md` around
       point-in-time restore.
-- [ ] **P5.3** Add `GET /api/health` deep-check variant reporting database
+- [x] **P5.3** Add `GET /api/health` deep-check variant reporting database
       reachability, pending Alembic revision vs head, and worker last-tick age
       (from the audit stream or a heartbeat row). Keep the existing shallow
       `/api/health` public and unauthenticated for the Cloudflare probe; the deep
