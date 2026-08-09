@@ -1,6 +1,6 @@
 # Plan: make Hangout Automator survive growth
 
-Status: **Phases 1-2 complete** (2026-08-08) — CI/ruff/verify_plan.sh; Postgres + Alembic landed, suite green on Postgres, sqlite purged from app/. Phases 1-3 complete (2026-08-08) — tenancy landed with isolation matrix green. Phases 1-4 complete (2026-08-08) — worker process with two-layer send locking, concurrency tests green. Phases 1-5 complete (2026-08-08) — rate limiting, Azure PITR backups, deep health. Phase 6 (final docs) in progress....
+Status: **complete** (2026-08-08) — all phases landed; `./scripts/verify_plan.sh` exits 0 with all six checks green.
 Owner: unattended agent loop
 Baseline commit: `5891d75` (2026-08-08)
 
