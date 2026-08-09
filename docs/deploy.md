@@ -303,6 +303,34 @@ Expect downtime while Azure recreates the VM. The managed database disk has
 `prevent_destroy` and is re-attached; bootstrap waits for the data disk before
 starting the app.
 
+#### Pre-flight: prove the new VM's dependencies before destroying the old one
+
+A replace destroys the only working instance *before* creating its
+replacement, and cloud-init runs `alembic upgrade head` during boot. Anything
+the new VM needs at boot must be proven reachable first — if it is not, the
+bootstrap fails and there is no old VM left to fall back to.
+
+A green `apply` does not prove this. Terraform reports success when the
+resources exist, not when they work together, and `postgres_host`
+(`main.tf`) is a hardcoded string rather than a resource reference, so no
+dependency edge forces the check. Verify by observation, not by plan output:
+
+```bash
+# The private endpoint's zone must actually hold the A record...
+az network private-dns record-set a list -g hangout-rg \
+  -z privatelink.postgres.database.azure.com \
+  --query '[].{name:name, ips:aRecords[].ipv4Address}' -o json
+
+# ...and the hardcoded host must resolve to that private IP from the VM,
+# not to the public address the FQDN carries outside the VNet.
+az vm run-command invoke -g hangout-rg -n hangout-vm --command-id RunShellScript \
+  --scripts "getent hosts hangout-postgres.postgres.database.azure.com" \
+  --query "value[0].message" -o tsv
+```
+
+An empty record list, or a resolved address that is not the endpoint's private
+IP, means the new VM will fail to bootstrap. Fix that before replacing.
+
 ### Recovering a failed VM replacement
 
 An intentional VM replace (or a plan that still force-replaces for other
@@ -592,3 +620,13 @@ Command or another private management path for updates.
 It excludes `.env`, `terraform.tfvars`, `backend.hcl`, state files, and all
 `*.db*` files, so running it cannot copy local secrets or a development
 database onto a VM.
+
+It also runs `rsync --delete` against `/opt/hangout-automator`, so whatever
+`ROOT` resolves to *becomes* the deployed tree and everything else there is
+erased. `ROOT` is computed by walking up from `$0`, which means moving this
+script between directories silently changes what it deploys — when the deploy
+scripts were moved from `scripts/` into `scripts/deploy/`, the unchanged
+one-level walk left `ROOT` pointing at `scripts/`. Nothing would have failed;
+it would have synced `scripts/` over the application and deleted the rest. Any
+script that derives a path from its own location needs that path re-checked
+when it moves, from both inside and outside the repo.

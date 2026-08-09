@@ -118,6 +118,20 @@ Things that have bitten, or would have. Keep this list short and real.
   [deploy.md](./deploy.md) before importing anything.
 - **A killed plan strands the state lock.** Confirm no terraform process is
   running, then `terraform.sh force-unlock -force <lock ID>`.
+- **A successful apply does not mean the pieces work together.** Terraform
+  reports success when resources exist. Twice now that has hidden a broken
+  deployment: a private DNS zone created, linked, and holding no records, and
+  an endpoint reporting `Approved` while its FQDN resolved to a public address.
+  Nothing forced a check because `postgres_host` is a hardcoded string with no
+  dependency edge. Before any destructive apply, verify the new dependency by
+  observation — see the pre-flight in [deploy.md](./deploy.md).
+- **Verify a scoped credential against the endpoints it is scoped for.** A
+  generic health-check endpoint can fail for reasons that have nothing to do
+  with the credential's health, and its error message will not say so.
+- **A truncated search has not proven an absence.** Both wrong turns on
+  2026-08-09 came from concluding something was missing or broken on the
+  strength of output that had been cut short, or of a check that could not see
+  the thing being asked about.
 - **`GET /user/tokens/verify` reports a healthy deployment token as invalid.**
   It needs a User-level scope that the deployment token deliberately does not
   carry, so it answers `401` / `1000 Invalid API Token` no matter how healthy
