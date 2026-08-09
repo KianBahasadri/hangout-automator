@@ -434,7 +434,7 @@ already flags the first one.
       money. Per-source-phone and global ceilings, 429 past them, backed by a
       Postgres counter table — no new infrastructure dependency. Signature
       verification stays first in the chain, so unsigned floods die cheaper.
-- [ ] **P5.2** Off-site backups. `docs/deploy.md:474` states the current gzipped
+- [x] **P5.2** Off-site backups. `docs/deploy.md:474` states the current gzipped
       snapshots sit on the same managed disk as the database. With Flexible Server
       from P2.8, Azure's own 35-day retention replaces `hangout-backup.sh`; delete
       the script, its `.service`, and its `.timer` from `cloud-init.yaml.tftpl`,
