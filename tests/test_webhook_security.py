@@ -4,7 +4,7 @@ import json
 import pytest
 from twilio.request_validator import RequestValidator
 
-from app.models import Hangout, HangoutInvite, HangoutStatus, InviteStatus, Profile
+from app.models import Hangout, HangoutInvite, HangoutStatus, InviteStatus, Profile, Workspace
 
 AUTH_TOKEN = "test-twilio-auth-token"
 PUBLIC_BASE_URL = "https://hangout.example.com"
@@ -32,13 +32,21 @@ def _sign(url, params=None):
 
 
 def _setup_invitee(db, phone="+15551112222"):
-    profile = Profile(name="Sam", phone=phone)
+    workspace_id = db.query(Workspace.id).filter(Workspace.slug == "default").scalar()
+    profile = Profile(name="Sam", phone=phone, workspace_id=workspace_id)
     db.add(profile)
     db.flush()
-    hangout = Hangout(status=HangoutStatus.active, motive="Beach day")
+    hangout = Hangout(status=HangoutStatus.active, motive="Beach day", workspace_id=workspace_id)
     db.add(hangout)
     db.flush()
-    db.add(HangoutInvite(hangout_id=hangout.id, profile_id=profile.id, status=InviteStatus.pending))
+    db.add(
+        HangoutInvite(
+            hangout_id=hangout.id,
+            profile_id=profile.id,
+            status=InviteStatus.pending,
+            workspace_id=workspace_id,
+        )
+    )
     db.commit()
     return profile, hangout
 

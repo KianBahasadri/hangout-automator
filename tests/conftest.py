@@ -50,13 +50,29 @@ def _clean_tables(db):
 
     with engine.begin() as conn:
         for table in reversed(Base.metadata.sorted_tables):
+            if table.name == "workspaces":
+                # The default workspace is infrastructure every request
+                # resolves to (CLERK_ENABLED=false); it must survive the wipe.
+                # Other workspaces must not leak between tests.
+                continue
             conn.execute(table.delete())
+        conn.execute(text("DELETE FROM workspace_members"))
+        conn.execute(
+            text(
+                "INSERT INTO workspaces (name, slug) VALUES ('Default', 'default')"
+                " ON CONFLICT (slug) DO NOTHING"
+            )
+        )
         # The default dietary restrictions are a one-shot data migration under
         # Alembic, so no per-test bootstrap re-seeds them. Re-insert them here
-        # (test infrastructure, not app behavior) so every test starts from the
-        # same "fresh seeded database" state the lifespan bootstrap used to give.
+        # (test infrastructure, not app behavior) scoped to the default
+        # workspace so every test starts from the same "fresh seeded database"
+        # state the lifespan bootstrap used to give.
         conn.execute(
-            text("INSERT INTO allergies (name) VALUES (:name)"),
+            text(
+                "INSERT INTO allergies (name, workspace_id)"
+                " SELECT :name, id FROM workspaces WHERE slug = 'default'"
+            ),
             [{"name": name} for name in DEFAULT_DIETARY_RESTRICTIONS],
         )
 
@@ -75,12 +91,32 @@ def client_no_raise():
 
 
 @pytest.fixture
-def sample_data(db):
+def workspace(db):
+    """The default workspace every request resolves to when Clerk is disabled."""
+    from app.models import Workspace
+
+    return db.query(Workspace).filter(Workspace.slug == "default").one()
+
+
+@pytest.fixture
+def other_workspace(db):
+    """A second workspace with a distinct identity, for tenancy tests."""
+    from app.models import Workspace
+
+    other = Workspace(name="Other", slug="other")
+    db.add(other)
+    db.commit()
+    return other
+
+
+@pytest.fixture
+def sample_data(db, workspace):
     """One row of everything, so routes that take an id have something real to hit.
 
-    Returns the ids by *path parameter name* (`profile_id`, `hangout_id`, …) so
-    smoke tests can fill any route template from it, plus a `hangouts` map of
-    the three lifecycle states.
+    Rows live in the default workspace (what requests resolve to with Clerk
+    disabled). Returns the ids by *path parameter name* (`profile_id`,
+    `hangout_id`, …) plus a `hangouts` map of the three lifecycle states and
+    the workspace itself.
     """
     from app.models import (
         Allergy,
@@ -93,8 +129,8 @@ def sample_data(db):
         YesNo,
     )
 
-    tag = Tag(name="Core")
-    allergy = Allergy(name="Peanuts")
+    tag = Tag(name="Core", workspace_id=workspace.id)
+    allergy = Allergy(name="Peanuts", workspace_id=workspace.id)
     db.add_all([tag, allergy])
     db.flush()
 
@@ -104,6 +140,7 @@ def sample_data(db):
         drinks=YesNo.yes,
         smokes=YesNo.no,
         drive=Drive.maybe,
+        workspace_id=workspace.id,
     )
     profile.tags = [tag]
     profile.allergies = [allergy]
@@ -119,14 +156,23 @@ def sample_data(db):
             time="19:00",
             organizer_profile_id=profile.id,
             organizer_phone=profile.phone,
+            workspace_id=workspace.id,
         )
         db.add(hangout)
         db.flush()
-        db.add(HangoutInvite(hangout_id=hangout.id, profile_id=profile.id))
+        db.add(
+            HangoutInvite(
+                hangout_id=hangout.id,
+                profile_id=profile.id,
+                workspace_id=workspace.id,
+            )
+        )
         hangouts[state.value] = hangout.id
     db.commit()
 
     return {
+        "workspace_id": workspace.id,
+        "workspace": workspace,
         "tag_id": tag.id,
         "allergy_id": allergy.id,
         "profile_id": profile.id,

@@ -6,29 +6,39 @@ from app.models import (
     MessageDirection,
     MessageLog,
     Profile,
+    Workspace,
 )
 from app.services import process_inbound_sms
 
 
+def _default_workspace_id(db) -> int:
+    return db.query(Workspace.id).filter(Workspace.slug == "default").scalar()
+
+
 def _profile(db, name, phone):
-    profile = Profile(name=name, phone=phone)
+    profile = Profile(name=name, phone=phone, workspace_id=_default_workspace_id(db))
     db.add(profile)
     db.flush()
     return profile
 
 
 def _active_hangout_with_invite(db, invitee, organizer=None, **notify_kwargs):
+    workspace_id = _default_workspace_id(db)
     hangout = Hangout(
         status=HangoutStatus.active,
         motive="Beach day",
         organizer_profile_id=organizer.id if organizer else None,
         organizer_phone=organizer.phone if organizer else None,
+        workspace_id=workspace_id,
         **notify_kwargs,
     )
     db.add(hangout)
     db.flush()
     invite = HangoutInvite(
-        hangout_id=hangout.id, profile_id=invitee.id, status=InviteStatus.pending
+        hangout_id=hangout.id,
+        profile_id=invitee.id,
+        status=InviteStatus.pending,
+        workspace_id=workspace_id,
     )
     db.add(invite)
     db.flush()
@@ -106,10 +116,19 @@ def test_reply_matches_by_last_10_digits_fallback(db):
 
 def test_reply_to_inactive_hangout_is_unmatched(db):
     invitee = _profile(db, "Sam", "+15551112222")
-    hangout = Hangout(status=HangoutStatus.draft, motive="Draft")
+    hangout = Hangout(
+        status=HangoutStatus.draft, motive="Draft", workspace_id=_default_workspace_id(db)
+    )
     db.add(hangout)
     db.flush()
-    db.add(HangoutInvite(hangout_id=hangout.id, profile_id=invitee.id, status=InviteStatus.pending))
+    db.add(
+        HangoutInvite(
+            hangout_id=hangout.id,
+            profile_id=invitee.id,
+            status=InviteStatus.pending,
+            workspace_id=_default_workspace_id(db),
+        )
+    )
     db.commit()
 
     reply = process_inbound_sms(db, "+15551112222", "confirm")
@@ -206,8 +225,23 @@ def test_info_returns_headcounts_without_changing_status(db):
     lee = _profile(db, "Lee", "+15553334444")
     pat = _profile(db, "Pat", "+15555556666")
     hangout, sam_invite = _active_hangout_with_invite(db, sam)
-    db.add(HangoutInvite(hangout_id=hangout.id, profile_id=lee.id, status=InviteStatus.confirmed))
-    db.add(HangoutInvite(hangout_id=hangout.id, profile_id=pat.id, status=InviteStatus.declined))
+    ws = _default_workspace_id(db)
+    db.add(
+        HangoutInvite(
+            hangout_id=hangout.id,
+            profile_id=lee.id,
+            status=InviteStatus.confirmed,
+            workspace_id=ws,
+        )
+    )
+    db.add(
+        HangoutInvite(
+            hangout_id=hangout.id,
+            profile_id=pat.id,
+            status=InviteStatus.declined,
+            workspace_id=ws,
+        )
+    )
     lee.drive = Drive.yes
     db.commit()
 
@@ -231,8 +265,23 @@ def test_more_info_returns_named_guest_list(db):
     lee = _profile(db, "Lee", "+15553334444")
     pat = _profile(db, "Pat", "+15555556666")
     hangout, sam_invite = _active_hangout_with_invite(db, sam)
-    db.add(HangoutInvite(hangout_id=hangout.id, profile_id=lee.id, status=InviteStatus.confirmed))
-    db.add(HangoutInvite(hangout_id=hangout.id, profile_id=pat.id, status=InviteStatus.declined))
+    ws = _default_workspace_id(db)
+    db.add(
+        HangoutInvite(
+            hangout_id=hangout.id,
+            profile_id=lee.id,
+            status=InviteStatus.confirmed,
+            workspace_id=ws,
+        )
+    )
+    db.add(
+        HangoutInvite(
+            hangout_id=hangout.id,
+            profile_id=pat.id,
+            status=InviteStatus.declined,
+            workspace_id=ws,
+        )
+    )
     lee.drive = Drive.yes
     db.commit()
 
@@ -251,6 +300,7 @@ def test_more_info_returns_named_guest_list(db):
 def test_invite_message_is_multiline_with_info_options(db):
     from app.services import load_hangout, setup_hangout
 
+    workspace = db.query(Workspace).filter(Workspace.slug == "default").one()
     invitee = _profile(db, "Sam", "+15551112222")
     hangout = Hangout(
         status=HangoutStatus.draft,
@@ -258,13 +308,21 @@ def test_invite_message_is_multiline_with_info_options(db):
         day_date="2026-08-08",
         time="19:00",
         location="Sam's place",
+        workspace_id=workspace.id,
     )
     db.add(hangout)
     db.flush()
-    db.add(HangoutInvite(hangout_id=hangout.id, profile_id=invitee.id, status=InviteStatus.pending))
+    db.add(
+        HangoutInvite(
+            hangout_id=hangout.id,
+            profile_id=invitee.id,
+            status=InviteStatus.pending,
+            workspace_id=workspace.id,
+        )
+    )
     db.commit()
 
-    setup_hangout(db, load_hangout(db, hangout.id), profile_ids=[invitee.id])
+    setup_hangout(db, load_hangout(db, hangout.id, workspace), [invitee.id], workspace)
     body = (
         db.query(MessageLog)
         .filter(MessageLog.direction == MessageDirection.outbound)

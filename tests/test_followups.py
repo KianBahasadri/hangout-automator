@@ -10,6 +10,7 @@ from app.models import (
     MessageDirection,
     MessageLog,
     Profile,
+    Workspace,
 )
 from app.services import FOLLOWUP_FAILURE_LIMIT, process_followups, utcnow
 
@@ -18,10 +19,11 @@ from app.services import FOLLOWUP_FAILURE_LIMIT, process_followups, utcnow
 
 @pytest.fixture
 def invite(db):
-    profile = Profile(name="Sam", phone="+15551112222")
+    workspace_id = db.query(Workspace.id).filter(Workspace.slug == "default").scalar()
+    profile = Profile(name="Sam", phone="+15551112222", workspace_id=workspace_id)
     db.add(profile)
     db.flush()
-    hangout = Hangout(status=HangoutStatus.active, motive="Beach day")
+    hangout = Hangout(status=HangoutStatus.active, motive="Beach day", workspace_id=workspace_id)
     db.add(hangout)
     db.flush()
     row = HangoutInvite(
@@ -29,6 +31,7 @@ def invite(db):
         profile_id=profile.id,
         status=InviteStatus.pending,
         last_outbound_at=utcnow() - timedelta(hours=5),
+        workspace_id=workspace_id,
     )
     db.add(row)
     db.commit()

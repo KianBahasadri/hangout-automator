@@ -3,6 +3,12 @@ import re
 from app.config import Settings
 
 
+def _ws_id(db):
+    from app.models import Workspace
+
+    return db.query(Workspace.id).filter(Workspace.slug == "default").scalar()
+
+
 def test_index_new_hangout_button_in_header_row(client):
     response = client.get("/")
     assert response.status_code == 200
@@ -24,10 +30,15 @@ def test_index_new_hangout_button_in_header_row(client):
 def test_index_lists_hangouts(client, db):
     from app.models import Hangout, HangoutStatus
 
-    active_hangout = Hangout(status=HangoutStatus.active, motive="Board games")
+    workspace_id = _ws_id(db)
+    active_hangout = Hangout(
+        status=HangoutStatus.active, motive="Board games", workspace_id=workspace_id
+    )
     db.add(active_hangout)
-    db.add(Hangout(status=HangoutStatus.closed, motive="Finished dinner"))
-    db.add(Hangout(status=HangoutStatus.draft, motive="Movie night"))
+    db.add(
+        Hangout(status=HangoutStatus.closed, motive="Finished dinner", workspace_id=workspace_id)
+    )
+    db.add(Hangout(status=HangoutStatus.draft, motive="Movie night", workspace_id=workspace_id))
     db.commit()
 
     response = client.get("/")
@@ -49,6 +60,7 @@ def test_hangout_ui_humanizes_date_time_duration(client, db):
         day_date="2026-08-15",
         time="19:00",
         duration="3",
+        workspace_id=_ws_id(db),
     )
     db.add(hangout)
     db.commit()
@@ -71,11 +83,13 @@ def test_hangout_ui_humanizes_date_time_duration(client, db):
 def test_draft_hangout_opens_a_prefilled_edit_form(client, db):
     from app.models import Hangout, HangoutInvite, HangoutStatus, Profile, YesNo
 
-    organizer = Profile(name="Sam Rivera", phone="+15551110001")
+    workspace_id = _ws_id(db)
+    organizer = Profile(name="Sam Rivera", phone="+15551110001", workspace_id=workspace_id)
     db.add(organizer)
     db.flush()
     hangout = Hangout(
         status=HangoutStatus.draft,
+        workspace_id=workspace_id,
         day_date="2026-08-15",
         time="19:30",
         duration="2.5",
@@ -100,7 +114,7 @@ def test_draft_hangout_opens_a_prefilled_edit_form(client, db):
     )
     db.add(hangout)
     db.flush()
-    db.add(HangoutInvite(hangout_id=hangout.id, profile_id=organizer.id))
+    db.add(HangoutInvite(hangout_id=hangout.id, profile_id=organizer.id, workspace_id=workspace_id))
     db.commit()
 
     home = client.get("/")
@@ -145,14 +159,17 @@ def test_draft_hangout_opens_a_prefilled_edit_form(client, db):
 def test_draft_edit_saves_updated_details_and_invitees(client, db):
     from app.models import Hangout, HangoutInvite, HangoutStatus, Profile, YesNo
 
-    old_invitee = Profile(name="Taylor", phone="+15551110001")
-    organizer = Profile(name="Morgan", phone="+15551110002")
+    workspace_id = _ws_id(db)
+    old_invitee = Profile(name="Taylor", phone="+15551110001", workspace_id=workspace_id)
+    organizer = Profile(name="Morgan", phone="+15551110002", workspace_id=workspace_id)
     db.add_all([old_invitee, organizer])
     db.flush()
-    hangout = Hangout(status=HangoutStatus.draft, motive="Old plan")
+    hangout = Hangout(status=HangoutStatus.draft, motive="Old plan", workspace_id=workspace_id)
     db.add(hangout)
     db.flush()
-    db.add(HangoutInvite(hangout_id=hangout.id, profile_id=old_invitee.id))
+    db.add(
+        HangoutInvite(hangout_id=hangout.id, profile_id=old_invitee.id, workspace_id=workspace_id)
+    )
     db.commit()
 
     response = client.post(
@@ -213,7 +230,7 @@ def test_draft_edit_saves_updated_details_and_invitees(client, db):
 def test_draft_edit_autosave_returns_no_content(client, db):
     from app.models import Hangout, HangoutStatus
 
-    hangout = Hangout(status=HangoutStatus.draft, motive="Before")
+    hangout = Hangout(status=HangoutStatus.draft, motive="Before", workspace_id=_ws_id(db))
     db.add(hangout)
     db.commit()
 
@@ -243,8 +260,9 @@ def test_draft_autosave_uses_the_form_action_attribute(client):
 def test_draft_edit_can_set_up_the_saved_invitees(client, db):
     from app.models import Hangout, HangoutStatus, Profile
 
-    invitee = Profile(name="Casey", phone="+15551110001")
-    hangout = Hangout(status=HangoutStatus.draft, motive="Dinner")
+    workspace_id = _ws_id(db)
+    invitee = Profile(name="Casey", phone="+15551110001", workspace_id=workspace_id)
+    hangout = Hangout(status=HangoutStatus.draft, motive="Dinner", workspace_id=workspace_id)
     db.add_all([invitee, hangout])
     db.commit()
 
@@ -389,7 +407,7 @@ def test_new_hangout_without_invitees_redirects_instead_of_500(client):
 def test_existing_hangout_without_invitees_redirects_instead_of_500(client, db):
     from app.models import Hangout, HangoutStatus
 
-    hangout = Hangout(status=HangoutStatus.draft, motive="Empty setup")
+    hangout = Hangout(status=HangoutStatus.draft, motive="Empty setup", workspace_id=_ws_id(db))
     db.add(hangout)
     db.commit()
 
@@ -526,9 +544,10 @@ def test_delete_confirmations_survive_an_apostrophe(client, db):
     """
     from app.models import Allergy, Profile, Tag
 
-    db.add(Profile(name="Kian O'Brien", phone="+15551234567"))
-    db.add(Tag(name="Sam's crew"))
-    db.add(Allergy(name="Cow's milk"))
+    workspace_id = _ws_id(db)
+    db.add(Profile(name="Kian O'Brien", phone="+15551234567", workspace_id=workspace_id))
+    db.add(Tag(name="Sam's crew", workspace_id=workspace_id))
+    db.add(Allergy(name="Cow's milk", workspace_id=workspace_id))
     db.commit()
 
     for path in ("/profiles", "/settings"):
