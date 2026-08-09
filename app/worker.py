@@ -19,7 +19,7 @@ from time import perf_counter
 from apscheduler.schedulers.blocking import BlockingScheduler
 
 from app.config import get_settings
-from app.database import SessionLocal
+from app.database import SessionLocal, engine
 from app.event_logging import audit_event, configure_logging, request_context
 from app.locks import JOB_KEYS, advisory_lock
 from app.services import process_followups, process_organizer_intervals
@@ -35,7 +35,7 @@ def _job_followups() -> None:
         audit_event("background_job.started", job="followups", job_id=job_id)
         db = SessionLocal()
         try:
-            with advisory_lock(db, JOB_KEYS["followups"]) as locked:
+            with advisory_lock(engine, JOB_KEYS["followups"]) as locked:
                 if not locked:
                     audit_event(
                         "background_job.skipped_locked",
@@ -74,7 +74,7 @@ def _job_organizer() -> None:
         audit_event("background_job.started", job="organizer_intervals", job_id=job_id)
         db = SessionLocal()
         try:
-            with advisory_lock(db, JOB_KEYS["organizer"]) as locked:
+            with advisory_lock(engine, JOB_KEYS["organizer"]) as locked:
                 if not locked:
                     audit_event(
                         "background_job.skipped_locked",
