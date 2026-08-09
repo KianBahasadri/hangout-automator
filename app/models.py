@@ -165,11 +165,14 @@ class Tag(Base):
     __tablename__ = "tags"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    workspace_id: Mapped[int | None] = mapped_column(
-        ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=True
+    workspace_id: Mapped[int] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
     )
-    name: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    name: Mapped[str] = mapped_column(String(64), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    # The same tag name may exist in different workspaces.
+    __table_args__ = (UniqueConstraint("workspace_id", "name"),)
 
     profiles: Mapped[list[Profile]] = relationship(secondary=profile_tags, back_populates="tags")
 
@@ -180,11 +183,14 @@ class Allergy(Base):
     __tablename__ = "allergies"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    workspace_id: Mapped[int | None] = mapped_column(
-        ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=True
+    workspace_id: Mapped[int] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
     )
-    name: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    name: Mapped[str] = mapped_column(String(64), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    # The same restriction name may exist in different workspaces.
+    __table_args__ = (UniqueConstraint("workspace_id", "name"),)
 
     profiles: Mapped[list[Profile]] = relationship(
         secondary=profile_allergies, back_populates="allergies"
@@ -195,11 +201,14 @@ class Profile(Base):
     __tablename__ = "profiles"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    workspace_id: Mapped[int | None] = mapped_column(
-        ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=True
+    workspace_id: Mapped[int] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
     )
     name: Mapped[str] = mapped_column(String(120), nullable=False)
-    phone: Mapped[str] = mapped_column(String(32), nullable=False, unique=True)
+    phone: Mapped[str] = mapped_column(String(32), nullable=False)
+
+    # The same phone number may exist in different workspaces.
+    __table_args__ = (UniqueConstraint("workspace_id", "phone"),)
     drinks: Mapped[YesNo | None] = mapped_column(_optional_enum_column(YesNo), nullable=True)
     smokes: Mapped[YesNo | None] = mapped_column(_optional_enum_column(YesNo), nullable=True)
     # Legacy free-text column; kept for data migrated from the legacy database. Prefer allergies relationship.
@@ -240,8 +249,8 @@ class Hangout(Base):
     __tablename__ = "hangouts"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    workspace_id: Mapped[int | None] = mapped_column(
-        ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=True
+    workspace_id: Mapped[int] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
     )
     day_date: Mapped[str | None] = mapped_column(String(64), nullable=True)
     time: Mapped[str | None] = mapped_column(String(64), nullable=True)
@@ -307,8 +316,8 @@ class HangoutInvite(Base):
     __tablename__ = "hangout_invites"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    workspace_id: Mapped[int | None] = mapped_column(
-        ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=True
+    workspace_id: Mapped[int] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
     )
     hangout_id: Mapped[int] = mapped_column(
         ForeignKey("hangouts.id", ondelete="CASCADE"), nullable=False

@@ -299,7 +299,7 @@ gets exponentially more expensive with every table and every route added.
 - [x] **P3.2** Add nullable `workspace_id` to `profiles`, `hangouts`, `tags`,
       `allergies`, `hangout_invites`, `message_logs` in one Alembic migration.
       Nullable first — the backfill needs it.
-- [ ] **P3.3** Backfill migration: create workspace `default` (slug `default`),
+- [x] **P3.3** Backfill migration: create workspace `default` (slug `default`),
       set `workspace_id` on every existing row in all six tables, then `ALTER`
       to NOT NULL on all except `message_logs`. Swap the three unique constraints
       to composite in the same migration. Include a working `downgrade()`.
