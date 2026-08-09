@@ -21,8 +21,10 @@ from app.models import (
     HangoutStatus,
     Profile,
     Tag,
+    Workspace,
     YesNo,
 )
+from app.tenancy import current_workspace, get_scoped, scoped
 from app.messages import format_day_date, format_duration, format_time, preview_message_catalog
 from app.services import (
     COOLDOWN_MINUTE_OPTIONS,
@@ -77,21 +79,21 @@ def _optional_enum_form(value: str | None, enum_cls):  # type: ignore[no-untyped
         return None
 
 
-def _profiles_with_tags(db: Session) -> list[Profile]:
+def _profiles_with_tags(db: Session, workspace: Workspace) -> list[Profile]:
     return (
-        db.query(Profile)
+        scoped(db, Profile, workspace)
         .options(joinedload(Profile.tags), joinedload(Profile.allergies))
         .order_by(Profile.name)
         .all()
     )
 
 
-def _all_tags(db: Session) -> list[Tag]:
-    return db.query(Tag).order_by(Tag.name).all()
+def _all_tags(db: Session, workspace: Workspace) -> list[Tag]:
+    return scoped(db, Tag, workspace).order_by(Tag.name).all()
 
 
-def _all_allergies(db: Session) -> list[Allergy]:
-    return db.query(Allergy).order_by(Allergy.name).all()
+def _all_allergies(db: Session, workspace: Workspace) -> list[Allergy]:
+    return scoped(db, Allergy, workspace).order_by(Allergy.name).all()
 
 
 def _safe_redirect_path(value: str | None) -> str:
@@ -115,15 +117,19 @@ def sign_in(request: Request) -> Response:
 
 
 @router.get("/", response_class=HTMLResponse)
-def home(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
+def home(
+    request: Request,
+    db: Session = Depends(get_db),
+    workspace: Workspace = Depends(current_workspace),
+) -> HTMLResponse:
     hangouts = (
-        db.query(Hangout)
+        scoped(db, Hangout, workspace)
         .options(joinedload(Hangout.invites).joinedload(HangoutInvite.profile))
         .filter(Hangout.deleted_at.is_(None))
         .order_by(Hangout.id.desc())
         .all()
     )
-    profiles = db.query(Profile).order_by(Profile.name).all()
+    profiles = scoped(db, Profile, workspace).order_by(Profile.name).all()
     return templates.TemplateResponse(
         request,
         "index.html",
@@ -140,10 +146,12 @@ PROFILE_ERRORS = {
 _PROFILE_FIELD_RE = re.compile(r"^profiles\[(\d+)\]\[([a-z_]+)\]$")
 
 
-def _profile_form_context(db: Session, *, error: str | None = None, profile_rows=None) -> dict:
+def _profile_form_context(
+    db: Session, workspace: Workspace, *, error: str | None = None, profile_rows=None
+) -> dict:
     return {
-        "tags": _all_tags(db),
-        "allergies": _all_allergies(db),
+        "tags": _all_tags(db, workspace),
+        "allergies": _all_allergies(db, workspace),
         "drinks_opts": list(YesNo),
         "smokes_opts": list(YesNo),
         "drive_opts": list(Drive),
@@ -201,14 +209,18 @@ def _profile_rows_from_form(form) -> tuple[list[dict], bool]:  # type: ignore[no
 
 
 @router.get("/profiles", response_class=HTMLResponse)
-def profiles_page(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
+def profiles_page(
+    request: Request,
+    db: Session = Depends(get_db),
+    workspace: Workspace = Depends(current_workspace),
+) -> HTMLResponse:
     return templates.TemplateResponse(
         request,
         "profiles.html",
         {
-            "profiles": _profiles_with_tags(db),
-            "tags": _all_tags(db),
-            "allergies": _all_allergies(db),
+            "profiles": _profiles_with_tags(db, workspace),
+            "tags": _all_tags(db, workspace),
+            "allergies": _all_allergies(db, workspace),
             "drinks_opts": list(YesNo),
             "smokes_opts": list(YesNo),
             "drive_opts": list(Drive),
@@ -218,12 +230,17 @@ def profiles_page(request: Request, db: Session = Depends(get_db)) -> HTMLRespon
 
 
 @router.get("/profiles/new", response_class=HTMLResponse)
-def profiles_new_page(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
+def profiles_new_page(
+    request: Request,
+    db: Session = Depends(get_db),
+    workspace: Workspace = Depends(current_workspace),
+) -> HTMLResponse:
     return templates.TemplateResponse(
         request,
         "profiles_new.html",
         _profile_form_context(
             db,
+            workspace,
             error=PROFILE_ERRORS.get(request.query_params.get("error", "")),
         ),
     )
@@ -231,20 +248,26 @@ def profiles_new_page(request: Request, db: Session = Depends(get_db)) -> HTMLRe
 
 @router.post("/tags")
 def tags_create(
-    name: str = Form(..., max_length=64), db: Session = Depends(get_db)
+    name: str = Form(..., max_length=64),
+    db: Session = Depends(get_db),
+    workspace: Workspace = Depends(current_workspace),
 ) -> RedirectResponse:
     cleaned = normalize_tag_name(name)
     if cleaned:
-        existing = db.query(Tag).filter(Tag.name.ilike(cleaned)).first()
+        existing = scoped(db, Tag, workspace).filter(Tag.name.ilike(cleaned)).first()
         if not existing:
-            db.add(Tag(name=cleaned))
+            db.add(Tag(name=cleaned, workspace_id=workspace.id))
             db.commit()
     return RedirectResponse("/profiles", status_code=303)
 
 
 @router.post("/tags/{tag_id}/delete")
-def tags_delete(tag_id: RowIdPath, db: Session = Depends(get_db)) -> RedirectResponse:
-    tag = db.get(Tag, tag_id)
+def tags_delete(
+    tag_id: RowIdPath,
+    db: Session = Depends(get_db),
+    workspace: Workspace = Depends(current_workspace),
+) -> RedirectResponse:
+    tag = get_scoped(db, Tag, tag_id, workspace)
     if tag:
         db.delete(tag)
         db.commit()
@@ -253,7 +276,9 @@ def tags_delete(tag_id: RowIdPath, db: Session = Depends(get_db)) -> RedirectRes
 
 @router.post("/profiles", response_model=None)
 async def profiles_create(
-    request: Request, db: Session = Depends(get_db)
+    request: Request,
+    db: Session = Depends(get_db),
+    workspace: Workspace = Depends(current_workspace),
 ) -> RedirectResponse | HTMLResponse:
     form = await request.form()
     rows, is_batch = _profile_rows_from_form(form)
@@ -274,7 +299,9 @@ async def profiles_create(
             errors.append(
                 f"{prefix}That phone number isn't usable — enter a full number like +1 (555) 123-4567."
             )
-        elif phone_n in seen_phones or db.query(Profile).filter(Profile.phone == phone_n).first():
+        elif phone_n in seen_phones or (
+            scoped(db, Profile, workspace).filter(Profile.phone == phone_n).first()
+        ):
             errors.append(f"{prefix}A profile with that phone number already exists.")
         else:
             seen_phones.add(phone_n)
@@ -299,7 +326,9 @@ async def profiles_create(
         return templates.TemplateResponse(
             request,
             "profiles_new.html",
-            _profile_form_context(db, error=" ".join(errors), profile_rows=validated_rows),
+            _profile_form_context(
+                db, workspace, error=" ".join(errors), profile_rows=validated_rows
+            ),
             status_code=400,
         )
 
@@ -310,6 +339,7 @@ async def profiles_create(
             drinks=_optional_enum_form(row["drinks"], YesNo),
             smokes=_optional_enum_form(row["smokes"], YesNo),
             drive=_optional_enum_form(row["drive"], Drive),
+            workspace_id=workspace.id,
         )
         tag_ids = [
             parsed for value in row["tag_ids"] if (parsed := parse_row_id(value)) is not None
@@ -317,16 +347,20 @@ async def profiles_create(
         allergy_ids = [
             parsed for value in row["allergy_ids"] if (parsed := parse_row_id(value)) is not None
         ]
-        profile.tags = load_tags_by_ids(db, tag_ids)
-        profile.allergies = load_allergies_by_ids(db, allergy_ids)
+        profile.tags = load_tags_by_ids(db, tag_ids, workspace)
+        profile.allergies = load_allergies_by_ids(db, allergy_ids, workspace)
         db.add(profile)
     db.commit()
     return RedirectResponse("/profiles", status_code=303)
 
 
 @router.post("/profiles/{profile_id}/delete")
-def profiles_delete(profile_id: RowIdPath, db: Session = Depends(get_db)) -> RedirectResponse:
-    profile = db.get(Profile, profile_id)
+def profiles_delete(
+    profile_id: RowIdPath,
+    db: Session = Depends(get_db),
+    workspace: Workspace = Depends(current_workspace),
+) -> RedirectResponse:
+    profile = get_scoped(db, Profile, profile_id, workspace)
     if profile:
         db.delete(profile)
         db.commit()
@@ -334,24 +368,29 @@ def profiles_delete(profile_id: RowIdPath, db: Session = Depends(get_db)) -> Red
 
 
 @router.get("/hangouts/new", response_class=HTMLResponse)
-def hangout_new(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
+def hangout_new(
+    request: Request,
+    db: Session = Depends(get_db),
+    workspace: Workspace = Depends(current_workspace),
+) -> HTMLResponse:
     return templates.TemplateResponse(
         request,
         "hangout_new.html",
-        _hangout_form_context(db),
+        _hangout_form_context(db, workspace),
     )
 
 
 def _hangout_form_context(
     db: Session,
+    workspace: Workspace,
     *,
     hangout: Hangout | None = None,
     error: str | None = None,
 ) -> dict:
     return {
         "hangout": hangout,
-        "profiles": _profiles_with_tags(db),
-        "tags": _all_tags(db),
+        "profiles": _profiles_with_tags(db, workspace),
+        "tags": _all_tags(db, workspace),
         "invited_ids": {invite.profile_id for invite in hangout.invites} if hangout else set(),
         "error": error,
         "google_places_enabled": bool(get_settings().google_maps_api_key.strip()),
@@ -365,6 +404,7 @@ def _hangout_form_context(
 
 def _apply_hangout_form(
     db: Session,
+    workspace: Workspace,
     hangout: Hangout,
     *,
     day_date: str,
@@ -390,7 +430,9 @@ def _apply_hangout_form(
 ) -> None:
     """Apply the shared new/edit form fields to a draft hangout."""
     organizer_id = parse_row_id(organizer_profile_id)
-    org_profile = db.get(Profile, organizer_id) if organizer_id is not None else None
+    org_profile = (
+        get_scoped(db, Profile, organizer_id, workspace) if organizer_id is not None else None
+    )
     notify = notify_enabled is not None
     # Notifications require an organizer profile with a phone.
     if notify and not (org_profile and org_profile.phone):
@@ -422,11 +464,19 @@ def _apply_hangout_form(
     )
 
 
-def _valid_profile_ids(db: Session, profile_ids: list[RowId] | None) -> list[int]:
-    return list(dict.fromkeys(pid for pid in profile_ids or [] if db.get(Profile, pid) is not None))
+def _valid_profile_ids(
+    db: Session, workspace: Workspace, profile_ids: list[RowId] | None
+) -> list[int]:
+    return list(
+        dict.fromkeys(
+            pid for pid in profile_ids or [] if get_scoped(db, Profile, pid, workspace) is not None
+        )
+    )
 
 
-def _sync_draft_invitees(db: Session, hangout: Hangout, profile_ids: list[int]) -> None:
+def _sync_draft_invitees(
+    db: Session, workspace: Workspace, hangout: Hangout, profile_ids: list[int]
+) -> None:
     """Make a draft's selected invitees match its edit form."""
     selected_ids = set(profile_ids)
     existing_ids = {invite.profile_id for invite in hangout.invites}
@@ -435,7 +485,13 @@ def _sync_draft_invitees(db: Session, hangout: Hangout, profile_ids: list[int]) 
             db.delete(invite)
     for profile_id in profile_ids:
         if profile_id not in existing_ids:
-            db.add(HangoutInvite(hangout_id=hangout.id, profile_id=profile_id))
+            db.add(
+                HangoutInvite(
+                    hangout_id=hangout.id,
+                    profile_id=profile_id,
+                    workspace_id=workspace.id,
+                )
+            )
 
 
 @router.post("/hangouts/new")
@@ -463,10 +519,12 @@ def hangout_create(
     profile_ids: Annotated[list[RowId] | None, Form()] = None,
     action: str = Form("draft"),
     db: Session = Depends(get_db),
+    workspace: Workspace = Depends(current_workspace),
 ) -> RedirectResponse:
-    hangout = Hangout(status=HangoutStatus.draft)
+    hangout = Hangout(status=HangoutStatus.draft, workspace_id=workspace.id)
     _apply_hangout_form(
         db,
+        workspace,
         hangout,
         day_date=day_date,
         time=time,
@@ -491,14 +549,14 @@ def hangout_create(
     )
     db.add(hangout)
     db.flush()
-    ids = _valid_profile_ids(db, profile_ids)
-    _sync_draft_invitees(db, hangout, ids)
+    ids = _valid_profile_ids(db, workspace, profile_ids)
+    _sync_draft_invitees(db, workspace, hangout, ids)
     db.commit()
 
     if action == "setup":
-        hangout = load_hangout(db, hangout.id)  # type: ignore[assignment]
+        hangout = load_hangout(db, hangout.id, workspace)  # type: ignore[assignment]
         try:
-            setup_hangout(db, hangout, ids)
+            setup_hangout(db, hangout, ids, workspace)
         except ValueError:
             return RedirectResponse(
                 f"/hangouts/{hangout.id}/edit?error=need_profiles", status_code=303
@@ -509,9 +567,12 @@ def hangout_create(
 
 @router.get("/hangouts/{hangout_id}/edit", response_class=HTMLResponse)
 def hangout_edit(
-    request: Request, hangout_id: RowIdPath, db: Session = Depends(get_db)
+    request: Request,
+    hangout_id: RowIdPath,
+    db: Session = Depends(get_db),
+    workspace: Workspace = Depends(current_workspace),
 ) -> HTMLResponse:
-    hangout = load_hangout(db, hangout_id)
+    hangout = load_hangout(db, hangout_id, workspace)
     if not hangout or hangout.status != HangoutStatus.draft or hangout.deleted_at is not None:
         return RedirectResponse(f"/hangouts/{hangout_id}" if hangout else "/", status_code=303)
     return templates.TemplateResponse(
@@ -519,6 +580,7 @@ def hangout_edit(
         "hangout_new.html",
         _hangout_form_context(
             db,
+            workspace,
             hangout=hangout,
             error=request.query_params.get("error"),
         ),
@@ -552,8 +614,9 @@ def hangout_update_draft(
     profile_ids: Annotated[list[RowId] | None, Form()] = None,
     action: str = Form("draft"),
     db: Session = Depends(get_db),
+    workspace: Workspace = Depends(current_workspace),
 ) -> Response:
-    hangout = load_hangout(db, hangout_id)
+    hangout = load_hangout(db, hangout_id, workspace)
     if not hangout:
         return RedirectResponse("/", status_code=303)
     if hangout.status != HangoutStatus.draft or hangout.deleted_at is not None:
@@ -561,6 +624,7 @@ def hangout_update_draft(
 
     _apply_hangout_form(
         db,
+        workspace,
         hangout,
         day_date=day_date,
         time=time,
@@ -583,14 +647,14 @@ def hangout_update_draft(
         notify_confirm_goal=notify_confirm_goal,
         notify_threshold_cooldown_minutes=notify_threshold_cooldown_minutes,
     )
-    ids = _valid_profile_ids(db, profile_ids)
-    _sync_draft_invitees(db, hangout, ids)
+    ids = _valid_profile_ids(db, workspace, profile_ids)
+    _sync_draft_invitees(db, workspace, hangout, ids)
     db.commit()
 
     if action == "setup":
-        hangout = load_hangout(db, hangout_id)  # type: ignore[assignment]
+        hangout = load_hangout(db, hangout_id, workspace)  # type: ignore[assignment]
         try:
-            setup_hangout(db, hangout, ids)
+            setup_hangout(db, hangout, ids, workspace)
         except ValueError:
             return RedirectResponse(
                 f"/hangouts/{hangout_id}/edit?error=need_profiles", status_code=303
@@ -604,9 +668,12 @@ def hangout_update_draft(
 
 @router.get("/hangouts/{hangout_id}", response_class=HTMLResponse)
 def hangout_detail(
-    request: Request, hangout_id: RowIdPath, db: Session = Depends(get_db)
+    request: Request,
+    hangout_id: RowIdPath,
+    db: Session = Depends(get_db),
+    workspace: Workspace = Depends(current_workspace),
 ) -> HTMLResponse:
-    hangout = load_hangout(db, hangout_id)
+    hangout = load_hangout(db, hangout_id, workspace)
     if not hangout:
         return RedirectResponse("/", status_code=303)
     if hangout.status == HangoutStatus.draft and hangout.deleted_at is None:
@@ -619,8 +686,8 @@ def hangout_detail(
         "hangout_detail.html",
         {
             "hangout": hangout,
-            "all_profiles": _profiles_with_tags(db),
-            "tags": _all_tags(db),
+            "all_profiles": _profiles_with_tags(db, workspace),
+            "tags": _all_tags(db, workspace),
             "invited_ids": invited_ids,
             "error": request.query_params.get("error"),
         },
@@ -632,21 +699,26 @@ def hangout_setup(
     hangout_id: RowIdPath,
     profile_ids: Annotated[list[RowId] | None, Form()] = None,
     db: Session = Depends(get_db),
+    workspace: Workspace = Depends(current_workspace),
 ) -> RedirectResponse:
-    hangout = load_hangout(db, hangout_id)
+    hangout = load_hangout(db, hangout_id, workspace)
     if not hangout:
         return RedirectResponse("/", status_code=303)
     ids = list(profile_ids or [])
     try:
-        setup_hangout(db, hangout, ids if ids else None)
+        setup_hangout(db, hangout, ids if ids else None, workspace)
     except ValueError:
         return RedirectResponse(f"/hangouts/{hangout_id}?error=need_profiles", status_code=303)
     return RedirectResponse(f"/hangouts/{hangout_id}", status_code=303)
 
 
 @router.post("/hangouts/{hangout_id}/close")
-def hangout_close(hangout_id: RowIdPath, db: Session = Depends(get_db)) -> RedirectResponse:
-    hangout = db.get(Hangout, hangout_id)
+def hangout_close(
+    hangout_id: RowIdPath,
+    db: Session = Depends(get_db),
+    workspace: Workspace = Depends(current_workspace),
+) -> RedirectResponse:
+    hangout = get_scoped(db, Hangout, hangout_id, workspace)
     if hangout and hangout.deleted_at is None:
         hangout.status = HangoutStatus.closed
         db.commit()
@@ -654,11 +726,15 @@ def hangout_close(hangout_id: RowIdPath, db: Session = Depends(get_db)) -> Redir
 
 
 @router.post("/hangouts/{hangout_id}/delete")
-def hangout_soft_delete(hangout_id: RowIdPath, db: Session = Depends(get_db)) -> RedirectResponse:
+def hangout_soft_delete(
+    hangout_id: RowIdPath,
+    db: Session = Depends(get_db),
+    workspace: Workspace = Depends(current_workspace),
+) -> RedirectResponse:
     """Hide a closed hangout from the main list (soft delete)."""
     from app.services import utcnow
 
-    hangout = db.get(Hangout, hangout_id)
+    hangout = get_scoped(db, Hangout, hangout_id, workspace)
     if hangout and hangout.status == HangoutStatus.closed and hangout.deleted_at is None:
         hangout.deleted_at = utcnow()
         db.commit()
@@ -669,9 +745,13 @@ def hangout_soft_delete(hangout_id: RowIdPath, db: Session = Depends(get_db)) ->
 
 
 @router.post("/hangouts/{hangout_id}/restore")
-def hangout_restore(hangout_id: RowIdPath, db: Session = Depends(get_db)) -> RedirectResponse:
+def hangout_restore(
+    hangout_id: RowIdPath,
+    db: Session = Depends(get_db),
+    workspace: Workspace = Depends(current_workspace),
+) -> RedirectResponse:
     """Un-hide a soft-deleted hangout."""
-    hangout = db.get(Hangout, hangout_id)
+    hangout = get_scoped(db, Hangout, hangout_id, workspace)
     if hangout and hangout.deleted_at is not None:
         hangout.deleted_at = None
         db.commit()
@@ -681,11 +761,15 @@ def hangout_restore(hangout_id: RowIdPath, db: Session = Depends(get_db)) -> Red
 
 
 @router.get("/settings", response_class=HTMLResponse)
-def settings_page(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
+def settings_page(
+    request: Request,
+    db: Session = Depends(get_db),
+    workspace: Workspace = Depends(current_workspace),
+) -> HTMLResponse:
     return templates.TemplateResponse(
         request,
         "settings.html",
-        {"allergies": _all_allergies(db)},
+        {"allergies": _all_allergies(db, workspace)},
     )
 
 
@@ -694,9 +778,10 @@ def deleted_hangouts_page(
     request: Request,
     q: str = "",
     db: Session = Depends(get_db),
+    workspace: Workspace = Depends(current_workspace),
 ) -> HTMLResponse:
     query = (
-        db.query(Hangout)
+        scoped(db, Hangout, workspace)
         .options(joinedload(Hangout.invites).joinedload(HangoutInvite.profile))
         .filter(Hangout.deleted_at.isnot(None))
     )
@@ -742,20 +827,26 @@ def download_logs() -> FileResponse:
 
 @router.post("/allergies")
 def allergies_create(
-    name: str = Form(..., max_length=64), db: Session = Depends(get_db)
+    name: str = Form(..., max_length=64),
+    db: Session = Depends(get_db),
+    workspace: Workspace = Depends(current_workspace),
 ) -> RedirectResponse:
     cleaned = normalize_allergy_name(name)
     if cleaned:
-        existing = db.query(Allergy).filter(Allergy.name.ilike(cleaned)).first()
+        existing = scoped(db, Allergy, workspace).filter(Allergy.name.ilike(cleaned)).first()
         if not existing:
-            db.add(Allergy(name=cleaned))
+            db.add(Allergy(name=cleaned, workspace_id=workspace.id))
             db.commit()
     return RedirectResponse("/settings", status_code=303)
 
 
 @router.post("/allergies/{allergy_id}/delete")
-def allergies_delete(allergy_id: RowIdPath, db: Session = Depends(get_db)) -> RedirectResponse:
-    allergy = db.get(Allergy, allergy_id)
+def allergies_delete(
+    allergy_id: RowIdPath,
+    db: Session = Depends(get_db),
+    workspace: Workspace = Depends(current_workspace),
+) -> RedirectResponse:
+    allergy = get_scoped(db, Allergy, allergy_id, workspace)
     if allergy:
         db.delete(allergy)
         db.commit()

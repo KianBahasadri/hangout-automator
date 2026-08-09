@@ -19,6 +19,7 @@ from app.models import (
     HangoutStatus,
     Profile,
     Tag,
+    Workspace,
     not_null_columns,
 )
 from app.messages import craft_invite_preview
@@ -53,6 +54,7 @@ from app.services import (
     setup_hangout,
 )
 from app.sms import is_valid_phone, normalize_phone
+from app.tenancy import current_workspace, get_scoped, scoped
 
 router = APIRouter(prefix="/api", tags=["api"])
 logger = logging.getLogger(__name__)
@@ -282,18 +284,24 @@ def preview_invite_sms(payload: InviteSmsPreviewIn) -> InviteSmsPreviewOut:
 
 
 @router.get("/tags", response_model=list[TagOut])
-def list_tags(db: Session = Depends(get_db)) -> list[Tag]:
-    return db.query(Tag).order_by(Tag.name).all()
+def list_tags(
+    db: Session = Depends(get_db), workspace: Workspace = Depends(current_workspace)
+) -> list[Tag]:
+    return scoped(db, Tag, workspace).order_by(Tag.name).all()
 
 
 @router.post("/tags", response_model=TagOut, status_code=201)
-def create_tag(payload: TagCreate, db: Session = Depends(get_db)) -> Tag:
+def create_tag(
+    payload: TagCreate,
+    db: Session = Depends(get_db),
+    workspace: Workspace = Depends(current_workspace),
+) -> Tag:
     name = normalize_tag_name(payload.name)
     if not name:
         raise HTTPException(400, "Tag name is required")
-    if db.query(Tag).filter(Tag.name.ilike(name)).first():
+    if scoped(db, Tag, workspace).filter(Tag.name.ilike(name)).first():
         raise HTTPException(400, "A tag with this name already exists")
-    tag = Tag(name=name)
+    tag = Tag(name=name, workspace_id=workspace.id)
     db.add(tag)
     db.commit()
     db.refresh(tag)
@@ -301,8 +309,12 @@ def create_tag(payload: TagCreate, db: Session = Depends(get_db)) -> Tag:
 
 
 @router.delete("/tags/{tag_id}", status_code=204, response_class=Response)
-def delete_tag(tag_id: RowIdPath, db: Session = Depends(get_db)) -> Response:
-    tag = db.get(Tag, tag_id)
+def delete_tag(
+    tag_id: RowIdPath,
+    db: Session = Depends(get_db),
+    workspace: Workspace = Depends(current_workspace),
+) -> Response:
+    tag = get_scoped(db, Tag, tag_id, workspace)
     if not tag:
         raise HTTPException(404, "Tag not found")
     db.delete(tag)
@@ -314,18 +326,24 @@ def delete_tag(tag_id: RowIdPath, db: Session = Depends(get_db)) -> Response:
 
 
 @router.get("/allergies", response_model=list[AllergyOut])
-def list_allergies(db: Session = Depends(get_db)) -> list[Allergy]:
-    return db.query(Allergy).order_by(Allergy.name).all()
+def list_allergies(
+    db: Session = Depends(get_db), workspace: Workspace = Depends(current_workspace)
+) -> list[Allergy]:
+    return scoped(db, Allergy, workspace).order_by(Allergy.name).all()
 
 
 @router.post("/allergies", response_model=AllergyOut, status_code=201)
-def create_allergy(payload: AllergyCreate, db: Session = Depends(get_db)) -> Allergy:
+def create_allergy(
+    payload: AllergyCreate,
+    db: Session = Depends(get_db),
+    workspace: Workspace = Depends(current_workspace),
+) -> Allergy:
     name = normalize_allergy_name(payload.name)
     if not name:
         raise HTTPException(400, "Allergy name is required")
-    if db.query(Allergy).filter(Allergy.name.ilike(name)).first():
+    if scoped(db, Allergy, workspace).filter(Allergy.name.ilike(name)).first():
         raise HTTPException(400, "An allergy with this name already exists")
-    allergy = Allergy(name=name)
+    allergy = Allergy(name=name, workspace_id=workspace.id)
     db.add(allergy)
     db.commit()
     db.refresh(allergy)
@@ -333,8 +351,12 @@ def create_allergy(payload: AllergyCreate, db: Session = Depends(get_db)) -> All
 
 
 @router.delete("/allergies/{allergy_id}", status_code=204, response_class=Response)
-def delete_allergy(allergy_id: RowIdPath, db: Session = Depends(get_db)) -> Response:
-    allergy = db.get(Allergy, allergy_id)
+def delete_allergy(
+    allergy_id: RowIdPath,
+    db: Session = Depends(get_db),
+    workspace: Workspace = Depends(current_workspace),
+) -> Response:
+    allergy = get_scoped(db, Allergy, allergy_id, workspace)
     if not allergy:
         raise HTTPException(404, "Allergy not found")
     db.delete(allergy)
@@ -345,24 +367,30 @@ def delete_allergy(allergy_id: RowIdPath, db: Session = Depends(get_db)) -> Resp
 # --- Profiles ---
 
 
-def _profile_query(db: Session):
-    return db.query(Profile).options(
+def _profile_query(db: Session, workspace: Workspace):
+    return scoped(db, Profile, workspace).options(
         joinedload(Profile.tags),
         joinedload(Profile.allergies),
     )
 
 
 @router.get("/profiles", response_model=list[ProfileOut])
-def list_profiles(db: Session = Depends(get_db)) -> list[Profile]:
-    return _profile_query(db).order_by(Profile.name).all()
+def list_profiles(
+    db: Session = Depends(get_db), workspace: Workspace = Depends(current_workspace)
+) -> list[Profile]:
+    return _profile_query(db, workspace).order_by(Profile.name).all()
 
 
 @router.post("/profiles", response_model=ProfileOut, status_code=201)
-def create_profile(payload: ProfileCreate, db: Session = Depends(get_db)) -> Profile:
+def create_profile(
+    payload: ProfileCreate,
+    db: Session = Depends(get_db),
+    workspace: Workspace = Depends(current_workspace),
+) -> Profile:
     phone = normalize_phone(payload.phone)
     if not is_valid_phone(phone):
         raise HTTPException(400, "Phone number is not usable")
-    if db.query(Profile).filter(Profile.phone == phone).first():
+    if scoped(db, Profile, workspace).filter(Profile.phone == phone).first():
         raise HTTPException(400, "A profile with this phone already exists")
     profile = Profile(
         name=payload.name.strip(),
@@ -370,19 +398,23 @@ def create_profile(payload: ProfileCreate, db: Session = Depends(get_db)) -> Pro
         drinks=payload.drinks,
         smokes=payload.smokes,
         drive=payload.drive,
+        workspace_id=workspace.id,
     )
-    profile.tags = load_tags_by_ids(db, payload.tag_ids)
-    profile.allergies = load_allergies_by_ids(db, payload.allergy_ids)
+    profile.tags = load_tags_by_ids(db, payload.tag_ids, workspace)
+    profile.allergies = load_allergies_by_ids(db, payload.allergy_ids, workspace)
     db.add(profile)
     db.commit()
-    return _profile_query(db).filter(Profile.id == profile.id).one()
+    return _profile_query(db, workspace).filter(Profile.id == profile.id).one()
 
 
 @router.patch("/profiles/{profile_id}", response_model=ProfileOut)
 def update_profile(
-    profile_id: RowIdPath, payload: ProfileUpdate, db: Session = Depends(get_db)
+    profile_id: RowIdPath,
+    payload: ProfileUpdate,
+    db: Session = Depends(get_db),
+    workspace: Workspace = Depends(current_workspace),
 ) -> Profile:
-    profile = db.get(Profile, profile_id)
+    profile = get_scoped(db, Profile, profile_id, workspace)
     if not profile:
         raise HTTPException(404, "Profile not found")
     data = payload.model_dump(exclude_unset=True)
@@ -395,7 +427,7 @@ def update_profile(
         if not is_valid_phone(data["phone"]):
             raise HTTPException(400, "Phone number is not usable")
         clash = (
-            db.query(Profile)
+            scoped(db, Profile, workspace)
             .filter(Profile.phone == data["phone"], Profile.id != profile_id)
             .first()
         )
@@ -408,16 +440,20 @@ def update_profile(
     for k, v in data.items():
         setattr(profile, k, v)
     if tag_ids is not None:
-        profile.tags = load_tags_by_ids(db, tag_ids)
+        profile.tags = load_tags_by_ids(db, tag_ids, workspace)
     if allergy_ids is not None:
-        profile.allergies = load_allergies_by_ids(db, allergy_ids)
+        profile.allergies = load_allergies_by_ids(db, allergy_ids, workspace)
     db.commit()
-    return _profile_query(db).filter(Profile.id == profile_id).one()
+    return _profile_query(db, workspace).filter(Profile.id == profile_id).one()
 
 
 @router.delete("/profiles/{profile_id}", status_code=204, response_class=Response)
-def delete_profile(profile_id: RowIdPath, db: Session = Depends(get_db)) -> Response:
-    profile = db.get(Profile, profile_id)
+def delete_profile(
+    profile_id: RowIdPath,
+    db: Session = Depends(get_db),
+    workspace: Workspace = Depends(current_workspace),
+) -> Response:
+    profile = get_scoped(db, Profile, profile_id, workspace)
     if not profile:
         raise HTTPException(404, "Profile not found")
     db.delete(profile)
@@ -429,9 +465,11 @@ def delete_profile(profile_id: RowIdPath, db: Session = Depends(get_db)) -> Resp
 
 
 @router.get("/hangouts", response_model=list[HangoutOut])
-def list_hangouts(db: Session = Depends(get_db)) -> list[Hangout]:
+def list_hangouts(
+    db: Session = Depends(get_db), workspace: Workspace = Depends(current_workspace)
+) -> list[Hangout]:
     return (
-        db.query(Hangout)
+        scoped(db, Hangout, workspace)
         .options(joinedload(Hangout.invites).joinedload(HangoutInvite.profile))
         .filter(Hangout.deleted_at.is_(None))
         .order_by(Hangout.id.desc())
@@ -440,10 +478,14 @@ def list_hangouts(db: Session = Depends(get_db)) -> list[Hangout]:
 
 
 @router.post("/hangouts", response_model=HangoutOut, status_code=201)
-def create_hangout(payload: HangoutCreate, db: Session = Depends(get_db)) -> Hangout:
+def create_hangout(
+    payload: HangoutCreate,
+    db: Session = Depends(get_db),
+    workspace: Workspace = Depends(current_workspace),
+) -> Hangout:
     org_profile = None
     if payload.organizer_profile_id is not None:
-        org_profile = db.get(Profile, payload.organizer_profile_id)
+        org_profile = get_scoped(db, Profile, payload.organizer_profile_id, workspace)
         if org_profile is None:
             raise HTTPException(400, "Organizer profile not found")
     org_phone = org_profile.phone if org_profile else None
@@ -459,6 +501,7 @@ def create_hangout(payload: HangoutCreate, db: Session = Depends(get_db)) -> Han
         weed_involved=payload.weed_involved,
         notes=payload.notes or None,
         status=HangoutStatus.draft,
+        workspace_id=workspace.id,
         organizer_profile_id=org_profile.id if org_profile else None,
         organizer_phone=org_phone,
         notify_enabled=payload.notify_enabled,
@@ -478,15 +521,19 @@ def create_hangout(payload: HangoutCreate, db: Session = Depends(get_db)) -> Han
     db.add(hangout)
     db.flush()
     for pid in payload.profile_ids:
-        if db.get(Profile, pid):
-            db.add(HangoutInvite(hangout_id=hangout.id, profile_id=pid))
+        if get_scoped(db, Profile, pid, workspace) is not None:
+            db.add(HangoutInvite(hangout_id=hangout.id, profile_id=pid, workspace_id=workspace.id))
     db.commit()
-    return load_hangout(db, hangout.id)  # type: ignore[return-value]
+    return load_hangout(db, hangout.id, workspace)  # type: ignore[return-value]
 
 
 @router.get("/hangouts/{hangout_id}", response_model=HangoutOut)
-def get_hangout(hangout_id: RowIdPath, db: Session = Depends(get_db)) -> Hangout:
-    hangout = load_hangout(db, hangout_id)
+def get_hangout(
+    hangout_id: RowIdPath,
+    db: Session = Depends(get_db),
+    workspace: Workspace = Depends(current_workspace),
+) -> Hangout:
+    hangout = load_hangout(db, hangout_id, workspace)
     if not hangout:
         raise HTTPException(404, "Hangout not found")
     return hangout
@@ -494,9 +541,12 @@ def get_hangout(hangout_id: RowIdPath, db: Session = Depends(get_db)) -> Hangout
 
 @router.patch("/hangouts/{hangout_id}", response_model=HangoutOut)
 def update_hangout(
-    hangout_id: RowIdPath, payload: HangoutUpdate, db: Session = Depends(get_db)
+    hangout_id: RowIdPath,
+    payload: HangoutUpdate,
+    db: Session = Depends(get_db),
+    workspace: Workspace = Depends(current_workspace),
 ) -> Hangout:
-    hangout = db.get(Hangout, hangout_id)
+    hangout = get_scoped(db, Hangout, hangout_id, workspace)
     if not hangout:
         raise HTTPException(404, "Hangout not found")
     data = payload.model_dump(exclude_unset=True)
@@ -511,7 +561,7 @@ def update_hangout(
             hangout.organizer_profile_id = None
             hangout.organizer_phone = None
         else:
-            org_profile = db.get(Profile, org_id)
+            org_profile = get_scoped(db, Profile, org_id, workspace)
             if org_profile is None:
                 raise HTTPException(400, "Organizer profile not found")
             hangout.organizer_profile_id = org_profile.id
@@ -539,7 +589,7 @@ def update_hangout(
         if not resolve_organizer_phone(db, hangout):
             raise HTTPException(400, "Organizer profile required when notifications are enabled")
     db.commit()
-    return load_hangout(db, hangout_id)  # type: ignore[return-value]
+    return load_hangout(db, hangout_id, workspace)  # type: ignore[return-value]
 
 
 @router.post("/hangouts/{hangout_id}/setup", response_model=HangoutOut)
@@ -547,8 +597,9 @@ def setup_hangout_endpoint(
     hangout_id: RowIdPath,
     payload: SetupHangoutRequest | None = None,
     db: Session = Depends(get_db),
+    workspace: Workspace = Depends(current_workspace),
 ) -> Hangout:
-    hangout = load_hangout(db, hangout_id)
+    hangout = load_hangout(db, hangout_id, workspace)
     if not hangout:
         raise HTTPException(404, "Hangout not found")
     # An omitted body means "reuse the hangout's existing invitees". An
@@ -556,16 +607,20 @@ def setup_hangout_endpoint(
     # service instead of silently reusing those invitees.
     profile_ids = payload.profile_ids if payload is not None else None
     try:
-        return setup_hangout(db, hangout, profile_ids)
+        return setup_hangout(db, hangout, profile_ids, workspace)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
 
 
 @router.post("/hangouts/{hangout_id}/close", response_model=HangoutOut)
-def close_hangout(hangout_id: RowIdPath, db: Session = Depends(get_db)) -> Hangout:
-    hangout = db.get(Hangout, hangout_id)
+def close_hangout(
+    hangout_id: RowIdPath,
+    db: Session = Depends(get_db),
+    workspace: Workspace = Depends(current_workspace),
+) -> Hangout:
+    hangout = get_scoped(db, Hangout, hangout_id, workspace)
     if not hangout:
         raise HTTPException(404, "Hangout not found")
     hangout.status = HangoutStatus.closed
     db.commit()
-    return load_hangout(db, hangout_id)  # type: ignore[return-value]
+    return load_hangout(db, hangout_id, workspace)  # type: ignore[return-value]
