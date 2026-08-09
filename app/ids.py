@@ -1,10 +1,9 @@
 """Row-id validation shared by the HTTP layer.
 
-SQLite stores 64-bit signed integers, and binding a larger number raises
-``OverflowError`` inside the driver. Without a bound, an id no row could ever
-have crashes the lookup instead of simply missing, so client-supplied ids are
-range-checked at the edge where the answer is a 422 (or a blank field) rather
-than a 500.
+Database ids are 64-bit signed integers, and a client-supplied id no row could
+ever have should miss, not crash. Without a bound, an absurd value can crash
+the lookup instead of simply missing, so client-supplied ids are range-checked
+at the edge where the answer is a 422 (or a blank field) rather than a 500.
 """
 
 from __future__ import annotations

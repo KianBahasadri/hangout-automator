@@ -11,8 +11,13 @@ Provisions roughly: resource group, VNet `10.20.0.0/16`, private subnet
 VM (default size `Standard_B2ats_v2`, admin user `hangout`), a remotely managed
 Cloudflare Tunnel, its hostname route, and the app hostname's CNAME.
 The VM has no public IP; an Azure NAT Gateway supplies outbound-only access for
-first-boot package installation and `cloudflared`, and a separate managed disk
-holds the SQLite database.
+first-boot package installation and `cloudflared`. A separate managed disk
+holds the audit log. The database is an Azure Database for PostgreSQL Flexible
+Server (`B_Standard_B1ms`, 35-day backup retention) with `prevent_destroy =
+true`, reachable only through a private endpoint in the `10.20.1.0/24` subnet
+plus a private DNS zone; the server has no public network access. The admin
+password comes from `POSTGRES_ADMIN_PASSWORD` in the ignored `.env` and has no
+Terraform default (`terraform/postgres.tf`).
 
 Notable variables (`variables.tf` / `terraform.tfvars.example`): `prefix`,
 `location` (default `mexicocentral`, see [Region and VM size
@@ -20,7 +25,9 @@ capacity](#region-and-vm-size-capacity)), required `ssh_public_key`, required Cl
 account id, zone id, and `cloudflare_hostname`, optional `git_repo_url` /
 `git_branch` (default `main`), optional pinned `git_revision`, SMS/Twilio
 settings, optional `GOOGLE_MAPS_API_KEY`, Clerk settings, `public_base_url`,
-`app_port`, `followup_hours`, and `organizer_interval_hours`.
+`app_port`, `followup_hours`, `organizer_interval_hours`, and the Postgres
+admin user/password (`scripts/terraform.sh` requires `POSTGRES_ADMIN_PASSWORD`
+in the ignored `.env` — no default).
 `scripts/terraform.sh` maps these values from the ignored `.env` to Terraform.
 
 `cloudflare_hostname` deliberately has **no default** and the example tfvars
@@ -396,16 +403,17 @@ Template `cloud-init.yaml.tftpl`:
 - Installs Python, git, and `cloudflared` from Cloudflare's apt repo
 - Writes `/etc/hangout-automator.env` (app on `127.0.0.1:${APP_PORT}`, with
   `APP_PORT` supplied from the ignored `.env`; DB
-  `sqlite:////var/lib/hangout-automator/app.db`, `ENABLE_API_DOCS=false`, SMS
-  settings and optional Google Places key from Terraform, and `LOG_*` settings for
+  `postgresql+psycopg://<admin>:<password>@<server>.postgres.database.azure.com/hangout`
+  from the Postgres variables, `ENABLE_API_DOCS=false`, SMS settings and
+  optional Google Places key from Terraform, and `LOG_*` settings for
   `/var/lib/hangout-automator/logs/server.log`)
 - systemd unit `hangout-automator.service` running Uvicorn, with
   `RequiresMountsFor=/var/lib/hangout-automator` so the app refuses to start
-  without the data disk instead of silently creating an empty SQLite file on
-  the OS disk (the fstab entry is `nofail`, so the VM itself still boots)
+  without the data disk holding its audit log (the fstab entry is `nofail`, so
+  the VM itself still boots)
 - systemd unit `cloudflared.service` using the Terraform-created Tunnel token
 - `hangout-backup.service` + `.timer` (see Backups below)
-- Bootstrap: wait for and mount the persistent data disk, clone `git_repo_url`, create venv, `pip install -r requirements.txt`, enable/restart the app service, and enable the backup timer
+- Bootstrap: wait for and mount the persistent data disk, clone `git_repo_url`, create venv, `pip install -r requirements.txt`, run `alembic upgrade head` against the Postgres server (schema migrations are a deploy step, never an app-startup step), then enable/restart the app service and enable the backup timer
 
 The cloudflared service token, Clerk backend credentials, and SMS secrets are
 rendered into root-readable machine configuration and Terraform state; use a
@@ -530,6 +538,14 @@ remaining external or operator-controlled steps:
    `Connectivity Directory` entry also mentions tunnels but is Magic WAN and
    grants nothing here.
 5. **Azure**: `az login`, then review `./scripts/terraform.sh plan` and run `./scripts/terraform.sh apply`.
+6. **Postgres**: after the server exists (the flexible server, private DNS
+   zone, and private endpoint are Terraform resources), `POSTGRES_ADMIN_PASSWORD`
+   must be in the ignored `.env` before any plan/apply. For a **fresh**
+   deployment, cloud-init runs `alembic upgrade head` during bootstrap. For an
+   **existing** SQLite deployment, migrate the data before starting the app:
+   `./scripts/migrate_sqlite_to_postgres.py --dry-run <backup.db>`, review the
+   row-count table, then run it for real against the new server, and confirm
+   `alembic check` is clean (see the plan's Operator runbook for the exact order).
 
 ### Verifying a fresh deploy
 

@@ -238,7 +238,7 @@ exists and fails only on checks 3–6.
       Password comes from a Terraform variable sourced from `.env`, never a
       default. Add `alembic upgrade head` to the cloud-init bootstrap sequence
       before the service starts. **Write the config; do not apply it.**
-- [ ] **P2.9** Update `docs/data-model.md` — delete the entire "SQLite ensure /
+- [x] **P2.9** Update `docs/data-model.md` — delete the entire "SQLite ensure /
       migrate" section and the connection-PRAGMA line, replace with how Alembic
       is used and where migrations live. Update `docs/local-development.md`
       (compose, Postgres, new env vars — the `DATABASE_URL` row of its settings

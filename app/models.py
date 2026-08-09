@@ -140,7 +140,7 @@ class Profile(Base):
     phone: Mapped[str] = mapped_column(String(32), nullable=False, unique=True)
     drinks: Mapped[YesNo | None] = mapped_column(_optional_enum_column(YesNo), nullable=True)
     smokes: Mapped[YesNo | None] = mapped_column(_optional_enum_column(YesNo), nullable=True)
-    # Legacy free-text column; kept for SQLite migration. Prefer allergies relationship.
+    # Legacy free-text column; kept for data migrated from the legacy database. Prefer allergies relationship.
     food_allergies: Mapped[str | None] = mapped_column(Text, nullable=True)
     drive: Mapped[Drive | None] = mapped_column(
         _optional_enum_column(Drive, legacy={"can_drive": "yes", "cannot": "no", "can": "yes"}),

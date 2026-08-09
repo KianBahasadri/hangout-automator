@@ -1,6 +1,8 @@
 # Data model
 
-Defined in `app/models.py`. SQLite bootstrap and lightweight schema evolution live in `app/database.py`.
+Defined in `app/models.py`. Schema evolution lives in Alembic migrations under
+`migrations/versions/`; `app/database.py` only builds the engine and the
+session/audit machinery.
 
 ## Enums
 
@@ -20,10 +22,10 @@ Optional enums use a string `TypeDecorator`: empty string and `"unknown"` bind/r
 
 Catalog rows: `id`, unique `name` (64), `created_at`. Dietary restrictions (table/API name: allergies) are managed in Settings; tags on the Profiles page.
 
-Default catalog seeds once on `init_db()` when the allergies table is empty and
-the one-time `schema_flags.dietary_defaults_seeded` flag is unset: `meat`,
-`pork`. After that flag is set, deleting restrictions (including the defaults)
-persists across restarts.
+The default catalog (`meat`, `pork`) is seeded by the baseline Alembic
+migration — a one-shot data migration that runs once by construction, so
+deleting restrictions (including the defaults) persists across restarts and
+re-runs of `alembic upgrade head`.
 
 ### Association tables
 
@@ -79,15 +81,19 @@ Legacy singleton table (`id=1`) may still exist in older databases; it is no lon
 
 Values outside these sets are clamped to the defaults used at create time.
 
-## SQLite ensure / migrate
+## Schema evolution (Alembic)
 
-`init_db()` → `create_all`, then:
+All schema changes are Alembic migrations in `migrations/versions/`, applied as
+a deploy step (`alembic upgrade head` — see [deploy.md](./deploy.md)); the app
+never creates or mutates its own schema at startup. Migrations target
+PostgreSQL only; there is no SQLite support.
 
-1. **`_ensure_sqlite_columns`** — `ALTER TABLE` add missing hangout notify/`weed_involved`/`location`/`deleted_at` columns; add `profiles.drive`; copy `car_access` → `drive`; set `'unknown'` enum strings to `NULL` where possible
-2. **`_rebuild_profiles_if_needed`** — recreate `profiles` if `drinks`/`smokes` were `NOT NULL` or `car_access` still exists (SQLite cannot drop nullability in place). It runs on its **own autocommit connection**, outside the surrounding `engine.begin()` block, because SQLite silently ignores `PRAGMA foreign_keys` inside a transaction: with enforcement left on, `DROP TABLE profiles` does an implicit `DELETE FROM` that cascades into invites, tag links, and allergy links and destroys the data the migration exists to preserve. The table swap still gets its own explicit `BEGIN`/`COMMIT` so a crash mid-rebuild cannot leave the database with no `profiles` table, and the pool is disposed afterwards. Regression coverage: `tests/test_migrations.py`
-3. **`_rebuild_hangouts_if_needed`** — same pattern for `hangouts` when `alcohol_involved` / `weed_involved` are still `NOT NULL` (legacy schema). Blank optional enums are stored as `NULL`; without this rebuild, empty create/setup hits a SQLite integrity error. Dependent invite/message rows are preserved with foreign keys off during the swap.
-4. **`_migrate_legacy_food_allergies`** — split comma/semicolon free-text into `Allergy` rows + M2M links, clear legacy text
-5. **`_ensure_schema_flags_table`** — `schema_flags` key/value table for one-time bootstrap markers
-6. **`_ensure_default_dietary_restrictions`** — seed `meat` and `pork` once into an empty catalog, then set `dietary_defaults_seeded` so user deletions stick
-
-Connection PRAGMAs (SQLite): `foreign_keys=ON`, `journal_mode=WAL`, `busy_timeout=5000`.
+- `migrations/env.py` reads the URL from `app.config` settings (env-driven),
+  registers the models on `Base.metadata`, and enables `compare_type` /
+  `compare_server_default` so `alembic check` catches model edits that shipped
+  without a migration. Regression coverage: `tests/test_migrations.py`
+- Enum columns are stored as `VARCHAR` with CHECK constraints
+  (`native_enum=False`), storing the lowercase `.value` strings — adding a
+  status value never costs an `ALTER TYPE` migration or a table rewrite.
+- The default dietary-restriction seed lives in the baseline migration (see
+  above). `schema_flags` no longer exists.

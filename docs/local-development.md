@@ -7,6 +7,24 @@
 - APScheduler, Twilio SDK, Clerk backend SDK, httpx, python-multipart
 - Package name `hangout-automator` `0.1.0` (`pyproject.toml`)
 
+## Database (Postgres via Docker)
+
+Local development uses PostgreSQL in Docker Compose — SQLite is not supported.
+Start it once (requires Docker):
+
+```bash
+./scripts/db_up.sh
+```
+
+The compose `postgres:17` service listens on `localhost:5432` with database
+`hangout` and `hangout_test` (the test suite's database). The default
+`DATABASE_URL` already points at it. Apply schema migrations before running the
+app:
+
+```bash
+uv run alembic upgrade head
+```
+
 ## Run
 
 Preferred:
@@ -46,7 +64,7 @@ the process environment), so changing `APP_PORT` changes the listening port.
 | Setting | Env var | Default (code) |
 |---------|---------|----------------|
 | Bind host / port | `APP_HOST` / `APP_PORT` | `0.0.0.0` / `9000` |
-| Database | `DATABASE_URL` | `sqlite:///./hangout.db` |
+| Database | `DATABASE_URL` | `postgresql+psycopg://hangout:hangout@localhost:5432/hangout` |
 | Public URL | `PUBLIC_BASE_URL` | `http://localhost:9000` |
 | Clerk auth switch | `CLERK_ENABLED` | `false` |
 | Clerk browser key | `CLERK_PUBLISHABLE_KEY` | empty |
@@ -92,4 +110,8 @@ logout endpoint is stored in this repo.
 
 ## Startup side effects
 
-On app start (`app/main.py` lifespan): `init_db()` runs, then the two APScheduler jobs register. Static files are mounted at `/static`.
+On app start (`app/main.py` lifespan): audit events are emitted and the
+scheduler registers (a separate worker process runs it in deployments — see
+[background-jobs.md](./background-jobs.md)). **No `init_db()`**: schema
+migrations are an explicit `alembic upgrade head` step, never an app-startup
+side effect. Static files are mounted at `/static`.
