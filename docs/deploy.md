@@ -462,8 +462,8 @@ Cloudflare Access remains the edge gate in front of the Tunnel. The FastAPI app
 can also require a verified Clerk session by setting `CLERK_ENABLED=true` (the
 Terraform wrapper passes the Clerk settings from the ignored `.env`). With that
 switch enabled, the browser UI and `/api/*` routes require both the edge Access
-session and an in-app Clerk session. The app still keeps one shared dataset;
-Clerk identity does not create per-user ownership.
+session and an in-app Clerk session. Clerk identity does map to per-workspace
+ownership — see [tenancy.md](./tenancy.md).
 
 `terraform/access.tf` owns this, so it is applied and reviewed like the rest of
 the boundary:
@@ -499,6 +499,51 @@ Defense in depth beyond Access:
 
 The SMS webhook is rate-limited per source phone and globally (Postgres
 counters, 429 past the ceilings); the Twilio signature check still runs first.
+
+#### Planned: retiring Cloudflare Access
+
+**Decision (2026-08-09):** once multi-tenancy is correct in the app, the
+Cloudflare Zero Trust layer comes out entirely — the Access applications, the
+policies, the email allowlist, and the Zero Trust login page. Clerk plus
+per-workspace scoping becomes the only authentication boundary, and the app
+becomes open-signup rather than an allowlist of one.
+
+The reason it is still here is that Access is currently doing real work: it is
+the compensating control for the two gaps in
+[tenancy.md](./tenancy.md#known-gap-step-2-fails-open) — workspace resolution
+fails open into the shared `default` workspace, and the email allowlist rather
+than the app is what keeps this deployment single-user. Remove Access before
+those are fixed and the second stops being theoretical the moment the hostname
+is discovered.
+
+Exit criteria, all of them, before deleting `terraform/access.tf`:
+
+1. `current_workspace` fails closed — no `sub` claim is a 401, never a fallback
+   to `default`.
+2. Clerk is on a **production** instance with live keys (a development instance
+   accepts any signer and is not an authentication boundary).
+3. Clerk sign-up is restricted to whoever should actually have accounts, or the
+   app is genuinely happy to provision a workspace for any signup.
+4. The isolation matrix in `tests/test_tenant_isolation.py` is green, since it
+   becomes the only thing standing between two tenants.
+5. The `default` workspace holds no real data — with Access gone it is reachable
+   by anything that trips a fail-open path.
+
+What removal touches, so none of it is missed:
+
+- delete `terraform/access.tf` (both applications, both policies)
+- drop `cloudflare_access_allowed_emails` from `terraform/variables.tf` and the
+  JSON-building block in `scripts/deploy/terraform.sh`, plus
+  `CLOUDFLARE_ACCESS_EMAILS` from `.env` / `.env.example`
+- narrow the Cloudflare API token: **Access: Apps and Policies Edit** is then
+  unused, and go-live item 3's Zero Trust prerequisite no longer applies
+- the `SMS_PROVIDER=twilio` webhook bypass disappears with it. That is fine —
+  the bypass exists only to punch through Access — but it makes the
+  `X-Twilio-Signature` check in `app/routers/webhooks.py` the sole gate on
+  `/webhooks/sms` for real, not just on that one path
+- the deploy verification in this doc that says an unauthenticated request gets
+  the Cloudflare Access login page stops being true; the expected response
+  becomes the app's own `/sign-in` redirect
 
 ### Backups
 
