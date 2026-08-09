@@ -29,6 +29,7 @@ from app.models import (
     MessageDirection,
     MessageLog,
     Profile,
+    Workspace,
 )
 from app.sms import get_sms_provider, is_valid_phone, normalize_phone
 
@@ -47,22 +48,22 @@ def normalize_allergy_name(name: str) -> str:
     return " ".join((name or "").strip().split())
 
 
-def load_tags_by_ids(db: Session, tag_ids: list[int] | None) -> list:
+def load_tags_by_ids(db: Session, tag_ids: list[int] | None, workspace) -> list:
     from app.models import Tag
 
     if not tag_ids:
         return []
     ids = sorted({int(t) for t in tag_ids})
-    return db.query(Tag).filter(Tag.id.in_(ids)).all()
+    return db.query(Tag).filter(Tag.id.in_(ids), Tag.workspace_id == workspace.id).all()
 
 
-def load_allergies_by_ids(db: Session, allergy_ids: list[int] | None) -> list:
+def load_allergies_by_ids(db: Session, allergy_ids: list[int] | None, workspace) -> list:
     from app.models import Allergy
 
     if not allergy_ids:
         return []
     ids = sorted({int(a) for a in allergy_ids})
-    return db.query(Allergy).filter(Allergy.id.in_(ids)).all()
+    return db.query(Allergy).filter(Allergy.id.in_(ids), Allergy.workspace_id == workspace.id).all()
 
 
 def profile_has_allergies(profile: Profile) -> bool:
@@ -74,13 +75,22 @@ def profile_allergies_label(profile: Profile) -> str | None:
 
 
 def resolve_organizer_phone(db: Session, hangout: Hangout) -> str | None:
-    """Phone for organizer SMS: selected profile, then legacy hangout phone."""
+    """Phone for organizer SMS: selected profile, then legacy hangout phone.
+
+    The fallback lookup is filtered to the hangout's own workspace so this
+    stays safe when called from the worker's cross-workspace sweep.
+    """
     if hangout.organizer_profile_id:
-        profile = (
-            hangout.organizer
-            if hangout.organizer is not None
-            else db.get(Profile, hangout.organizer_profile_id)
-        )
+        profile = hangout.organizer
+        if profile is None:
+            profile = (
+                db.query(Profile)
+                .filter(
+                    Profile.id == hangout.organizer_profile_id,
+                    Profile.workspace_id == hangout.workspace_id,
+                )
+                .first()
+            )
         if profile and profile.phone:
             return profile.phone
     if hangout.organizer_phone:
@@ -151,7 +161,13 @@ def maybe_send_organizer_threshold(
         )
         return False
     body = craft_organizer_digest(hangout) + f"\n(Event: {', '.join(reasons)})"
-    ok, _ = send_sms(db, to=phone, body=body, hangout_id=hangout.id)
+    ok, _ = send_sms(
+        db,
+        to=phone,
+        body=body,
+        hangout_id=hangout.id,
+        workspace_id=hangout.workspace_id,
+    )
     if ok:
         hangout.last_organizer_notify_at = utcnow()
         hangout.last_digest_fingerprint = hangout_digest_fingerprint(hangout)
@@ -218,6 +234,7 @@ def log_message(
     error: str | None = None,
     invite_id: int | None = None,
     hangout_id: int | None = None,
+    workspace_id: int | None = None,
 ) -> MessageLog:
     entry = MessageLog(
         phone=phone,
@@ -227,6 +244,7 @@ def log_message(
         error=error,
         invite_id=invite_id,
         hangout_id=hangout_id,
+        workspace_id=workspace_id,
     )
     db.add(entry)
     return entry
@@ -239,6 +257,7 @@ def send_sms(
     body: str,
     invite_id: int | None = None,
     hangout_id: int | None = None,
+    workspace_id: int | None = None,
 ) -> tuple[bool, str | None]:
     phone = normalize_phone(to)
     if not is_valid_phone(phone):
@@ -252,6 +271,7 @@ def send_sms(
             error=error,
             invite_id=invite_id,
             hangout_id=hangout_id,
+            workspace_id=workspace_id,
         )
         audit_event(
             "sms.outbound.rejected",
@@ -288,6 +308,7 @@ def send_sms(
             error=error,
             invite_id=invite_id,
             hangout_id=hangout_id,
+            workspace_id=workspace_id,
         )
         audit_event(
             "sms.outbound.failed",
@@ -311,6 +332,7 @@ def send_sms(
         error=err,
         invite_id=invite_id,
         hangout_id=hangout_id,
+        workspace_id=workspace_id,
     )
     audit_event(
         "sms.outbound.completed",
@@ -325,7 +347,7 @@ def send_sms(
     return ok, err
 
 
-def load_hangout(db: Session, hangout_id: int) -> Hangout | None:
+def load_hangout(db: Session, hangout_id: int, workspace) -> Hangout | None:
     return (
         db.query(Hangout)
         .options(
@@ -335,12 +357,14 @@ def load_hangout(db: Session, hangout_id: int) -> Hangout | None:
             joinedload(Hangout.invites).joinedload(HangoutInvite.profile).joinedload(Profile.tags),
             joinedload(Hangout.organizer),
         )
-        .filter(Hangout.id == hangout_id)
+        .filter(Hangout.id == hangout_id, Hangout.workspace_id == workspace.id)
         .first()
     )
 
 
-def setup_hangout(db: Session, hangout: Hangout, profile_ids: list[int] | None = None) -> Hangout:
+def setup_hangout(
+    db: Session, hangout: Hangout, profile_ids: list[int] | None, workspace
+) -> Hangout:
     """Activate hangout and send invite SMS to selected (or existing) invitees."""
     audit_event(
         "hangout.setup.started",
@@ -359,7 +383,16 @@ def setup_hangout(db: Session, hangout: Hangout, profile_ids: list[int] | None =
     requested_ids = (
         profile_ids if profile_ids is not None else [i.profile_id for i in hangout.invites]
     )
-    ids = list(dict.fromkeys(pid for pid in requested_ids if db.get(Profile, pid) is not None))
+    ids = list(
+        dict.fromkeys(
+            pid
+            for pid in requested_ids
+            if db.query(Profile)
+            .filter(Profile.id == pid, Profile.workspace_id == workspace.id)
+            .first()
+            is not None
+        )
+    )
     if not ids:
         audit_event(
             "hangout.setup.rejected",
@@ -390,12 +423,21 @@ def setup_hangout(db: Session, hangout: Hangout, profile_ids: list[int] | None =
                 del existing[pid]
 
     for pid in ids:
-        profile = db.get(Profile, pid)
+        profile = (
+            db.query(Profile)
+            .filter(Profile.id == pid, Profile.workspace_id == workspace.id)
+            .first()
+        )
         if profile is None:
             continue
         inv = existing.get(pid)
         if inv is None:
-            inv = HangoutInvite(hangout_id=hangout.id, profile_id=pid, status=InviteStatus.pending)
+            inv = HangoutInvite(
+                hangout_id=hangout.id,
+                profile_id=pid,
+                status=InviteStatus.pending,
+                workspace_id=workspace.id,
+            )
             db.add(inv)
             db.flush()
             existing[pid] = inv
@@ -416,7 +458,14 @@ def setup_hangout(db: Session, hangout: Hangout, profile_ids: list[int] | None =
 
         body = craft_invite_message(hangout, profile)
         sms_attempts += 1
-        ok, err = send_sms(db, to=profile.phone, body=body, invite_id=inv.id, hangout_id=hangout.id)
+        ok, err = send_sms(
+            db,
+            to=profile.phone,
+            body=body,
+            invite_id=inv.id,
+            hangout_id=hangout.id,
+            workspace_id=workspace.id,
+        )
         inv.last_outbound_at = now
         inv.followups_sent = 0
         if ok:
@@ -439,7 +488,7 @@ def setup_hangout(db: Session, hangout: Hangout, profile_ids: list[int] | None =
         sms_failures=sms_failures,
         status=hangout.status,
     )
-    return load_hangout(db, hangout.id)  # type: ignore[return-value]
+    return load_hangout(db, hangout.id, workspace)  # type: ignore[return-value]
 
 
 def process_inbound_sms(db: Session, from_phone: str, body: str) -> str:
@@ -463,7 +512,12 @@ def process_inbound_sms(db: Session, from_phone: str, body: str) -> str:
 
 def _handle_inbound_sms(db: Session, from_phone: str, body: str) -> str:
     phone = normalize_phone(from_phone)
-    log_message(db, phone=phone, body=body, direction=MessageDirection.inbound, success=True)
+    # The inbound row starts with no workspace: it is attributed only when an
+    # invite is matched, so unmatched rows stay NULL (message_logs.workspace_id
+    # is deliberately nullable).
+    inbound_log = log_message(
+        db, phone=phone, body=body, direction=MessageDirection.inbound, success=True
+    )
 
     intent = parse_reply_intent(body)
     audit_event(
@@ -478,7 +532,7 @@ def _handle_inbound_sms(db: Session, from_phone: str, body: str) -> str:
         HangoutInvite.last_outbound_at.desc().nullslast(),
         HangoutInvite.id.desc(),
     )
-    invite = (
+    candidates = (
         db.query(HangoutInvite)
         .join(HangoutInvite.profile)
         .join(HangoutInvite.hangout)
@@ -486,13 +540,15 @@ def _handle_inbound_sms(db: Session, from_phone: str, body: str) -> str:
         .filter(Profile.phone == phone)
         .filter(Hangout.status == HangoutStatus.active)
         .order_by(*recency)
-        .first()
+        .all()
     )
+    invite = candidates[0] if candidates else None
+    candidate_workspaces = {inv.workspace_id for inv in candidates}
 
     # Fallback: match by last 10 digits if exact normalize mismatch
     if invite is None:
         digits = "".join(c for c in phone if c.isdigit())[-10:]
-        candidates = (
+        all_active = (
             db.query(HangoutInvite)
             .join(HangoutInvite.profile)
             .join(HangoutInvite.hangout)
@@ -501,11 +557,15 @@ def _handle_inbound_sms(db: Session, from_phone: str, body: str) -> str:
             .order_by(*recency)
             .all()
         )
-        for inv in candidates:
-            pdigits = "".join(c for c in inv.profile.phone if c.isdigit())[-10:]
-            if pdigits == digits:
-                invite = inv
-                break
+        matches = [
+            inv
+            for inv in all_active
+            if "".join(c for c in inv.profile.phone if c.isdigit())[-10:] == digits
+        ]
+        if matches:
+            invite = matches[0]
+            candidates = matches
+            candidate_workspaces = {inv.workspace_id for inv in matches}
 
     if invite is None:
         db.commit()
@@ -516,6 +576,21 @@ def _handle_inbound_sms(db: Session, from_phone: str, body: str) -> str:
             parsed_intent=intent,
         )
         return craft_unmatched_reply()
+
+    # Matched: attribute the inbound row to the invite's workspace.
+    if inbound_log.workspace_id is None:
+        inbound_log.workspace_id = invite.workspace_id
+    if len(candidate_workspaces) > 1:
+        # The same person was invited to active hangouts in several
+        # workspaces in this window; we picked by most-recent-outbound, but
+        # the ambiguity is observable. Per-workspace Twilio numbers are the
+        # real fix (see docs/tenancy.md).
+        audit_event(
+            "sms.inbound.ambiguous_workspace",
+            from_phone=phone,
+            chosen_workspace_id=invite.workspace_id,
+            candidate_workspace_ids=sorted(candidate_workspaces),
+        )
 
     if intent is None:
         db.commit()
@@ -530,7 +605,7 @@ def _handle_inbound_sms(db: Session, from_phone: str, body: str) -> str:
 
     # INFO / MORE INFO are read-only — do not change RSVP status
     if intent in {"info", "info2"}:
-        hangout = load_hangout(db, invite.hangout_id)
+        hangout = load_hangout(db, invite.hangout_id, Workspace(id=invite.workspace_id))
         db.commit()
         if hangout is None:
             return craft_unmatched_reply()
@@ -577,7 +652,7 @@ def _handle_inbound_sms(db: Session, from_phone: str, body: str) -> str:
     )
 
     # Threshold organizer notify based on hangout preferences
-    hangout = load_hangout(db, invite.hangout_id)
+    hangout = load_hangout(db, invite.hangout_id, Workspace(id=invite.workspace_id))
     if hangout:
         evaluate_organizer_threshold_for_reply(
             db,
@@ -674,7 +749,12 @@ def process_followups(db: Session) -> int:
         attempt = inv.followups_sent + 1
         body = craft_followup_message(inv.hangout, inv.profile, attempt)
         ok, err = send_sms(
-            db, to=inv.profile.phone, body=body, invite_id=inv.id, hangout_id=inv.hangout_id
+            db,
+            to=inv.profile.phone,
+            body=body,
+            invite_id=inv.id,
+            hangout_id=inv.hangout_id,
+            workspace_id=inv.workspace_id,
         )
         # Always advance the clock: a number that permanently rejects SMS (an
         # opt-out, say) must not be retried on every scheduler tick.
@@ -741,7 +821,7 @@ def process_organizer_intervals(db: Session) -> int:
             continue
 
         body = craft_organizer_digest(h)
-        ok, _ = send_sms(db, to=phone, body=body, hangout_id=h.id)
+        ok, _ = send_sms(db, to=phone, body=body, hangout_id=h.id, workspace_id=h.workspace_id)
         if ok:
             h.last_organizer_notify_at = now
             h.last_digest_fingerprint = fingerprint
