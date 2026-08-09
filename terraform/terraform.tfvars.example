@@ -15,10 +15,6 @@ cloudflare_zone_id     = "00000000000000000000000000000000"
 cloudflare_hostname    = "hangout.example.com"
 cloudflare_tunnel_name = "hangout-automator"
 
-# Cloudflare Access remains the edge gate. The wrapper builds this from the
-# comma-separated CLOUDFLARE_ACCESS_EMAILS in .env.
-cloudflare_access_allowed_emails = ["you@example.com"]
-
 admin_username = "hangout"
 ssh_public_key = "ssh-ed25519 AAAA... your-key"
 

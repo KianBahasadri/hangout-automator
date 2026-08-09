@@ -188,21 +188,6 @@ variable "cloudflare_tunnel_name" {
   default     = "hangout-automator"
 }
 
-variable "cloudflare_access_allowed_emails" {
-  description = "Email addresses allowed through Cloudflare Access to the app. Supplied from the ignored .env by scripts/deploy/terraform.sh; no default, so no personal address is published in this repo. An empty list would expose the edge route to nobody allowed by Access."
-  type        = list(string)
-
-  validation {
-    condition     = length(var.cloudflare_access_allowed_emails) > 0
-    error_message = "cloudflare_access_allowed_emails must list at least one address, otherwise nobody can reach the app."
-  }
-
-  validation {
-    condition     = alltrue([for email in var.cloudflare_access_allowed_emails : can(regex("^[^@[:space:]]+@[^@[:space:]]+\\.[^@[:space:]]+$", email))])
-    error_message = "Every cloudflare_access_allowed_emails entry must be an email address."
-  }
-}
-
 variable "twilio_account_sid" {
   type      = string
   default   = ""

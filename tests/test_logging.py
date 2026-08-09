@@ -39,7 +39,10 @@ def test_http_trace_writes_source_body_and_correlation_id(client, tmp_path):
     )
     assert completed["request_id"] == request_id
     assert completed["data"]["source"]["cf_connecting_ip"] == "198.51.100.10"
-    assert completed["data"]["source"]["access_identity"] == "operator@example.com"
+    # Cloudflare Access is gone, so CF-Access-Authenticated-User-Email is now an
+    # unauthenticated client-supplied header. It must not be recorded as an
+    # identity, or the audit log would attribute requests to a forged address.
+    assert "access_identity" not in completed["data"]["source"]
     assert "confirm me" in completed["data"]["request_body"]["body"]
     for header_name in (
         "authorization",

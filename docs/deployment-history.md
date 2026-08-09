@@ -11,6 +11,57 @@ Dates are UTC.
 
 ---
 
+## 2026-08-09 — Cloudflare Access removed; Clerk is the only auth boundary
+
+Command: `./scripts/deploy/terraform.sh apply`
+Plan: 0 to add, 0 to change, 4 to destroy
+
+Destroyed `cloudflare_zero_trust_access_application.app`,
+`.webhook[0]`, `cloudflare_zero_trust_access_policy.owner`, and
+`.webhook_bypass[0]`. No Azure resource was touched and the VM was not
+replaced — Access lived entirely at the Cloudflare edge, so nothing had to be
+redeployed. The account's built-in `App Launcher` app remains; it is
+Cloudflare's default and gates nothing here.
+
+Exit criteria from the retirement plan, as they stood at removal:
+
+1. `current_workspace` fails closed — done in the previous cutover.
+2. Production Clerk instance with live keys — done in the previous cutover.
+3. **Sign-up restriction — not met, accepted deliberately.** Clerk is on open
+   registration with `total_count: 0` users. See the exposure note below.
+4. Isolation matrix green — 30 tests in `tests/test_tenant_isolation.py`,
+   full suite 325 passed.
+5. `default` workspace holds no real data — verified against production: one
+   workspace, zero members, zero profiles/hangouts/invites/message_logs, and
+   2 leftover `allergies` rows.
+
+**What is now unprotected.** The email allowlist that came out held three
+addresses, so this was never a single-user deployment. Anyone who creates a
+Clerk account now gets their own workspace. Tenant data stays isolated —
+criterion 4 covers that — but a stranger can drive the organizer features,
+which send SMS on the deployment's shared Twilio credentials at the operator's
+expense. Closing this is a Clerk Dashboard setting (**Configure →
+Restrictions**), not a code change; the Backend API exposes
+`/v1/instance/restrictions` as `PATCH` only, and `GET` returns 405, so the
+current restriction state cannot be read back programmatically.
+
+A third guard went into `terraform.sh` alongside the two Clerk-key ones: it
+refuses `apply` unless `CLERK_ENABLED=true`. That switch used to select
+"one auth layer or two"; with Access gone it selects "authenticated or open to
+the internet", and the failure is silent at apply time. Override is
+`HANGOUT_ALLOW_UNAUTHENTICATED_DEPLOY=1`.
+
+The audit log's `access_identity` field was dropped from
+`app/event_logging.py`. It read `CF-Access-Authenticated-User-Email`, which
+without an edge authenticator stamping it is unauthenticated client-supplied
+text — recording it would have attributed requests to a forged address.
+`tests/test_logging.py` now asserts the field is absent rather than populated.
+
+Verified after apply, externally: `/` → 303 to the app's own
+`/sign-in?redirect_url=%2F` (previously a 302 to the Cloudflare Access login),
+`/api/hangouts` with no session → 401, `/webhooks/sms` → 405 from the app,
+`/sign-in` → 200. `GET /accounts/<id>/access/apps` lists only `App Launcher`.
+
 ## 2026-08-09 — Clerk production cutover: live keys delivered to the VM
 
 Commit: `33d818a`

@@ -41,12 +41,21 @@ here is what the *no identity, so no workspace* rule means;
 ### Known gap: any signer gets a workspace
 
 Nothing in the app refuses an *unknown* Clerk user — step 3 simply provisions
-a workspace for them. Whoever can sign up can get an account. The deployment
-is kept single-user by the Cloudflare Access email allowlist in front of it,
-not by anything here, which is why Access cannot be removed until sign-up is
-restricted; the
-[deploy doc](./deploy.md#planned-retiring-cloudflare-access) records that plan
-and its exit criteria.
+a workspace for them. Whoever can sign up can get an account.
+
+Until 2026-08-09 a Cloudflare Access email allowlist in front of the app was
+the compensating control. It is gone, so this gap is now live: **whoever can
+create a Clerk account gets a workspace on this deployment.** The only place
+that can be narrowed is the Clerk Dashboard (**Configure → Restrictions**);
+nothing in this repo enforces it.
+
+What that does and does not expose:
+
+- It does **not** expose existing tenants' data. A new signer lands in their
+  own workspace, and every read is scoped — see below.
+- It **does** let a stranger use the organizer features, which send SMS
+  through the deployment's shared Twilio credentials at the operator's
+  expense. That is the concrete cost of leaving sign-up open.
 
 ### Scoping
 

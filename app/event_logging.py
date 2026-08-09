@@ -305,7 +305,6 @@ def _scope_request_data(scope: Scope) -> dict[str, Any]:
             "cf_connecting_ip": headers.get("cf-connecting-ip"),
             "cf_ipcountry": headers.get("cf-ipcountry"),
             "cf_ray": headers.get("cf-ray"),
-            "access_identity": headers.get("cf-access-authenticated-user-email"),
         },
         "user_agent": headers.get("user-agent"),
         "referer": headers.get("referer"),

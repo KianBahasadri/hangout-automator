@@ -3,6 +3,7 @@ set -euo pipefail
 
 REPO_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
 ENV_FILE="${REPO_DIR}/.env"
+COMMAND="${1:-}"
 
 if [[ ! -f "${ENV_FILE}" ]]; then
   echo "Missing ${ENV_FILE}; copy the deployment secrets/settings into the ignored .env first." >&2
@@ -29,19 +30,6 @@ export TF_VAR_cloudflare_hostname="${TF_VAR_cloudflare_hostname:-${CLOUDFLARE_TU
 export TF_VAR_public_base_url="${TF_VAR_public_base_url:-${PUBLIC_BASE_URL:-https://${CLOUDFLARE_TUNNEL_HOSTNAME}}}"
 export TF_VAR_app_port="${TF_VAR_app_port:-${APP_PORT:-8000}}"
 
-# Who Cloudflare Access lets in. Terraform reads list variables from the
-# environment as JSON, so build it from the comma-separated .env value.
-if [[ -z "${TF_VAR_cloudflare_access_allowed_emails:-}" ]]; then
-  : "${CLOUDFLARE_ACCESS_EMAILS:?CLOUDFLARE_ACCESS_EMAILS is required in .env (comma-separated addresses allowed through Cloudflare Access)}"
-  ACCESS_EMAILS_JSON=""
-  IFS=',' read -ra ACCESS_EMAILS <<<"${CLOUDFLARE_ACCESS_EMAILS}"
-  for ACCESS_EMAIL in "${ACCESS_EMAILS[@]}"; do
-    ACCESS_EMAIL="${ACCESS_EMAIL//[[:space:]]/}"
-    [[ -z "${ACCESS_EMAIL}" ]] && continue
-    ACCESS_EMAILS_JSON+="${ACCESS_EMAILS_JSON:+,}\"${ACCESS_EMAIL}\""
-  done
-  export TF_VAR_cloudflare_access_allowed_emails="[${ACCESS_EMAILS_JSON}]"
-fi
 export TF_VAR_sms_provider="${TF_VAR_sms_provider:-${SMS_PROVIDER:-mock}}"
 export TF_VAR_twilio_account_sid="${TF_VAR_twilio_account_sid:-${TWILIO_ACCOUNT_SID:-}}"
 export TF_VAR_twilio_auth_token="${TF_VAR_twilio_auth_token:-${TWILIO_AUTH_TOKEN:-}}"
@@ -54,6 +42,18 @@ export TF_VAR_clerk_secret_key="${TF_VAR_clerk_secret_key:-${CLERK_SECRET_KEY:-}
 export TF_VAR_clerk_jwt_key="${TF_VAR_clerk_jwt_key:-${CLERK_JWT_KEY:-}}"
 export TF_VAR_clerk_authorized_parties="${TF_VAR_clerk_authorized_parties:-${CLERK_AUTHORIZED_PARTIES:-}}"
 export TF_VAR_clerk_dns_id="${TF_VAR_clerk_dns_id:-${CLERK_DNS_ID:-}}"
+
+# Cloudflare Access used to sit in front of the Tunnel and gate every path, so
+# CLERK_ENABLED=false still left an edge login. Access is gone, so that switch
+# now decides between "Clerk session required" and "the public internet can
+# reach every route". Refuse the deploy rather than publish the app open.
+# Only on apply: plan and validate change nothing and must stay runnable.
+if [[ "${COMMAND}" == "apply" && "${TF_VAR_clerk_enabled}" != "true" \
+      && "${HANGOUT_ALLOW_UNAUTHENTICATED_DEPLOY:-}" != "1" ]]; then
+  echo "Refusing apply: CLERK_ENABLED is '${TF_VAR_clerk_enabled}', but Clerk is the only authentication boundary since Cloudflare Access was removed." >&2
+  echo "Set CLERK_ENABLED=true, or set HANGOUT_ALLOW_UNAUTHENTICATED_DEPLOY=1 to deploy a deliberately public instance." >&2
+  exit 1
+fi
 
 # Refuse to ship a development Clerk instance as production auth. A pk_test_
 # key is user-capped, accepts any signer, and is not an authentication
@@ -102,7 +102,6 @@ fi
 
 BACKEND_FILE="${REPO_DIR}/terraform/backend.hcl"
 BACKEND_DECLARATION="${REPO_DIR}/terraform/backend.tf"
-COMMAND="${1:-}"
 if [[ "${COMMAND}" == "init" ]]; then
   shift
   if [[ -f "${BACKEND_FILE}" && -f "${BACKEND_DECLARATION}" ]]; then

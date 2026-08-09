@@ -40,16 +40,21 @@ logger, process/thread, event name, message, and event-specific `data`.
 
 HTTP events include method, path, query string, route, status, duration,
 request/response headers, readable request/response bodies, body byte counts
-and SHA-256 hashes, user agent, referer, and host. Source and identity fields
-include the direct peer, `X-Forwarded-For`, `X-Real-IP`, Cloudflare's
-`CF-Connecting-IP`, country/Ray values, and
-`CF-Access-Authenticated-User-Email` when the edge supplies them. A response
+and SHA-256 hashes, user agent, referer, and host. Source fields include the
+direct peer, `X-Forwarded-For`, `X-Real-IP`, and Cloudflare's
+`CF-Connecting-IP` and country/Ray values. A response
 also carries `X-Request-ID` so an operator can match a browser/API response to
 the file.
 
+No identity is read from a request header. The log used to record an
+`access_identity` from `CF-Access-Authenticated-User-Email`; that field was
+dropped when Cloudflare Access was removed, because with no edge authenticator
+stamping it the header is just client-supplied text and recording it would
+attribute requests to a forged address.
+
 Known credential-bearing headers (`Authorization`, cookies, API keys, the
-Twilio signature, Cloudflare Access JWT/client credentials, and `Set-Cookie`)
-are not written; their names are recorded as redacted. This keeps access
+Twilio signature, the legacy Cloudflare Access JWT/client credentials, and
+`Set-Cookie`) are not written; their names are recorded as redacted. This keeps access
 tracing useful without turning the audit file into a credential dump. Request
 and response bodies are intentionally not redacted.
 

@@ -69,8 +69,6 @@ complete boundary:
 - a Cloudflare Tunnel from the VM to `http://127.0.0.1:${APP_PORT}`
 - the Tunnel hostname route and DNS record for the configured zone and
   subdomain
-- the Cloudflare Access applications and policies in front of that hostname
-  (see Access control below)
 - the canonical `PUBLIC_BASE_URL` passed to the app so Twilio signatures match
   the public URL
 
@@ -373,8 +371,7 @@ only through environment variables or a secret manager:
 | Area | Input used by this deployment |
 |------|-------------------------------|
 | Cloudflare | Zone, app hostname, account ID, and zone ID — all in the ignored `.env`, never in this repo |
-| Cloudflare | API token exported as `CLOUDFLARE_API_TOKEN`; it needs Tunnel Edit, DNS Edit, and Access: Apps and Policies Edit permissions. Before concluding this token is broken, read item 4 of the [go-live checklist](#production-go-live-checklist-external-prerequisites) — the obvious health-check endpoint reports a healthy token as invalid |
-| Cloudflare | `CLOUDFLARE_ACCESS_EMAILS` in the ignored `.env` — comma-separated addresses Access admits (see Access control below) |
+| Cloudflare | API token exported as `CLOUDFLARE_API_TOKEN`; it needs Tunnel Edit and DNS Edit. Before concluding this token is broken, read item 4 of the [go-live checklist](#production-go-live-checklist-external-prerequisites) — the obvious health-check endpoint reports a healthy token as invalid |
 | Compute | Azure CLI login, region/VM size, repository URL/branch, and an SSH public key for the VM administrator (not direct public access) |
 | Public URL | `https://<app hostname>`, written to `PUBLIC_BASE_URL` for webhook signature validation |
 | SMS | `mock` by default; Twilio SID/token/number must be injected through secret environment variables before selecting `twilio` |
@@ -458,38 +455,34 @@ credentials, `.env`, Terraform state, or private keys.
 
 ### Access control
 
-Cloudflare Access remains the edge gate in front of the Tunnel. The FastAPI app
-can also require a verified Clerk session by setting `CLERK_ENABLED=true` (the
-Terraform wrapper passes the Clerk settings from the ignored `.env`). With that
-switch enabled, the browser UI and `/api/*` routes require both the edge Access
-session and an in-app Clerk session. Clerk identity does map to per-workspace
-ownership — see [tenancy.md](./tenancy.md).
+**Clerk is the only authentication boundary.** Cloudflare Access was removed on
+2026-08-09 (see [the removal record](./deployment-history.md)); the edge now
+passes every request straight to the app, and `CLERK_ENABLED=true` plus
+per-workspace scoping is what stands between a visitor and tenant data. Clerk
+identity maps to workspace ownership — see [tenancy.md](./tenancy.md).
 
-`terraform/access.tf` owns this, so it is applied and reviewed like the rest of
-the boundary:
+Because that switch is now load-bearing rather than an extra layer,
+`scripts/deploy/terraform.sh` refuses `apply` when it is anything but `true`
+(override with `HANGOUT_ALLOW_UNAUTHENTICATED_DEPLOY=1` for a deliberately
+public instance). It also refuses a `pk_test_` key, and a publishable key whose
+encoded host disagrees with `CLERK_FRONTEND_API_URL`.
 
-- `cloudflare_zero_trust_access_policy.owner` — `allow` for each address in
-  `cloudflare_access_allowed_emails` (comma-separated `CLOUDFLARE_ACCESS_EMAILS`
-  in the ignored `.env`; no default, so no personal address is published here).
-  `allowed_idps` is left unset, so any login method on the account satisfies it;
-  one-time PIN works out of the box, with no external identity provider.
-- `cloudflare_zero_trust_access_application.app` — the hostname, 24h session
-- `cloudflare_zero_trust_access_application.webhook` +
-  `cloudflare_zero_trust_access_policy.webhook_bypass` — `bypass` for
-  `/webhooks/sms` when `SMS_PROVIDER=twilio`. With the mock provider, these
-  resources are omitted and the application policy covers every path.
-  Access matches the most specific path first when the webhook exception is
-  present.
+Two paths are deliberately outside the Clerk session check:
 
-The webhook exception is forced when `SMS_PROVIDER=twilio`: Twilio cannot attach
-`CF-Access-Client-Id`/`CF-Access-Client-Secret` headers to a webhook, so a
-service token cannot work there. The app leaves that Twilio webhook outside
-its Clerk browser-session middleware, making the `X-Twilio-Signature` check in
-`app/routers/webhooks.py` the **only** application layer on that path. A mock
-provider webhook remains protected by Clerk — see
-[sms-and-rsvp.md](./sms-and-rsvp.md) for what it verifies.
+- `/webhooks/sms` — Twilio cannot present a browser session, so the
+  `X-Twilio-Signature` check in `app/routers/webhooks.py` is the **sole** gate
+  on this path. With `SMS_PROVIDER=mock` there is no external caller and Clerk
+  protects it normally. See [sms-and-rsvp.md](./sms-and-rsvp.md).
+- `/sign-in` and Clerk's own handshake routes, which must be reachable
+  unauthenticated for anyone to sign in at all.
 
-Defense in depth beyond Access:
+Sign-up is open: the app provisions a workspace for any Clerk user who
+registers (see
+[tenancy.md](./tenancy.md#known-gap-any-signer-gets-a-workspace)). Restricting
+who may create an account is a Clerk Dashboard setting — **Configure →
+Restrictions**, allowlist mode — not something this repo configures.
+
+Defense in depth beyond Clerk:
 
 - `ENABLE_API_DOCS=false` on the VM, so `/docs`, `/redoc`, and `/openapi.json`
   do not publish a map of the state-changing endpoints
@@ -500,54 +493,9 @@ Defense in depth beyond Access:
 The SMS webhook is rate-limited per source phone and globally (Postgres
 counters, 429 past the ceilings); the Twilio signature check still runs first.
 
-#### Planned: retiring Cloudflare Access
-
-**Decision (2026-08-09):** once multi-tenancy is correct in the app, the
-Cloudflare Zero Trust layer comes out entirely — the Access applications, the
-policies, the email allowlist, and the Zero Trust login page. Clerk plus
-per-workspace scoping becomes the only authentication boundary, and the app
-becomes open-signup rather than an allowlist of one.
-
-The reason it is still here is that Access is currently doing real work: it is
-the compensating control for the gap in
-[tenancy.md](./tenancy.md#known-gap-any-signer-gets-a-workspace) — the app
-provisions a workspace for any Clerk user, so the email allowlist rather than
-anything in the app is what keeps this deployment single-user. Remove Access
-before sign-up is restricted and that stops being theoretical the moment the
-hostname is discovered.
-
-Exit criteria, all of them, before deleting `terraform/access.tf`:
-
-1. ~~`current_workspace` fails closed — no `sub` claim is a 401, never a
-   fallback to `default`.~~ **Done**; see
-   [tenancy.md](./tenancy.md#how-a-request-resolves-to-a-workspace).
-2. ~~Clerk is on a **production** instance with live keys (a development
-   instance accepts any signer and is not an authentication boundary).~~
-   **Done 2026-08-09**; the wrapper also refuses `apply` when
-   `CLERK_ENABLED=true` with a `pk_test_` key, and when the publishable key's
-   encoded host disagrees with `CLERK_FRONTEND_API_URL`.
-3. Clerk sign-up is restricted to whoever should actually have accounts, or the
-   app is genuinely happy to provision a workspace for any signup.
-4. The isolation matrix in `tests/test_tenant_isolation.py` is green, since it
-   becomes the only thing standing between two tenants.
-5. The `default` workspace holds no real data — with Access gone it is reachable
-   by anything that trips a fail-open path.
-
-What removal touches, so none of it is missed:
-
-- delete `terraform/access.tf` (both applications, both policies)
-- drop `cloudflare_access_allowed_emails` from `terraform/variables.tf` and the
-  JSON-building block in `scripts/deploy/terraform.sh`, plus
-  `CLOUDFLARE_ACCESS_EMAILS` from `.env` / `.env.example`
-- narrow the Cloudflare API token: **Access: Apps and Policies Edit** is then
-  unused, and go-live item 3's Zero Trust prerequisite no longer applies
-- the `SMS_PROVIDER=twilio` webhook bypass disappears with it. That is fine —
-  the bypass exists only to punch through Access — but it makes the
-  `X-Twilio-Signature` check in `app/routers/webhooks.py` the sole gate on
-  `/webhooks/sms` for real, not just on that one path
-- the deploy verification in this doc that says an unauthenticated request gets
-  the Cloudflare Access login page stops being true; the expected response
-  becomes the app's own `/sign-in` redirect
+The Zero Trust layer that used to front this hostname is gone; its removal, the
+exit criteria it had to clear first, and what is now unprotected are recorded in
+[deployment-history.md](./deployment-history.md).
 
 ### Backups
 
@@ -588,19 +536,18 @@ remaining external or operator-controlled steps:
 
 1. **Twilio**: provision an SMS-capable phone number; inject the three Twilio credentials and select `SMS_PROVIDER=twilio`; then run `./scripts/deploy/set_twilio_webhook.py` to register the messaging webhook. Use a number not already serving another app — see [Registering the Twilio webhook](#registering-the-twilio-webhook).
 2. **State**: initialize the chosen remote backend before the first production apply.
-3. **Cloudflare Zero Trust**: done for the current deployment account — Zero Trust is enabled (the free tier covers 50 users) and the API token carries Access: Apps and Policies. On a fresh account both are dashboard steps, because editing an API token over the API needs a token carrying User: API Tokens Edit, which a deployment token normally does not have. When adding the permission, put it under an *Account* resource row rather than a zone row; it is an account-level permission group, so a zone-scoped policy silently fails to grant it. To confirm, `GET /client/v4/accounts/<account id>/access/apps` should return `success: true` rather than error `10000`.
+3. **Clerk**: a **production** instance (`pk_live_`/`sk_live_`) with its five CNAMEs verified and a certificate issued for `clerk.<hostname>`, since Clerk is the only authentication boundary. Decide sign-up policy in the Clerk Dashboard under **Configure → Restrictions**: the default is open registration, and this repo provisions a workspace for whoever signs up. Cloudflare Zero Trust is no longer a prerequisite — Access was removed on 2026-08-09.
 4. **Cloudflare API token write scopes**: Cloudflare grants Read and Edit as
    separate permission groups, and a plan cannot tell them apart — every
    resource in it is a create, so nothing is exercised until apply. A token
    holding only Tunnel Read lists tunnels happily and then fails
-   `POST /cfd_tunnel` with 403 `10000` *during* apply, after the Access
-   applications and most of the Azure network already exist. Probe the writes
+   `POST /cfd_tunnel` with 403 `10000` *during* apply, after most of the Azure
+   network already exists. Probe the writes
    first; an empty body creates nothing, and 400 means the permission is
    present and only the body was rejected, while 403 means it is missing:
 
    ```bash
    for p in "accounts/$CLOUDFLARE_ACCOUNT_ID/cfd_tunnel" \
-            "accounts/$CLOUDFLARE_ACCOUNT_ID/access/apps" \
             "zones/$CLOUDFLARE_ZONE_ID/dns_records"; do
      printf '%s -> ' "$p"
      curl -s -o /dev/null -w '%{http_code}\n' -X POST \
@@ -612,8 +559,9 @@ remaining external or operator-controlled steps:
 
    Note that `GET /client/v4/user/tokens/verify` returns `Invalid API Token`
    for an account-owned token even when the token is fine, so it is not a
-   usable health check here. Fixing a missing scope is a dashboard step for the
-   same reason as item 3.
+   usable health check here. Fixing a missing scope is a dashboard step,
+   because editing an API token over the API needs a token carrying User: API
+   Tokens Edit, which a deployment token normally does not have.
 
    The tunnel permission is not listed under the name the product now uses.
    In the token editor it is **Cloudflare One / Zero Trust → `Argo Tunnel
@@ -710,11 +658,12 @@ az vm run-command invoke -g <rg> -n <vm> --command-id RunShellScript \
 ```
 
 Externally, `GET https://<hostname>/webhooks/sms` should return **405** from
-the app itself — that one response proves DNS, the tunnel, the Access bypass
-exception, and Uvicorn all at once. `GET /` should redirect (302) to the
-Cloudflare Access login and never serve the app. After an Access-authenticated
-request reaches a deployment with `CLERK_ENABLED=true`, the app should then
-redirect unauthenticated users to `/sign-in`.
+the app itself — that one response proves DNS, the tunnel, and Uvicorn all at
+once. `GET /` should redirect (302) to the app's own `/sign-in`, and
+`GET /api/hangouts` with no session should return **401**, not a workspace.
+That 401 is the check worth keeping: it proves the app refuses an
+unattributable request rather than resolving it to the shared `default`
+workspace, which is the behavior Cloudflare Access used to make moot.
 
 To verify the exact release from Azure Run Command, Git can reject the app
 directory as being owned by a different service user. Use a per-command safe
