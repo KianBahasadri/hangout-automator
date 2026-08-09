@@ -1,6 +1,6 @@
 # Plan: make Hangout Automator survive growth
 
-Status: **Phases 1-2 complete** (2026-08-08) — CI/ruff/verify_plan.sh; Postgres + Alembic landed, suite green on Postgres, sqlite purged from app/. Phases 1-3 complete (2026-08-08) — tenancy landed with isolation matrix green. Phase 4 (worker) in progress..
+Status: **Phases 1-2 complete** (2026-08-08) — CI/ruff/verify_plan.sh; Postgres + Alembic landed, suite green on Postgres, sqlite purged from app/. Phases 1-3 complete (2026-08-08) — tenancy landed with isolation matrix green. Phases 1-4 complete (2026-08-08) — worker process with two-layer send locking, concurrency tests green. Phase 5 (ops) in progress...
 Owner: unattended agent loop
 Baseline commit: `5891d75` (2026-08-08)
 
@@ -414,7 +414,7 @@ workspace filter.
       `After=hangout-automator.service`, `Restart=always`. Add it to the
       `systemctl is-active` smoke check in `docs/deploy.md`'s verification
       snippet. **Write it; do not apply it.**
-- [ ] **P4.7** Write `docs/background-jobs.md`: the two jobs, their intervals, the
+- [x] **P4.7** Write `docs/background-jobs.md`: the two jobs, their intervals, the
       two-layer locking model and why both layers exist, the worker unit, and how
       to verify a worker is running. Add to `docs/README.md`. Remove the
       background-jobs bullet from `docs/overview.md:15` and link instead.
