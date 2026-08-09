@@ -1,6 +1,8 @@
 # Invites and follow-ups
 
-Core logic: `setup_hangout` and `process_followups` in `app/services.py`. Scheduler: every **5 minutes** from `app/main.py`.
+Core logic: `setup_hangout` and `process_followups` in `app/services.py`. The
+sweep runs on the worker's 5-minute interval — see
+[background-jobs.md](./background-jobs.md) for scheduling and send locking.
 
 ## Setup / activate
 

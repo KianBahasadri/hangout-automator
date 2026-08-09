@@ -25,24 +25,28 @@ console script `dev` → `app.dev:main` (reload), and the ASGI app
 
 ```
 app/
-  main.py           FastAPI app, static mount, scheduler
+  main.py           FastAPI app, static mount, auth middleware, audit lifespan
   server.py         settings-aware Uvicorn launcher
+  worker.py         background jobs entry point (hangout-worker process)
+  tenancy.py        workspace resolution + scoped queries
+  locks.py          Postgres advisory locks for the worker sweeps
   event_logging.py  JSONL audit file, correlation IDs, HTTP trace middleware
   config.py         pydantic-settings
-  database.py       engine, sessions, SQLite ensure/migrate
+  database.py       engine, sessions, audit listeners
   ids.py            row-id bounds for paths, payloads, and form fields
   models.py         ORM + enums
   schemas.py        API Pydantic models
-  services.py       invites, RSVP, follow-ups, organizer SMS
+  services.py       invites, RSVP, follow-ups, organizer SMS, row claiming
   messages.py       SMS copy + reply parse
   sms.py            mock/Twilio + phone normalize
   routers/          api, web, webhooks
   templates/        Jinja pages
   static/           CSS, JS, icons
+migrations/         Alembic schema migrations (versions/)
 docs/               topic docs + functional specification
 tests/              pytest suite + generated route/form smoke matrix
-terraform/          Azure VM + cloud-init
-scripts/            local run + rsync deploy
+terraform/          Azure VM + Flexible Server + cloud-init
+scripts/            local run, DB up, migrate, verify_plan, deploy
 ```
 
 Product intent (MVP requirements) lives in [functional-specification.md](./functional-specification.md). Implementation details are split across the other topic files listed in [README.md](./README.md).
