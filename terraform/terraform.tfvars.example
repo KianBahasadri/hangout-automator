@@ -44,3 +44,8 @@ twilio_from_number = ""
 # clerk_frontend_api_url   = "https://...clerk.accounts.dev"
 # clerk_secret_key         = "sk_live_..."
 # clerk_authorized_parties = "https://hangout.example.com"
+
+# Azure Database for PostgreSQL Flexible Server (private endpoint). The
+# password deliberately has no default: scripts/terraform.sh requires
+# POSTGRES_ADMIN_PASSWORD in the ignored .env.
+# postgres_admin_user = "hangout"

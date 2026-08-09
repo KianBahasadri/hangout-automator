@@ -225,3 +225,15 @@ variable "organizer_interval_hours" {
   type    = number
   default = 6
 }
+
+variable "postgres_admin_user" {
+  description = "Administrator login for the Azure Database for PostgreSQL Flexible Server"
+  type        = string
+  default     = "hangout"
+}
+
+variable "postgres_admin_password" {
+  description = "Administrator password for the Flexible Server. No default: sourced from POSTGRES_ADMIN_PASSWORD in the ignored .env by scripts/terraform.sh."
+  type        = string
+  sensitive   = true
+}

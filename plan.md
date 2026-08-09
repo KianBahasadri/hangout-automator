@@ -230,7 +230,7 @@ exists and fails only on checks 3–6.
       (`docs/data-model.md:70-72`). Have the script assert it has accounted for
       every source table, with those two named in an explicit skip list, so a
       table added later cannot be silently dropped on the floor.
-- [ ] **P2.8** Terraform: add `azurerm_postgresql_flexible_server` (B1ms,
+- [x] **P2.8** Terraform: add `azurerm_postgresql_flexible_server` (B1ms,
       private DNS zone + VNet integration into the existing `10.20.1.0/24`
       subnet, `public_network_access_enabled = false`, `prevent_destroy = true`,
       35-day backup retention). Add the connection string to

@@ -53,6 +53,10 @@ export TF_VAR_clerk_frontend_api_url="${TF_VAR_clerk_frontend_api_url:-${CLERK_F
 export TF_VAR_clerk_secret_key="${TF_VAR_clerk_secret_key:-${CLERK_SECRET_KEY:-}}"
 export TF_VAR_clerk_jwt_key="${TF_VAR_clerk_jwt_key:-${CLERK_JWT_KEY:-}}"
 export TF_VAR_clerk_authorized_parties="${TF_VAR_clerk_authorized_parties:-${CLERK_AUTHORIZED_PARTIES:-}}"
+# Postgres admin password has no Terraform default by design; the operator's
+# .env is the only source.
+: "${POSTGRES_ADMIN_PASSWORD:?POSTGRES_ADMIN_PASSWORD is required in .env}"
+export TF_VAR_postgres_admin_password="${TF_VAR_postgres_admin_password:-${POSTGRES_ADMIN_PASSWORD}}"
 if [[ -z "${TF_VAR_subscription_id:-}" ]]; then
   export TF_VAR_subscription_id="$(az account show --query id -o tsv)"
 fi

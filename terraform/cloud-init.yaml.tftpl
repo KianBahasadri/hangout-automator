@@ -15,7 +15,8 @@ write_files:
     content: |
       APP_HOST=127.0.0.1
       APP_PORT=${app_port}
-      DATABASE_URL=sqlite:////var/lib/hangout-automator/app.db
+      # Azure Flexible Server, reached via private endpoint + private DNS zone.
+      DATABASE_URL=postgresql+psycopg://${postgres_admin_user}:${postgres_admin_password}@${postgres_host}/hangout
       LOG_FILE=/var/lib/hangout-automator/logs/server.log
       LOG_LEVEL=INFO
       LOG_MAX_BYTES=50000000
@@ -45,8 +46,8 @@ write_files:
       Description=Hangout Automator FastAPI
       After=network-online.target
       Wants=network-online.target
-      # The database lives on the persistent data disk. Fail loudly instead of
-      # starting up and creating an empty SQLite file on the OS disk.
+      # Audit logs live on the persistent data disk; fail loudly if it is not
+      # mounted rather than losing the audit stream on the OS disk.
       RequiresMountsFor=/var/lib/hangout-automator
 
       [Service]
@@ -210,6 +211,14 @@ write_files:
       .venv/bin/pip install --upgrade pip
       .venv/bin/pip install -r requirements.txt
       chown -R ${admin_username}:${admin_username} "$APP_DIR"
+
+      # Schema migrations are a deploy step, never an app startup step. Run
+      # them before the service starts, with the deployment's environment.
+      set -a
+      # shellcheck disable=SC1091
+      . /etc/hangout-automator.env
+      set +a
+      .venv/bin/alembic upgrade head
 
       systemctl daemon-reload
       systemctl enable hangout-automator
