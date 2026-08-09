@@ -25,6 +25,7 @@ dependencies = [
 
 [project.scripts]
 dev = "app.dev:main"
+worker = "app.worker:main"
 
 [dependency-groups]
 dev = [
