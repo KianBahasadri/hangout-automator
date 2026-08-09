@@ -11,7 +11,7 @@ Twilio permits exactly one ``SmsUrl`` per number, so pointing a number here
 takes it away from anything else using it. Overwriting a non-empty webhook
 requires ``--force``.
 
-Usage: ./scripts/set_twilio_webhook.py [--force] [--dry-run]
+Usage: ./scripts/deploy/set_twilio_webhook.py [--force] [--dry-run]
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ import os
 import sys
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 # Settings reads ./.env relative to the working directory, so anchor to the repo
 # root no matter where this was invoked from.
@@ -37,8 +37,8 @@ except ImportError:  # pragma: no cover - depends on which interpreter was used
         os.environ["_HANGOUT_WEBHOOK_REEXEC"] = "1"
         os.execv(str(venv_python), [str(venv_python), __file__, *sys.argv[1:]])
     raise SystemExit(
-        "The twilio SDK is not available. Run ./scripts/run_local.sh once to "
-        "build .venv, or invoke this as .venv/bin/python scripts/set_twilio_webhook.py"
+        "The twilio SDK is not available. Run `uv sync` once to build .venv, "
+        "or invoke this as `uv run scripts/deploy/set_twilio_webhook.py`"
     )
 
 from app.config import get_settings  # noqa: E402

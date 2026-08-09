@@ -16,8 +16,8 @@ other table not in the expected set fails the run — a table added later cannot
 be silently dropped on the floor.
 
 Usage:
-    uv run scripts/migrate_sqlite_to_postgres.py --dry-run [sqlite.db]
-    uv run scripts/migrate_sqlite_to_postgres.py [--database-url URL] [sqlite.db]
+    uv run scripts/sqlite-cutover/migrate.py --dry-run [sqlite.db]
+    uv run scripts/sqlite-cutover/migrate.py [--database-url URL] [sqlite.db]
 """
 
 from __future__ import annotations

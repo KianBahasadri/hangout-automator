@@ -86,9 +86,9 @@ the run red before the current workflow was trusted.
 
 ## The aggregate gate
 
-`scripts/verify_plan.sh` is the terminal condition for the growth plan in
-`plan.md` (see the plan's "How to work this plan" for when it runs). It exits
-non-zero unless **all** of these hold, each as a separate labelled check:
+`scripts/check.sh` is the full local gate — run it before pushing anything
+non-trivial. It exits non-zero unless **all** of these hold, each as a separate
+labelled check:
 
 1. `uv run --group dev pytest` exits 0
 2. `ruff check` and `ruff format --check` exit 0
@@ -99,10 +99,15 @@ non-zero unless **all** of these hold, each as a separate labelled check:
    both exist and pass
 7. `tests/test_advisory_lock.py` exists and passes
 
-Checks 3–7 depend on later phases of the plan (and, for 7, the post-plan
-audit) and are expected to fail until those land. Check 3 writes to a
-database, so the script refuses to run (exit 2) unless `TEST_DATABASE_URL` is
-set or `DATABASE_URL` points at localhost — never point it at anything else.
+Checks 1–2 are what CI runs on every push. Checks 3–7 are local-only: they
+need a database, or they pin an invariant that is cheap to lose and expensive
+to rediscover (the scheduler staying out of the web process, `app/` staying
+free of SQLite, and the tenancy, worker-locking, and advisory-lock regression
+tests continuing to exist rather than being quietly deleted).
+
+Check 3 writes to a database, so the script refuses to run (exit 2) unless
+`TEST_DATABASE_URL` is set or `DATABASE_URL` points at localhost — never point
+it at anything else.
 
 Terraform has its own checks (`terraform fmt -check`, `terraform validate`);
 they are an operator step, described in [deploy.md](./deploy.md).

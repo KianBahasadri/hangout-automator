@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
-# Aggregate gate for plan.md — exits non-zero unless every check passes.
+# Aggregate local gate — exits non-zero unless every check passes.
 # Each check is a separate labelled step with its own message.
+#
+# Checks 1-2 are what CI runs. Checks 3-7 are local-only: they need a database
+# and guard invariants that are cheap to lose and expensive to rediscover.
 #
 # Check 3 (alembic upgrade head + alembic check) WRITES TO A DATABASE.
 # Never run this script pointed at anything but localhost: refuse loudly
-# (exit 2) unless TEST_DATABASE_URL is set or DATABASE_URL points at
-# localhost. Checks 3-6 fail until their phases land; that is expected.
+# (exit 2) unless TEST_DATABASE_URL is set or DATABASE_URL points at localhost.
 
 set -u
 
@@ -33,7 +35,7 @@ fi
 
 if [ -n "$guard_error" ]; then
     echo "REFUSED: $guard_error." >&2
-    echo "verify_plan.sh runs migrations (alembic upgrade head); it will not" >&2
+    echo "check.sh runs migrations (alembic upgrade head); it will not" >&2
     echo "run against anything but a local database. Set TEST_DATABASE_URL to a" >&2
     echo "local Postgres, or set DATABASE_URL to a localhost URL, and re-run." >&2
     exit 2
@@ -70,7 +72,7 @@ section "Check 3: alembic"
 if uv run alembic upgrade head && uv run alembic check; then
     echo "PASS: alembic upgrade head clean, alembic check reports no pending diff."
 else
-    echo "FAIL: alembic upgrade/check. This needs the Phase 2 compose Postgres"
+    echo "FAIL: alembic upgrade/check. This needs the compose Postgres"
     echo "      running (scripts/db_up.sh) and expects no pending autogenerate diff."
     checks_pass=0
 fi
@@ -78,7 +80,7 @@ fi
 # --- Check 4: no BackgroundScheduler in the web process ---------------------
 section "Check 4: scheduler out of app/main.py"
 if grep -rn "BackgroundScheduler" app/main.py; then
-    echo "FAIL: BackgroundScheduler still present in app/main.py (Phase 4)."
+    echo "FAIL: BackgroundScheduler still present in app/main.py — the web process must not schedule jobs."
     checks_pass=0
 else
     echo "PASS: no BackgroundScheduler in app/main.py."
@@ -87,7 +89,7 @@ fi
 # --- Check 5: no SQLite anywhere in app/ ------------------------------------
 section "Check 5: no sqlite/PRAGMA in app/"
 if grep -rniIE "sqlite|PRAGMA" app/; then
-    echo "FAIL: sqlite/PRAGMA still present in app/ (Phase 2)."
+    echo "FAIL: sqlite/PRAGMA still present in app/ — Postgres only."
     checks_pass=0
 else
     echo "PASS: no sqlite/PRAGMA references anywhere in app/."
@@ -99,12 +101,12 @@ if [ -f tests/test_tenant_isolation.py ] && [ -f tests/test_worker_concurrency.p
     if uv run --group dev pytest tests/test_tenant_isolation.py tests/test_worker_concurrency.py; then
         echo "PASS: tenant isolation and worker concurrency tests exist and pass."
     else
-        echo "FAIL: tenant isolation / worker concurrency tests exist but fail (Phases 3, 4)."
+        echo "FAIL: tenant isolation / worker concurrency tests exist but fail — these guard tenancy and worker locking."
         checks_pass=0
     fi
 else
     echo "FAIL: tests/test_tenant_isolation.py or tests/test_worker_concurrency.py"
-    echo "      missing (Phases 3, 4)."
+    echo "      missing — these guard tenancy and worker locking."
     checks_pass=0
 fi
 
@@ -118,16 +120,16 @@ if [ -f tests/test_advisory_lock.py ]; then
         checks_pass=0
     fi
 else
-    echo "FAIL: tests/test_advisory_lock.py missing (post-plan audit F3)."
+    echo "FAIL: tests/test_advisory_lock.py missing — it guards advisory-lock release."
     checks_pass=0
 fi
 
 # --- Summary ----------------------------------------------------------------
 section "Result"
 if [ "$checks_pass" -eq 1 ]; then
-    echo "verify_plan.sh: ALL CHECKS PASS."
+    echo "check.sh: ALL CHECKS PASS."
     exit 0
 else
-    echo "verify_plan.sh: one or more checks failed."
+    echo "check.sh: one or more checks failed."
     exit 1
 fi

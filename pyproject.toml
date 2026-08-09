@@ -24,7 +24,7 @@ dependencies = [
 ]
 
 [project.scripts]
-dev = "app.dev:main"
+dev = "app.server:dev"
 worker = "app.worker:main"
 
 [dependency-groups]
@@ -46,7 +46,7 @@ line-length = 100
 target-version = "py312"
 # Frozen artifact vendored verbatim from git 5891d75 — formatting it would
 # silently break the byte-identical provenance of the legacy SQLite machinery.
-extend-exclude = ["scripts/_legacy_sqlite_database.py"]
+extend-exclude = ["scripts/sqlite-cutover/_legacy_sqlite_database.py"]
 
 [tool.setuptools.packages.find]
 include = ["app*"]

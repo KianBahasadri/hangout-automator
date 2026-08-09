@@ -15,6 +15,10 @@
 - [background-jobs.md](./background-jobs.md) — Worker process, sweep intervals, two-layer send locking
 - [deploy.md](./deploy.md) — Azure Terraform + rsync deploy scripts
 
+`archive/` holds completed plans and other point-in-time records. It is kept
+for history and is **not maintained** — never treat it as a description of
+current behavior.
+
 ## Notes
 
 These docs (except `functional-specification.md`) are AI-generated after the fact from the current repo. They describe how the implementation works, not a design target.

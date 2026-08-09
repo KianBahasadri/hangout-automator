@@ -35,14 +35,15 @@ uv run dev
 
 Runs Uvicorn on `app.main:app` with reload, host/port from settings (default `0.0.0.0:9000`).
 
-Also:
+Background jobs run in a second, separate process — start it in its own
+terminal, since both are long-running:
 
 ```bash
-./scripts/run_local.sh
+uv run worker
 ```
 
-Creates `.venv` (uv or venv), installs `requirements.txt`, and starts the same
-settings-based Uvicorn launcher with `--reload`.
+Without it the app serves normally but no follow-up or organizer SMS is ever
+sent (see [background-jobs.md](./background-jobs.md)).
 
 Run the test suite (pytest, dev dependency group):
 

@@ -1,6 +1,15 @@
 # Plan: make Hangout Automator survive growth
 
-Status: **complete** (2026-08-08) — all phases landed; `./scripts/verify_plan.sh` exits 0 with all six checks green.
+> **Archived, point-in-time record.** This plan is complete and is kept only
+> for its Operator runbook (the SQLite → Postgres cutover, which has not been
+> executed yet) and as a record of why the current architecture looks the way
+> it does. It is **not maintained**: paths below predate the `scripts/`
+> reorganisation — `scripts/verify_plan.sh` is now `scripts/check.sh`, and
+> `scripts/migrate_sqlite_to_postgres.py` is now
+> `scripts/sqlite-cutover/migrate.py`. For current behavior, use the topic
+> files in [../README.md](../README.md).
+
+Status: **complete** (2026-08-08) — all phases landed; the aggregate gate exits 0 with all checks green.
 Owner: unattended agent loop
 Baseline commit: `5891d75` (2026-08-08)
 

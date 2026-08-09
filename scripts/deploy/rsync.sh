@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Sync local code to an already-provisioned VM and restart the service.
-# Usage: ./scripts/deploy_rsync.sh hangout@1.2.3.4
+# Usage: ./scripts/deploy/rsync.sh hangout@1.2.3.4
 set -euo pipefail
-HOST="${1:?usage: deploy_rsync.sh user@host}"
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+HOST="${1:?usage: scripts/deploy/rsync.sh user@host}"
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 
 rsync -avz --delete \
   --exclude '.git' \

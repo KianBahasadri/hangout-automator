@@ -1,6 +1,6 @@
 # VENDORED VERBATIM from git 5891d75 (app/database.py) — the one-time SQLite
 # schema machinery deleted in P2.5. Used only by
-# scripts/migrate_sqlite_to_postgres.py to bring a copied SQLite file to its
+# scripts/sqlite-cutover/migrate.py to bring a copied SQLite file to its
 # final legacy schema before export. Do not edit the code below; if the
 # migration logic must change, change the script that execs this module.
 from collections.abc import Generator

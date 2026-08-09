@@ -46,6 +46,6 @@ twilio_from_number = ""
 # clerk_authorized_parties = "https://hangout.example.com"
 
 # Azure Database for PostgreSQL Flexible Server (private endpoint). The
-# password deliberately has no default: scripts/terraform.sh requires
+# password deliberately has no default: scripts/deploy/terraform.sh requires
 # POSTGRES_ADMIN_PASSWORD in the ignored .env.
 # postgres_admin_user = "hangout"

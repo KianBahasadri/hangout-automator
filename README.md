@@ -19,12 +19,18 @@ Requires Docker for Postgres:
 ```bash
 ./scripts/db_up.sh          # start the compose Postgres and wait for readiness
 uv run alembic upgrade head # apply schema migrations
-uv run dev                  # web process (http://127.0.0.1:9000)
-uv run worker               # separate background-jobs process
 ```
 
-`uv run dev` creates the project environment and installs dependencies automatically. The existing
-`./scripts/run_local.sh` command is also still supported.
+Then run the two processes, each in its own terminal — both are long-running:
+
+```bash
+uv run dev                  # web process (http://127.0.0.1:9000)
+uv run worker               # background jobs: follow-ups and organizer digests
+```
+
+`uv run dev` creates the project environment and installs dependencies
+automatically. Without the worker the app serves fine but no follow-up or
+organizer SMS is ever sent.
 
 Mock SMS prints invites and replies to the terminal. Simulate an inbound reply:
 
@@ -68,8 +74,9 @@ uv run --group dev pytest
 ```
 
 CI runs this suite plus `ruff` on every push and pull request
-(`.github/workflows/ci.yml`). `./scripts/verify_plan.sh` is the aggregate gate
-for the growth plan — see [docs/testing.md](docs/testing.md).
+(`.github/workflows/ci.yml`). `./scripts/check.sh` is the aggregate local gate
+(pytest, ruff, Alembic, and a few structural invariants) — see
+[docs/testing.md](docs/testing.md).
 
 ## API
 
@@ -88,10 +95,10 @@ backend, and both Azure and Cloudflare inputs come from the ignored `.env` via
 a wrapper script:
 
 ```bash
-./scripts/bootstrap_state.sh apply   # once: creates the remote state backend
-./scripts/terraform.sh init
-./scripts/terraform.sh plan
-./scripts/terraform.sh apply
+./scripts/deploy/bootstrap_state.sh apply   # once: creates the remote state backend
+./scripts/deploy/terraform.sh init
+./scripts/deploy/terraform.sh plan
+./scripts/deploy/terraform.sh apply
 ```
 
 Do not run bare `terraform apply` — it has neither the Cloudflare credentials
@@ -101,23 +108,31 @@ handling, and the security gate to clear before switching `SMS_PROVIDER` to
 `twilio`.
 
 Cost: `Standard_B2ats_v2` is a low-cost burstable SKU; you still pay for the
-NAT gateway public IP, disks, and bandwidth. `./scripts/terraform.sh destroy`
+NAT gateway public IP, disks, and bandwidth. `./scripts/deploy/terraform.sh destroy`
 when unused (the data disk and the database server are `prevent_destroy`).
 
 ## Project layout
 
 ```
-app/                 FastAPI application
-  main.py            web process (no scheduler)
-  worker.py          background jobs process
-  tenancy.py         workspace resolution
-  locks.py           advisory locks for the sweeps
+app/                    FastAPI application
+  main.py               web process (no scheduler)
+  worker.py             background jobs process
+  server.py             Uvicorn launchers for `dev` / `main`
+  tenancy.py            workspace resolution
+  locks.py              advisory locks for the sweeps
   models.py
-  services.py        SMS invites, RSVP, follow-ups, organizer digests
-  routers/           API, web UI, webhooks
-  templates/         Jinja HTML
-migrations/          Alembic schema migrations
-terraform/           Azure VM + Flexible Server + Cloudflare Tunnel + cloud-init
-docs/                Topic docs (start at docs/README.md) + functional spec
-scripts/             Local run, db_up, migrate, verify_plan, Terraform wrapper
+  services.py           SMS invites, RSVP, follow-ups, organizer digests
+  routers/              API, web UI, webhooks
+  templates/            Jinja HTML
+  static/               CSS, JS, icons
+migrations/             Alembic schema migrations
+tests/                  pytest suite + generated route/form smoke matrix
+terraform/              Azure VM + Flexible Server + Cloudflare Tunnel + cloud-init
+docs/                   Topic docs (start at docs/README.md) + functional spec
+  archive/              Point-in-time records; not maintained
+scripts/
+  db_up.sh              start the local compose Postgres
+  check.sh              aggregate local gate (pytest, ruff, alembic, invariants)
+  deploy/               Terraform wrapper, state bootstrap, Twilio webhook, rsync
+  sqlite-cutover/       one-time SQLite → Postgres migration; delete after go-live
 ```

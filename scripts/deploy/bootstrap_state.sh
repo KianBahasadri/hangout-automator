@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
 BOOTSTRAP_DIR="${REPO_DIR}/terraform/bootstrap-state"
 MAIN_BACKEND_FILE="${REPO_DIR}/terraform/backend.hcl"
 
@@ -32,7 +32,7 @@ if [[ "${COMMAND}" == "apply" ]]; then
   } > "${MAIN_BACKEND_FILE}"
   printf 'terraform {\n  backend "azurerm" {}\n}\n' > "${REPO_DIR}/terraform/backend.tf"
   chmod 0600 "${MAIN_BACKEND_FILE}"
-  echo "Wrote ${MAIN_BACKEND_FILE}; run ./scripts/terraform.sh init next." >&2
+  echo "Wrote ${MAIN_BACKEND_FILE}; run ./scripts/deploy/terraform.sh init next." >&2
 elif [[ "${COMMAND}" == "plan" ]]; then
   terraform -chdir="${BOOTSTRAP_DIR}" plan "$@"
 elif [[ "${COMMAND}" == "init" ]]; then

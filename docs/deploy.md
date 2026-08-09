@@ -3,7 +3,7 @@
 ## Terraform (Azure VM)
 
 Directory: `terraform/`. Requires Terraform ≥ 1.5, AzureRM provider ~> 4.0,
-and Cloudflare provider ~> 5.22. Run it through `./scripts/terraform.sh` so
+and Cloudflare provider ~> 5.22. Run it through `./scripts/deploy/terraform.sh` so
 the ignored `.env` is loaded and dotenv values are mapped to Terraform inputs.
 
 Provisions roughly: resource group, VNet `10.20.0.0/16`, private subnet
@@ -26,14 +26,14 @@ account id, zone id, and `cloudflare_hostname`, optional `git_repo_url` /
 `git_branch` (default `main`), optional pinned `git_revision`, SMS/Twilio
 settings, optional `GOOGLE_MAPS_API_KEY`, Clerk settings, `public_base_url`,
 `app_port`, `followup_hours`, `organizer_interval_hours`, and the Postgres
-admin user/password (`scripts/terraform.sh` requires `POSTGRES_ADMIN_PASSWORD`
+admin user/password (`scripts/deploy/terraform.sh` requires `POSTGRES_ADMIN_PASSWORD`
 in the ignored `.env` — no default).
-`scripts/terraform.sh` maps these values from the ignored `.env` to Terraform.
+`scripts/deploy/terraform.sh` maps these values from the ignored `.env` to Terraform.
 
 `cloudflare_hostname` deliberately has **no default** and the example tfvars
 carries placeholders: the deployed hostname is a sensitive deployment boundary,
 so it stays in the ignored `.env` rather than in this public repository.
-`scripts/terraform.sh` supplies it from `CLOUDFLARE_TUNNEL_HOSTNAME`.
+`scripts/deploy/terraform.sh` supplies it from `CLOUDFLARE_TUNNEL_HOSTNAME`.
 
 Validation (fails at plan/apply, before anything is created):
 
@@ -153,7 +153,7 @@ A `plan` holds the same blob-lease lock as an `apply`, so a plan that is
 killed mid-run (closed terminal, laptop sleep) leaves the state locked and
 every later command fails with "state blob is already locked". Confirm no
 terraform process is actually still running, then clear it once:
-`./scripts/terraform.sh force-unlock -force <lock ID from the error>`.
+`./scripts/deploy/terraform.sh force-unlock -force <lock ID from the error>`.
 
 Resuming an interrupted apply can hit ARM propagation lag as two
 benign-looking failures. A freshly created VNet can answer 404
@@ -164,7 +164,7 @@ during an apply's refresh can silently drop a real, still-existing resource
 (seen with the NSG) from state; the next apply then dies with "A resource
 with the ID ... already exists — to be managed via Terraform this resource
 needs to be imported". That one does not heal by retrying: re-import it
-(`./scripts/terraform.sh import <addr> <id from the error>`), then apply
+(`./scripts/deploy/terraform.sh import <addr> <id from the error>`), then apply
 again. A failed apply also makes a saved plan file stale, so re-plan rather
 than reusing an old `tfplan`.
 
@@ -173,15 +173,15 @@ storage account that stores its own first state. Run the bootstrap plan, review
 it, and apply it once:
 
 ```text
-./scripts/bootstrap_state.sh plan
-./scripts/bootstrap_state.sh apply
-./scripts/terraform.sh init
-./scripts/terraform.sh plan
+./scripts/deploy/bootstrap_state.sh plan
+./scripts/deploy/bootstrap_state.sh apply
+./scripts/deploy/terraform.sh init
+./scripts/deploy/terraform.sh plan
 ```
 
 The apply writes the ignored `terraform/backend.hcl`; it contains only the
 storage resource names and state key, never the Cloudflare or Twilio secrets.
-After that, `scripts/terraform.sh apply` refuses to run unless the remote
+After that, `scripts/deploy/terraform.sh apply` refuses to run unless the remote
 backend file exists. The bootstrap root has its own local state until you move
 that state to a separately managed backend; protect that small bootstrap state
 file and do not commit it.
@@ -258,11 +258,11 @@ things make that more than a normal replace:
 - `azurerm_subnet.main` plans as a **no-op**. It has no `location` of its own
   and its name and parent names do not change, so Terraform sees no diff — but
   Azure deletes it along with the resource group, and the NIC then fails to
-  find it. Force it: `./scripts/terraform.sh plan -replace=azurerm_subnet.main`.
+  find it. Force it: `./scripts/deploy/terraform.sh plan -replace=azurerm_subnet.main`.
 - `azurerm_managed_disk.data` carries `prevent_destroy = true`, so the plan is
   refused outright. If the disk holds real data, back it up per
   [Backups](#backups) first. Only when it is genuinely empty, drop it from
-  state: `./scripts/terraform.sh state rm azurerm_managed_disk.data`.
+  state: `./scripts/deploy/terraform.sh state rm azurerm_managed_disk.data`.
 
   Dropping it from state is not enough on its own. The disk still exists in
   Azure, and the AzureRM provider defaults
@@ -292,7 +292,7 @@ To intentionally rebuild the VM (pick up a new cloud-init, rotate secrets that
 only live in user-data, etc.):
 
 ```bash
-./scripts/terraform.sh apply -replace=azurerm_linux_virtual_machine.main
+./scripts/deploy/terraform.sh apply -replace=azurerm_linux_virtual_machine.main
 ```
 
 Expect downtime while Azure recreates the VM. The managed database disk has
@@ -328,7 +328,7 @@ az vm delete -g <rg> -n <vm> --yes
 
 Persist Azure's offered alternative as an explicit ignored deployment input,
 for example `TF_VAR_vm_size=Standard_B2ts_v2` in `.env`, then re-run
-`./scripts/terraform.sh plan` and `apply`. The recovery plan should create the
+`./scripts/deploy/terraform.sh plan` and `apply`. The recovery plan should create the
 VM and data-disk attachment only. After the apply, wait for cloud-init and run
 a final Terraform plan; it should report no changes. During the outage,
 Cloudflare correctly reports the tunnel as down because its origin is absent.
@@ -354,7 +354,7 @@ Terraform state, SSH private key, or `.env` contents in chat.
 
 ### What can be configured from this repository
 
-`./scripts/terraform.sh init`, `validate`, `plan`, and `apply` use the values in
+`./scripts/deploy/terraform.sh init`, `validate`, `plan`, and `apply` use the values in
 `.env` plus the logged-in Azure CLI. Applying the plan changes the Cloudflare
 and Azure accounts; review the plan before applying. The wrapper also reads a
 local public key (or `TF_VAR_ssh_public_key`) so a separate tfvars file is not
@@ -373,7 +373,7 @@ verifies.
 
 ### Registering the Twilio webhook
 
-`./scripts/set_twilio_webhook.py` sets it over the Twilio REST API instead of
+`./scripts/deploy/set_twilio_webhook.py` sets it over the Twilio REST API instead of
 the console, using the `twilio` SDK the app already depends on. It resolves the
 number's SID from `TWILIO_FROM_NUMBER`, sets `SmsUrl`, and re-reads the number
 to confirm the value Twilio actually stored. Re-running it once the URL is
@@ -505,7 +505,7 @@ survive in Azure and must be deleted by hand once you are sure.
 The normal Azure/Cloudflare resources are automated by Terraform. These are the
 remaining external or operator-controlled steps:
 
-1. **Twilio**: provision an SMS-capable phone number; inject the three Twilio credentials and select `SMS_PROVIDER=twilio`; then run `./scripts/set_twilio_webhook.py` to register the messaging webhook. Use a number not already serving another app — see [Registering the Twilio webhook](#registering-the-twilio-webhook).
+1. **Twilio**: provision an SMS-capable phone number; inject the three Twilio credentials and select `SMS_PROVIDER=twilio`; then run `./scripts/deploy/set_twilio_webhook.py` to register the messaging webhook. Use a number not already serving another app — see [Registering the Twilio webhook](#registering-the-twilio-webhook).
 2. **State**: initialize the chosen remote backend before the first production apply.
 3. **Cloudflare Zero Trust**: done for the current deployment account — Zero Trust is enabled (the free tier covers 50 users) and the API token carries Access: Apps and Policies. On a fresh account both are dashboard steps, because editing an API token over the API needs a token carrying User: API Tokens Edit, which a deployment token normally does not have. When adding the permission, put it under an *Account* resource row rather than a zone row; it is an account-level permission group, so a zone-scoped policy silently fails to grant it. To confirm, `GET /client/v4/accounts/<account id>/access/apps` should return `success: true` rather than error `10000`.
 4. **Cloudflare API token write scopes**: Cloudflare grants Read and Edit as
@@ -542,15 +542,16 @@ remaining external or operator-controlled steps:
    describes the Read box — tick **Edit**, which implies Read. The nearby
    `Connectivity Directory` entry also mentions tunnels but is Magic WAN and
    grants nothing here.
-5. **Azure**: `az login`, then review `./scripts/terraform.sh plan` and run `./scripts/terraform.sh apply`.
+5. **Azure**: `az login`, then review `./scripts/deploy/terraform.sh plan` and run `./scripts/deploy/terraform.sh apply`.
 6. **Postgres**: after the server exists (the flexible server, private DNS
    zone, and private endpoint are Terraform resources), `POSTGRES_ADMIN_PASSWORD`
    must be in the ignored `.env` before any plan/apply. For a **fresh**
    deployment, cloud-init runs `alembic upgrade head` during bootstrap. For an
    **existing** SQLite deployment, migrate the data before starting the app:
-   `./scripts/migrate_sqlite_to_postgres.py --dry-run <backup.db>`, review the
+   `uv run scripts/sqlite-cutover/migrate.py --dry-run <backup.db>`, review the
    row-count table, then run it for real against the new server, and confirm
-   `alembic check` is clean (see the plan's Operator runbook for the exact order).
+   `alembic check` is clean (the exact order is in the Operator runbook section
+   of [archive/postgres-migration-plan.md](./archive/postgres-migration-plan.md)).
 
 ### Verifying a fresh deploy
 
@@ -583,7 +584,7 @@ az vm run-command invoke -g <rg> -n <vm> --command-id RunShellScript \
 
 ## Rsync updates
 
-`./scripts/deploy_rsync.sh user@host` is a legacy public-SSH updater and is not
+`./scripts/deploy/rsync.sh user@host` is a legacy public-SSH updater and is not
 usable for this private-VM topology. Initial code and service setup come from
 Terraform-rendered cloud-init; a future release pipeline should use Azure Run
 Command or another private management path for updates.

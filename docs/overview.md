@@ -17,16 +17,17 @@ is how local development behaves until Clerk is configured.
 - **Background jobs** — separate `hangout-worker` process, follow-ups every 5 minutes, organizer interval digests every 10 minutes ([background-jobs.md](./background-jobs.md))
 - **Persistence** — PostgreSQL via SQLAlchemy + Alembic (`DATABASE_URL`)
 
-Entry points: settings-aware launcher `python -m app.server` (production),
-console script `dev` → `app.dev:main` (reload), and the ASGI app
-`app.main:app`.
+Entry points, all in `app/server.py`: settings-aware launcher
+`python -m app.server` (production), console script `dev` → `app.server:dev`
+(reload), and the ASGI app `app.main:app`. The worker is separate:
+console script `worker` → `app.worker:main`.
 
 ## Package layout
 
 ```
 app/
   main.py           FastAPI app, static mount, auth middleware, audit lifespan
-  server.py         settings-aware Uvicorn launcher
+  server.py         settings-aware Uvicorn launchers (`dev` and `main`)
   worker.py         background jobs entry point (hangout-worker process)
   tenancy.py        workspace resolution + scoped queries
   locks.py          Postgres advisory locks for the worker sweeps
@@ -43,10 +44,10 @@ app/
   templates/        Jinja pages
   static/           CSS, JS, icons
 migrations/         Alembic schema migrations (versions/)
-docs/               topic docs + functional specification
+docs/               topic docs + functional specification (archive/ is historical)
 tests/              pytest suite + generated route/form smoke matrix
 terraform/          Azure VM + Flexible Server + cloud-init
-scripts/            local run, DB up, migrate, verify_plan, deploy
+scripts/            db_up.sh, check.sh, deploy/, sqlite-cutover/
 ```
 
 Product intent (MVP requirements) lives in [functional-specification.md](./functional-specification.md). Implementation details are split across the other topic files listed in [README.md](./README.md).

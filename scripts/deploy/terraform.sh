@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
 ENV_FILE="${REPO_DIR}/.env"
 
 if [[ ! -f "${ENV_FILE}" ]]; then
@@ -79,12 +79,12 @@ if [[ "${COMMAND}" == "init" ]]; then
   if [[ -f "${BACKEND_FILE}" && -f "${BACKEND_DECLARATION}" ]]; then
     exec terraform -chdir="${REPO_DIR}/terraform" init -backend-config="${BACKEND_FILE}" "$@"
   fi
-  echo "No ${BACKEND_FILE}; initializing with local state for validation only. Run ./scripts/bootstrap_state.sh apply before production apply." >&2
+  echo "No ${BACKEND_FILE}; initializing with local state for validation only. Run ./scripts/deploy/bootstrap_state.sh apply before production apply." >&2
   exec terraform -chdir="${REPO_DIR}/terraform" init -backend=false "$@"
 fi
 
 if [[ "${COMMAND}" == "apply" && ( ! -f "${BACKEND_FILE}" || ! -f "${BACKEND_DECLARATION}" ) ]]; then
-  echo "Refusing apply without remote state. Run ./scripts/bootstrap_state.sh apply, then ./scripts/terraform.sh init." >&2
+  echo "Refusing apply without remote state. Run ./scripts/deploy/bootstrap_state.sh apply, then ./scripts/deploy/terraform.sh init." >&2
   exit 1
 fi
 

@@ -5,7 +5,7 @@ variable "prefix" {
 }
 
 variable "subscription_id" {
-  description = "Azure subscription ID. The scripts/terraform.sh wrapper reads the active az CLI subscription when this is unset."
+  description = "Azure subscription ID. The scripts/deploy/terraform.sh wrapper reads the active az CLI subscription when this is unset."
   type        = string
   default     = ""
 
@@ -162,7 +162,7 @@ variable "cloudflare_zone_id" {
 }
 
 variable "cloudflare_hostname" {
-  description = "Public hostname routed through the Cloudflare Tunnel. Supplied from the ignored .env by scripts/terraform.sh; no default, so the deployed hostname is not published in this repo."
+  description = "Public hostname routed through the Cloudflare Tunnel. Supplied from the ignored .env by scripts/deploy/terraform.sh; no default, so the deployed hostname is not published in this repo."
   type        = string
 
   validation {
@@ -178,7 +178,7 @@ variable "cloudflare_tunnel_name" {
 }
 
 variable "cloudflare_access_allowed_emails" {
-  description = "Email addresses allowed through Cloudflare Access to the app. Supplied from the ignored .env by scripts/terraform.sh; no default, so no personal address is published in this repo. An empty list would expose the edge route to nobody allowed by Access."
+  description = "Email addresses allowed through Cloudflare Access to the app. Supplied from the ignored .env by scripts/deploy/terraform.sh; no default, so no personal address is published in this repo. An empty list would expose the edge route to nobody allowed by Access."
   type        = list(string)
 
   validation {
@@ -233,7 +233,7 @@ variable "postgres_admin_user" {
 }
 
 variable "postgres_admin_password" {
-  description = "Administrator password for the Flexible Server. No default: sourced from POSTGRES_ADMIN_PASSWORD in the ignored .env by scripts/terraform.sh."
+  description = "Administrator password for the Flexible Server. No default: sourced from POSTGRES_ADMIN_PASSWORD in the ignored .env by scripts/deploy/terraform.sh."
   type        = string
   sensitive   = true
 }
