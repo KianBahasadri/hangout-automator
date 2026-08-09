@@ -376,22 +376,22 @@ workspace filter.
 
 ### Tasks
 
-- [ ] **P4.1** Create `app/worker.py`: builds a `BlockingScheduler`, registers the
+- [x] **P4.1** Create `app/worker.py`: builds a `BlockingScheduler`, registers the
       two jobs currently at `app/main.py:101-110` (followups every 5 min,
       organizer every 10 min), reuses `_job_followups` / `_job_organizer` bodies
       including their `request_context()` / `audit_event` instrumentation
       verbatim — that logging is load-bearing. Add a `worker` console script to
       `pyproject.toml` `[project.scripts]` alongside the existing `dev`.
-- [ ] **P4.2** Delete `scheduler`, `_job_followups`, `_job_organizer`, and both
+- [x] **P4.2** Delete `scheduler`, `_job_followups`, `_job_organizer`, and both
       `add_job`/`start`/`shutdown` calls from `app/main.py`. The lifespan keeps
       only the audit events. Emit `server.started` with a field recording that
       scheduling is external, so a misconfigured deploy with no worker is
       visible in the audit stream.
-- [ ] **P4.3** Add `app/locks.py`: `advisory_lock(session, key) -> bool` context
+- [x] **P4.3** Add `app/locks.py`: `advisory_lock(session, key) -> bool` context
       manager over `pg_try_advisory_lock` / `pg_advisory_unlock`, with a stable
       integer key per job name. Wrap each job body; skip the tick and emit
       `background_job.skipped_locked` when the lock is not acquired.
-- [ ] **P4.4** Rewrite the invite selection in `process_followups`
+- [x] **P4.4** Rewrite the invite selection in `process_followups`
       (`app/services.py:610`) to claim rows with
       `.with_for_update(skip_locked=True)` and commit the `last_outbound_at`
       advance **before** dispatching to Twilio. Today `last_outbound_at` is set at

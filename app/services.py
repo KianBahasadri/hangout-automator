@@ -705,23 +705,48 @@ def process_followups(db: Session) -> int:
         budget=budget,
     )
 
-    # SKIP LOCKED claims the due rows so two workers cannot both dispatch the
-    # same invite: whichever process selects a row owns it for this tick.
+    # Candidate snapshot (no locks): who owns each row this tick is decided by
+    # the per-invite claim below. Locking the whole batch up front cannot work
+    # — the per-invite claim commit would release every other row's lock at
+    # once, letting a second worker re-claim the rest.
     invites = (
         db.query(HangoutInvite)
         .join(Hangout)
         .options(joinedload(HangoutInvite.profile), joinedload(HangoutInvite.hangout))
         .filter(Hangout.status == HangoutStatus.active)
         .filter(HangoutInvite.status.in_([InviteStatus.pending, InviteStatus.remind]))
-        # of= limits locking to the invite rows: the eager-load LEFT OUTER
-        # JOINs are the nullable side and Postgres rejects locking them.
-        .with_for_update(of=HangoutInvite, skip_locked=True)
         .all()
     )
+    db.commit()  # close the snapshot transaction; each claim below is its own
 
-    for inv in invites:
-        # Nothing has gone out yet, so there is no clock to measure against.
+    for candidate in invites:
+        # CLAIM this invite row in its own short transaction. SKIP LOCKED
+        # makes the loser walk away: two workers can never both own one invite.
+        claimed = (
+            db.query(HangoutInvite.id)
+            .filter(HangoutInvite.id == candidate.id)
+            .with_for_update(skip_locked=True)
+            .first()
+        )
+        if claimed is None:
+            continue  # another worker owns this invite for this tick
+        # Re-read the row under the lock with a FRESH statement snapshot: the
+        # claim statement's snapshot may predate the other worker's committed
+        # clock advance (the lock can be acquired mid-scan, after that commit),
+        # and the clock must be current before deciding due-ness.
+        # populate_existing is load-bearing: the row is in this session's
+        # identity map from the candidate snapshot, and without it the object
+        # can keep stale attributes when its expiration state races the other
+        # worker's commit.
+        inv = (
+            db.query(HangoutInvite)
+            .filter(HangoutInvite.id == claimed.id)
+            .populate_existing()
+            .first()
+        )
         if inv.last_outbound_at is None:
+            # Nothing has gone out yet, so there is no clock to measure against.
+            db.commit()
             continue
         last = inv.last_outbound_at
         if last.tzinfo is None:
@@ -743,13 +768,14 @@ def process_followups(db: Session) -> int:
                     previous_status=previous_status,
                     new_status=inv.status,
                 )
-                db.commit()
+            db.commit()
             continue
 
         next_delay = delays[inv.followups_sent]
         due_at = last + timedelta(hours=next_delay)
         # For sequential follow-ups after first, measure from last outbound
         if now < due_at:
+            db.commit()
             continue
 
         # CLAIM: advance and commit the clock BEFORE dispatching to Twilio. A
@@ -805,9 +831,9 @@ def process_organizer_intervals(db: Session) -> int:
     now = utcnow()
     sent = 0
     audit_event("organizer_intervals.scan.started", at=now)
-    # SKIP LOCKED claims the hangout rows: two workers must not both dispatch
-    # the same digest. The lock target here is hangouts, not hangout_invites —
-    # the clock this sweep advances is Hangout.last_organizer_notify_at.
+    # Candidate snapshot (no locks) — the per-hangout claim below decides who
+    # owns each row this tick. The lock target is hangouts, not invites: the
+    # clock this sweep advances is Hangout.last_organizer_notify_at.
     hangouts = (
         db.query(Hangout)
         .options(
@@ -819,13 +845,27 @@ def process_organizer_intervals(db: Session) -> int:
         .filter(Hangout.status == HangoutStatus.active)
         .filter(Hangout.notify_enabled.is_(True))
         .filter(Hangout.notify_interval.is_(True))
-        # of= limits locking to the hangout rows (see process_followups).
-        .with_for_update(of=Hangout, skip_locked=True)
         .all()
     )
-    for h in hangouts:
+    db.commit()  # close the snapshot transaction; each claim below is its own
+
+    for candidate in hangouts:
+        # CLAIM this hangout row in its own short transaction; the loser of a
+        # concurrent claim walks away (SKIP LOCKED).
+        claimed = (
+            db.query(Hangout.id)
+            .filter(Hangout.id == candidate.id)
+            .with_for_update(skip_locked=True)
+            .first()
+        )
+        if claimed is None:
+            continue  # another worker owns this hangout for this tick
+        # Fresh-snapshot re-read under the lock (see process_followups): the
+        # clock must be current, or a mid-scan lock acquisition double-sends.
+        h = db.query(Hangout).filter(Hangout.id == claimed.id).populate_existing().first()
         phone = resolve_organizer_phone(db, h)
         if not phone:
+            db.commit()
             continue
         hours = h.notify_interval_hours or settings.organizer_interval_hours or 6
         last = h.last_organizer_notify_at or h.activated_at
@@ -834,6 +874,7 @@ def process_organizer_intervals(db: Session) -> int:
         if last.tzinfo is None:
             last = last.replace(tzinfo=timezone.utc)
         if now < last + timedelta(hours=hours):
+            db.commit()
             continue
 
         fingerprint = hangout_digest_fingerprint(h)
@@ -859,8 +900,8 @@ def process_organizer_intervals(db: Session) -> int:
             h.last_digest_fingerprint = fingerprint
             sent += 1
         db.commit()
-    # Close the sweep transaction so the FOR UPDATE row locks never outlive
-    # the tick (see process_followups).
+    # Close the sweep transaction so no row locks outlive the tick
+    # (see process_followups).
     db.commit()
     audit_event(
         "organizer_intervals.scan.completed",
