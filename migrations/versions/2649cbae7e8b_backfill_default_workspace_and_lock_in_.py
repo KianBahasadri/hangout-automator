@@ -9,7 +9,6 @@ Create Date: 2026-08-08 20:09:58.336266
 from typing import Sequence, Union
 
 from alembic import op
-import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
@@ -69,4 +68,4 @@ def downgrade() -> None:
     for table in ("tags", "allergies", "profiles", "hangouts", "hangout_invites"):
         op.alter_column(table, "workspace_id", nullable=True)
 
-    op.execute(f"DELETE FROM workspaces WHERE slug = 'default'")
+    op.execute("DELETE FROM workspaces WHERE slug = 'default'")
