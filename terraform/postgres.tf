@@ -6,8 +6,17 @@
 # right mechanism here.)
 
 # Private DNS resolution for the server's FQDN inside the VNet.
+#
+# This name is not a free choice. Azure resolves the server's public FQDN to a
+# CNAME at <server>.privatelink.postgres.database.azure.com, and the private
+# endpoint's zone group registers its A record there. Any other zone name (for
+# example "private.", which is the convention for the *delegated-subnet* VNet
+# integration mode this deployment does not use) leaves the CNAME target
+# unresolvable inside the VNet, so lookups fall through to public DNS and
+# return the public IP — which then refuses the connection, because
+# public_network_access_enabled is false below.
 resource "azurerm_private_dns_zone" "postgres" {
-  name                = "private.postgres.database.azure.com"
+  name                = "privatelink.postgres.database.azure.com"
   resource_group_name = azurerm_resource_group.main.name
 }
 
@@ -29,6 +38,10 @@ resource "azurerm_postgresql_flexible_server" "main" {
   sku_name              = "B_Standard_B1ms"
   storage_mb            = 32768
   backup_retention_days = 35
+  # Azure assigns an availability zone at creation whether or not one is asked
+  # for. Pinning the assigned value keeps it out of every subsequent plan as a
+  # phantom "1 to change"; without it Terraform perpetually tries to null it.
+  zone = "1"
   # No default: sourced from POSTGRES_ADMIN_PASSWORD in the ignored .env.
   administrator_login    = var.postgres_admin_user
   administrator_password = var.postgres_admin_password

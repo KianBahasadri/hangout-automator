@@ -345,7 +345,7 @@ only through environment variables or a secret manager:
 | Area | Input used by this deployment |
 |------|-------------------------------|
 | Cloudflare | Zone, app hostname, account ID, and zone ID — all in the ignored `.env`, never in this repo |
-| Cloudflare | API token exported as `CLOUDFLARE_API_TOKEN`; it needs Tunnel Edit, DNS Edit, and Access: Apps and Policies Edit permissions |
+| Cloudflare | API token exported as `CLOUDFLARE_API_TOKEN`; it needs Tunnel Edit, DNS Edit, and Access: Apps and Policies Edit permissions. Before concluding this token is broken, read item 4 of the [go-live checklist](#production-go-live-checklist-external-prerequisites) — the obvious health-check endpoint reports a healthy token as invalid |
 | Cloudflare | `CLOUDFLARE_ACCESS_EMAILS` in the ignored `.env` — comma-separated addresses Access admits (see Access control below) |
 | Compute | Azure CLI login, region/VM size, repository URL/branch, and an SSH public key for the VM administrator (not direct public access) |
 | Public URL | `https://<app hostname>`, written to `PUBLIC_BASE_URL` for webhook signature validation |
