@@ -1,6 +1,6 @@
 # Plan: make Hangout Automator survive growth
 
-Status: **Phase 1 complete** (2026-08-08) — CI, ruff, verify_plan.sh, testing docs. Phase 2 in progress.
+Status: **Phases 1-2 complete** (2026-08-08) — CI/ruff/verify_plan.sh; Postgres + Alembic landed, suite green on Postgres, sqlite purged from app/. Phase 3 (tenancy) in progress.
 Owner: unattended agent loop
 Baseline commit: `5891d75` (2026-08-08)
 
@@ -291,12 +291,12 @@ gets exponentially more expensive with every table and every route added.
 
 ### Tasks
 
-- [ ] **P3.1** Add `Workspace` and `WorkspaceMember` models. `Workspace`: `id`,
+- [x] **P3.1** Add `Workspace` and `WorkspaceMember` models. `Workspace`: `id`,
       `name`, `slug` (unique), `created_at`. `WorkspaceMember`: `id`,
       `workspace_id` FK CASCADE, `clerk_user_id` (String(255), indexed),
       `role` (enum `owner`/`member`), `created_at`, `UNIQUE (workspace_id,
       clerk_user_id)`.
-- [ ] **P3.2** Add nullable `workspace_id` to `profiles`, `hangouts`, `tags`,
+- [x] **P3.2** Add nullable `workspace_id` to `profiles`, `hangouts`, `tags`,
       `allergies`, `hangout_invites`, `message_logs` in one Alembic migration.
       Nullable first — the backfill needs it.
 - [ ] **P3.3** Backfill migration: create workspace `default` (slug `default`),

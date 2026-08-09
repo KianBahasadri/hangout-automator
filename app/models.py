@@ -15,6 +15,7 @@ from sqlalchemy import (
     Table,
     Text,
     TypeDecorator,
+    UniqueConstraint,
     func,
 )
 from sqlalchemy import inspect as sqla_inspect
@@ -93,6 +94,58 @@ class MessageDirection(str, enum.Enum):
     inbound = "inbound"
 
 
+class WorkspaceRole(str, enum.Enum):
+    owner = "owner"
+    member = "member"
+
+
+class Workspace(Base):
+    """A tenant: an isolated set of profiles, hangouts, tags, and log rows.
+
+    Clerk stays a pure identity provider; membership in a workspace is
+    app-owned via WorkspaceMember. With CLERK_ENABLED=false everything resolves
+    to the seeded `default` workspace so local dev keeps working.
+    """
+
+    __tablename__ = "workspaces"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    slug: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    members: Mapped[list[WorkspaceMember]] = relationship(
+        back_populates="workspace", cascade="all, delete-orphan"
+    )
+
+
+class WorkspaceMember(Base):
+    """A clerk_user_id's role inside a workspace."""
+
+    __tablename__ = "workspace_members"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    workspace_id: Mapped[int] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
+    )
+    clerk_user_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    role: Mapped[WorkspaceRole] = mapped_column(
+        # VARCHAR + CHECK, not a native Postgres enum type (see Hangout.status).
+        Enum(
+            WorkspaceRole,
+            native_enum=False,
+            values_callable=lambda x: [e.value for e in x],
+        ),
+        default=WorkspaceRole.member,
+        nullable=False,
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (UniqueConstraint("workspace_id", "clerk_user_id"),)
+
+    workspace: Mapped[Workspace] = relationship(back_populates="members")
+
+
 profile_tags = Table(
     "profile_tags",
     Base.metadata,
@@ -112,6 +165,9 @@ class Tag(Base):
     __tablename__ = "tags"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    workspace_id: Mapped[int | None] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=True
+    )
     name: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
@@ -124,6 +180,9 @@ class Allergy(Base):
     __tablename__ = "allergies"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    workspace_id: Mapped[int | None] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=True
+    )
     name: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
@@ -136,6 +195,9 @@ class Profile(Base):
     __tablename__ = "profiles"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    workspace_id: Mapped[int | None] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=True
+    )
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     phone: Mapped[str] = mapped_column(String(32), nullable=False, unique=True)
     drinks: Mapped[YesNo | None] = mapped_column(_optional_enum_column(YesNo), nullable=True)
@@ -178,6 +240,9 @@ class Hangout(Base):
     __tablename__ = "hangouts"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    workspace_id: Mapped[int | None] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=True
+    )
     day_date: Mapped[str | None] = mapped_column(String(64), nullable=True)
     time: Mapped[str | None] = mapped_column(String(64), nullable=True)
     duration: Mapped[str | None] = mapped_column(String(64), nullable=True)
@@ -242,6 +307,9 @@ class HangoutInvite(Base):
     __tablename__ = "hangout_invites"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    workspace_id: Mapped[int | None] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=True
+    )
     hangout_id: Mapped[int] = mapped_column(
         ForeignKey("hangouts.id", ondelete="CASCADE"), nullable=False
     )
@@ -276,6 +344,9 @@ class MessageLog(Base):
     __tablename__ = "message_logs"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    workspace_id: Mapped[int | None] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=True
+    )
     invite_id: Mapped[int | None] = mapped_column(
         ForeignKey("hangout_invites.id", ondelete="SET NULL"), nullable=True
     )
