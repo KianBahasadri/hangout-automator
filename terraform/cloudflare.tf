@@ -31,6 +31,41 @@ resource "cloudflare_zero_trust_tunnel_cloudflared_config" "app" {
   }
 }
 
+# Clerk production instance DNS.
+#
+# Clerk is registered as a *secondary* application on the app's own hostname
+# (see the go-live checklist in docs/deploy.md), so it serves its Frontend API
+# and account portal from subdomains of that hostname and sends verification
+# mail as it. That needs five CNAMEs. The mail and DKIM targets carry an
+# instance-specific label, supplied as clerk_dns_id rather than hardcoded, for
+# the same reason cloudflare_hostname has no default: the deployed names stay
+# out of this repo. Empty means no records, which is correct while the
+# deployment is still on a development instance.
+#
+# These are deliberately NOT proxied. Cloudflare's proxy terminates TLS with
+# its own certificate, which breaks Clerk's Frontend API and blocks the
+# certificate it issues for the subdomain; Clerk's setup requires DNS-only.
+locals {
+  clerk_dns_records = var.clerk_dns_id == "" ? {} : {
+    "clerk"           = "frontend-api.clerk.services"
+    "accounts"        = "accounts.clerk.services"
+    "clkmail"         = "mail.${var.clerk_dns_id}.clerk.services"
+    "clk._domainkey"  = "dkim1.${var.clerk_dns_id}.clerk.services"
+    "clk2._domainkey" = "dkim2.${var.clerk_dns_id}.clerk.services"
+  }
+}
+
+resource "cloudflare_dns_record" "clerk" {
+  for_each = local.clerk_dns_records
+
+  zone_id = data.cloudflare_zone.app.id
+  name    = "${each.key}.${var.cloudflare_hostname}"
+  type    = "CNAME"
+  content = each.value
+  ttl     = 1
+  proxied = false
+}
+
 resource "cloudflare_dns_record" "app" {
   zone_id = data.cloudflare_zone.app.id
   name    = var.cloudflare_hostname

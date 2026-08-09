@@ -124,6 +124,17 @@ variable "clerk_jwt_key" {
   sensitive   = true
 }
 
+variable "clerk_dns_id" {
+  description = "Clerk production instance's DNS id, the label in its mail/DKIM CNAME targets (mail.<id>.clerk.services). Supplied from CLERK_DNS_ID in the ignored .env; empty creates no Clerk DNS records, which is correct for a development instance."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.clerk_dns_id == "" || can(regex("^[a-z0-9]+$", var.clerk_dns_id))
+    error_message = "clerk_dns_id must be lowercase alphanumeric."
+  }
+}
+
 variable "clerk_authorized_parties" {
   description = "Comma-separated browser origins accepted by Clerk's authorized-party check."
   type        = string
