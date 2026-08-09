@@ -409,7 +409,7 @@ workspace filter.
       recorded in `message_logs` — not 2N. Add a second case that asserts a
       simulated failure after send but before commit does not produce a duplicate
       on the next tick.
-- [ ] **P4.6** Terraform / cloud-init: add a `hangout-worker.service` systemd unit
+- [x] **P4.6** Terraform / cloud-init: add a `hangout-worker.service` systemd unit
       running the `worker` entry point, sharing `/etc/hangout-automator.env`,
       `After=hangout-automator.service`, `Restart=always`. Add it to the
       `systemctl is-active` smoke check in `docs/deploy.md`'s verification
