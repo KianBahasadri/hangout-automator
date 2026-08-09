@@ -14,6 +14,7 @@
 - [tenancy.md](./tenancy.md) — Workspaces, how requests resolve, inbound-SMS routing ambiguity
 - [background-jobs.md](./background-jobs.md) — Worker process, sweep intervals, two-layer send locking
 - [deploy.md](./deploy.md) — Azure Terraform + rsync deploy scripts
+- [deployment-history.md](./deployment-history.md) — Log of what was actually deployed, when, and what broke
 
 `archive/` holds completed plans and other point-in-time records. It is kept
 for history and is **not maintained** — never treat it as a description of

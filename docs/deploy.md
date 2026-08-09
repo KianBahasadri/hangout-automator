@@ -1,5 +1,9 @@
 # Deploy
 
+What has actually been deployed, and what broke doing it, is logged in
+[deployment-history.md](./deployment-history.md). Record an entry there after
+any apply that changes real infrastructure.
+
 ## Terraform (Azure VM)
 
 Directory: `terraform/`. Requires Terraform ≥ 1.5, AzureRM provider ~> 4.0,
