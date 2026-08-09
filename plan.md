@@ -303,7 +303,7 @@ gets exponentially more expensive with every table and every route added.
       set `workspace_id` on every existing row in all six tables, then `ALTER`
       to NOT NULL on all except `message_logs`. Swap the three unique constraints
       to composite in the same migration. Include a working `downgrade()`.
-- [ ] **P3.4** Add `app/tenancy.py`:
+- [x] **P3.4** Add `app/tenancy.py`:
       - `current_workspace(request) -> Workspace` FastAPI dependency. Resolves
         `request.state.clerk_user_id` → `WorkspaceMember` → `Workspace`. A user
         with **no** membership is not an error — provision one (see P3.10);
@@ -314,20 +314,20 @@ gets exponentially more expensive with every table and every route added.
       - `scoped(db, model, workspace)` helper returning a filtered query, and
         `get_scoped(db, model, id, workspace)` returning `None` (→ 404) rather
         than a foreign row.
-- [ ] **P3.5** Convert every read in `app/routers/web.py` (17 call sites) and
+- [x] **P3.5** Convert every read in `app/routers/web.py` (17 call sites) and
       `app/routers/api.py` (17 call sites). Every bare `db.get(Model, id)` becomes
       `get_scoped(...)`; every `db.query(Model)` gains a workspace filter. Every
       write sets `workspace_id` from the resolved workspace. Do this file by file,
       running the suite after each.
-- [ ] **P3.6** Convert `app/services.py` (12 call sites). `setup_hangout`,
+- [x] **P3.6** Convert `app/services.py` (12 call sites). `setup_hangout`,
       `load_hangout`, and the organizer-resolution helpers all take an explicit
       workspace argument. `process_followups` and `process_organizer_intervals`
       stay workspace-agnostic — they are the worker's cross-workspace sweep — but
       must carry `workspace_id` onto anything they create.
-- [ ] **P3.7** Update `_handle_inbound_sms`: set `workspace_id` on the inbound
+- [x] **P3.7** Update `_handle_inbound_sms`: set `workspace_id` on the inbound
       `message_logs` row once an invite is matched, leave NULL when unmatched, and
       emit the multi-workspace-candidate audit event described above.
-- [ ] **P3.8** **Write `tests/test_tenant_isolation.py` — the most important test
+- [x] **P3.8** **Write `tests/test_tenant_isolation.py` — the most important test
       in this plan.** Follow the generated-matrix style already in
       `tests/support/routes.py`. Build two workspaces, each with a full
       `sample_data` set. Then, for **every route in the live router inventory**,
@@ -337,9 +337,9 @@ gets exponentially more expensive with every table and every route added.
       appears in any response body. Add a guard test asserting the route inventory
       is non-empty, matching the existing `test_route_inventory_reflects_the_real_app`
       pattern — an empty matrix must fail, not silently pass.
-- [ ] **P3.9** Update `tests/conftest.py`'s `sample_data` to create and return a
+- [x] **P3.9** Update `tests/conftest.py`'s `sample_data` to create and return a
       workspace, and add a second `other_workspace` fixture for P3.8.
-- [ ] **P3.10** Workspace bootstrap — the other half of P3.4's resolution rule.
+- [x] **P3.10** Workspace bootstrap — the other half of P3.4's resolution rule.
       On the first authenticated request from a `clerk_user_id` with no
       membership, create a workspace and an `owner` membership, inside
       `current_workspace` itself. Put this in `app/tenancy.py`, not the

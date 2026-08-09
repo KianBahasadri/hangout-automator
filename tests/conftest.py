@@ -51,12 +51,10 @@ def _clean_tables(db):
     with engine.begin() as conn:
         for table in reversed(Base.metadata.sorted_tables):
             if table.name == "workspaces":
-                # The default workspace is infrastructure every request
-                # resolves to (CLERK_ENABLED=false); it must survive the wipe.
-                # Other workspaces must not leak between tests.
-                continue
+                continue  # handled below: the default workspace survives
             conn.execute(table.delete())
         conn.execute(text("DELETE FROM workspace_members"))
+        conn.execute(text("DELETE FROM workspaces WHERE slug != 'default'"))
         conn.execute(
             text(
                 "INSERT INTO workspaces (name, slug) VALUES ('Default', 'default')"
