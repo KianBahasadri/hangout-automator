@@ -293,6 +293,34 @@ def test_brand_new_user_gets_an_empty_workspace(client, monkeypatch, db, sample_
     assert "Sam Rivera" not in foreign.text
 
 
+def test_authenticated_request_without_a_subject_is_refused(client, monkeypatch, sample_data):
+    """No `sub` means no identity, so no workspace — 401, never the shared
+    `default` workspace whose rows belong to someone else."""
+    settings = _clerk_settings()
+    monkeypatch.setattr("app.auth.get_settings", lambda: settings)
+    monkeypatch.setattr("app.tenancy.get_settings", lambda: settings)
+    monkeypatch.setattr("app.routers.web.get_settings", lambda: settings)
+
+    async def authenticated_but_anonymous(request, settings):
+        # Signed in as far as the middleware is concerned, but the payload
+        # carries no subject claim.
+        return RequestState(
+            status=AuthStatus.SIGNED_IN,
+            payload={"sid": "sess_nosub"},
+            token="test-token",
+        )
+
+    monkeypatch.setattr("app.auth.authenticate_clerk_request", authenticated_but_anonymous)
+
+    response = client.get("/api/hangouts")
+    assert response.status_code == 401
+
+    # The default workspace's data did not leak on the way out.
+    hangout_id = sample_data["hangouts"]["active"]
+    assert client.get(f"/api/hangouts/{hangout_id}").status_code == 401
+    assert "Sam Rivera" not in client.get("/api/profiles").text
+
+
 def test_repeated_first_requests_do_not_create_duplicate_workspaces(client, monkeypatch, db):
     """Two requests from a user with no membership still yield one workspace:
     the deterministic slug's unique constraint makes the loser re-read."""

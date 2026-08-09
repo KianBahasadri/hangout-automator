@@ -5,13 +5,17 @@ Clerk stays a pure identity provider; membership is app-owned
 seeded `default` workspace so local dev and the test suite keep working.
 """
 
-from fastapi import Depends, Request
+import logging
+
+from fastapi import Depends, HTTPException, Request
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.database import get_db
 from app.models import Workspace, WorkspaceMember, WorkspaceRole
+
+logger = logging.getLogger(__name__)
 
 
 def _default_workspace(db: Session) -> Workspace:
@@ -24,15 +28,26 @@ def current_workspace(request: Request, db: Session = Depends(get_db)) -> Worksp
     Never raises for a user with no membership — provisioning one is part of
     resolution (a brand-new user owns a fresh, empty workspace). The 404 rule
     in this codebase is about *resources*, never about membership.
+
+    It does raise 401 for a request that cannot be attributed to any user,
+    which is a different thing entirely: no identity, so no workspace.
     """
     if not get_settings().clerk_enabled:
         return _default_workspace(db)
 
     clerk_user_id = getattr(request.state, "clerk_user_id", None)
     if not clerk_user_id:
-        # Authenticated request without a usable sub claim: fall back to the
-        # default workspace rather than 500.
-        return _default_workspace(db)
+        # Authenticated by the middleware but carrying no usable `sub`, so the
+        # request cannot be attributed to anyone. This must fail closed: the
+        # earlier behaviour returned the shared `default` workspace, which
+        # handed an unattributable request another tenant's data. It should be
+        # unreachable — the middleware only sets state after
+        # is_authenticated — so log it rather than failing silently.
+        logger.error(
+            "Clerk-authenticated request has no subject claim; refusing",
+            extra={"path": request.url.path},
+        )
+        raise HTTPException(status_code=401, detail="Authentication required")
 
     member = (
         db.query(WorkspaceMember).filter(WorkspaceMember.clerk_user_id == clerk_user_id).first()

@@ -30,18 +30,21 @@ every route that touches tenant data:
    `user-<clerk_user_id>`, whose unique constraint makes concurrent first
    requests collapse to one workspace via re-read on conflict).
 
-### Known gap: step 2 fails open
+A request the middleware admitted but that carries no usable `sub` is refused
+with a 401, and the anomaly is logged. It should be unreachable — the
+middleware only populates `request.state` after `is_authenticated` — but the
+alternative to refusing is resolving to the shared `default` workspace, which
+would hand an unattributable request another tenant's data. Failing closed
+here is what the *no identity, so no workspace* rule means;
+`test_authenticated_request_without_a_subject_is_refused` pins it.
 
-If the auth middleware admitted the request but `request.state.clerk_user_id`
-is missing, `current_workspace` returns the shared `default` workspace rather
-than refusing (`app/tenancy.py:31-35`). It was written to avoid a 500 on a
-token with no usable `sub`, but the effect is that an unattributable
-authenticated request reads and writes shared data. It should be a 401.
+### Known gap: any signer gets a workspace
 
-Nothing in the app refuses an *unknown* signer either — a Clerk-authenticated
-stranger is simply provisioned a workspace by step 3. Today the deployment is
-kept single-user by the Cloudflare Access email allowlist in front of it, not
-by anything here. Both facts are why Access cannot be removed yet; the
+Nothing in the app refuses an *unknown* Clerk user — step 3 simply provisions
+a workspace for them. Whoever can sign up can get an account. The deployment
+is kept single-user by the Cloudflare Access email allowlist in front of it,
+not by anything here, which is why Access cannot be removed until sign-up is
+restricted; the
 [deploy doc](./deploy.md#planned-retiring-cloudflare-access) records that plan
 and its exit criteria.
 

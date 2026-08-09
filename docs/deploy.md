@@ -509,19 +509,22 @@ per-workspace scoping becomes the only authentication boundary, and the app
 becomes open-signup rather than an allowlist of one.
 
 The reason it is still here is that Access is currently doing real work: it is
-the compensating control for the two gaps in
-[tenancy.md](./tenancy.md#known-gap-step-2-fails-open) — workspace resolution
-fails open into the shared `default` workspace, and the email allowlist rather
-than the app is what keeps this deployment single-user. Remove Access before
-those are fixed and the second stops being theoretical the moment the hostname
-is discovered.
+the compensating control for the gap in
+[tenancy.md](./tenancy.md#known-gap-any-signer-gets-a-workspace) — the app
+provisions a workspace for any Clerk user, so the email allowlist rather than
+anything in the app is what keeps this deployment single-user. Remove Access
+before sign-up is restricted and that stops being theoretical the moment the
+hostname is discovered.
 
 Exit criteria, all of them, before deleting `terraform/access.tf`:
 
-1. `current_workspace` fails closed — no `sub` claim is a 401, never a fallback
-   to `default`.
+1. ~~`current_workspace` fails closed — no `sub` claim is a 401, never a
+   fallback to `default`.~~ **Done**; see
+   [tenancy.md](./tenancy.md#how-a-request-resolves-to-a-workspace).
 2. Clerk is on a **production** instance with live keys (a development instance
-   accepts any signer and is not an authentication boundary).
+   accepts any signer and is not an authentication boundary). The wrapper now
+   refuses `apply` when `CLERK_ENABLED=true` with a `pk_test_` key, and when
+   the publishable key's encoded host disagrees with `CLERK_FRONTEND_API_URL`.
 3. Clerk sign-up is restricted to whoever should actually have accounts, or the
    app is genuinely happy to provision a workspace for any signup.
 4. The isolation matrix in `tests/test_tenant_isolation.py` is green, since it

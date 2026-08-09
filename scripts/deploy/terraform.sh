@@ -54,6 +54,34 @@ export TF_VAR_clerk_secret_key="${TF_VAR_clerk_secret_key:-${CLERK_SECRET_KEY:-}
 export TF_VAR_clerk_jwt_key="${TF_VAR_clerk_jwt_key:-${CLERK_JWT_KEY:-}}"
 export TF_VAR_clerk_authorized_parties="${TF_VAR_clerk_authorized_parties:-${CLERK_AUTHORIZED_PARTIES:-}}"
 export TF_VAR_clerk_dns_id="${TF_VAR_clerk_dns_id:-${CLERK_DNS_ID:-}}"
+
+# Refuse to ship a development Clerk instance as production auth. A pk_test_
+# key is user-capped, accepts any signer, and is not an authentication
+# boundary. The mismatch is silent at apply time and only surfaces as a
+# signed-in stranger, so catch it here rather than in the logs.
+if [[ "${TF_VAR_clerk_enabled}" == "true" && "${TF_VAR_clerk_publishable_key}" == pk_test_* ]]; then
+  echo "Refusing apply: CLERK_ENABLED=true with a development publishable key (pk_test_)." >&2
+  echo "Use a Clerk production instance (pk_live_/sk_live_), or set HANGOUT_ALLOW_CLERK_TEST_KEYS=1 to override." >&2
+  [[ "${HANGOUT_ALLOW_CLERK_TEST_KEYS:-}" == "1" ]] || exit 1
+fi
+
+# The frontend API host and the publishable key encode the same instance; if
+# they disagree the browser loads ClerkJS from one instance and presents it a
+# key from another, which fails only in the browser. The key's payload is the
+# host followed by "$".
+if [[ -n "${TF_VAR_clerk_publishable_key}" && -n "${TF_VAR_clerk_frontend_api_url}" ]]; then
+  KEY_BODY="${TF_VAR_clerk_publishable_key#pk_test_}"
+  KEY_BODY="${KEY_BODY#pk_live_}"
+  # Clerk strips the base64 padding; some base64(1) builds reject that.
+  while (( ${#KEY_BODY} % 4 )); do KEY_BODY+="="; done
+  KEY_HOST="$(printf '%s' "${KEY_BODY}" | base64 -d 2>/dev/null | tr -d '$' || true)"
+  URL_HOST="${TF_VAR_clerk_frontend_api_url#https://}"
+  URL_HOST="${URL_HOST%%/*}"
+  if [[ -n "${KEY_HOST}" && "${KEY_HOST}" != "${URL_HOST}" ]]; then
+    echo "Refusing apply: CLERK_PUBLISHABLE_KEY encodes '${KEY_HOST}' but CLERK_FRONTEND_API_URL is '${URL_HOST}'." >&2
+    exit 1
+  fi
+fi
 # Postgres admin password has no Terraform default by design; the operator's
 # .env is the only source.
 : "${POSTGRES_ADMIN_PASSWORD:?POSTGRES_ADMIN_PASSWORD is required in .env}"
