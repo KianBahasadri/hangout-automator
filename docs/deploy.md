@@ -412,8 +412,10 @@ Template `cloud-init.yaml.tftpl`:
   without the data disk holding its audit log (the fstab entry is `nofail`, so
   the VM itself still boots)
 - systemd unit `cloudflared.service` using the Terraform-created Tunnel token
-- `hangout-backup.service` + `.timer` (see Backups below)
-- Bootstrap: wait for and mount the persistent data disk, clone `git_repo_url`, create venv, `pip install -r requirements.txt`, run `alembic upgrade head` against the Postgres server (schema migrations are a deploy step, never an app-startup step), then enable/restart the app service and enable the backup timer
+- systemd unit `hangout-worker.service` running the background jobs (see
+  [background-jobs.md](./background-jobs.md)); backups are Azure-managed (see
+  Backups below)
+- Bootstrap: wait for and mount the persistent data disk, clone `git_repo_url`, create venv, `pip install -r requirements.txt`, run `alembic upgrade head` against the Postgres server (schema migrations are a deploy step, never an app-startup step), then enable/restart the app and worker services
 
 The cloudflared service token, Clerk backend credentials, and SMS secrets are
 rendered into root-readable machine configuration and Terraform state; use a
@@ -461,39 +463,40 @@ Defense in depth beyond Access:
   committed here — though earlier commits in this public repository still
   contain it, so treat it as known
 
-There is still no rate limiting, and Access does not add any.
+The SMS webhook is rate-limited per source phone and globally (Postgres
+counters, 429 past the ceilings); the Twilio signature check still runs first.
 
 ### Backups
 
-`hangout-backup.timer` runs `/usr/local/bin/hangout-backup.sh` daily
-(`Persistent=true`, so a missed run fires after boot). It writes a gzipped
-snapshot to `/var/lib/hangout-automator/backups/app-<UTC timestamp>.db.gz` and
-keeps the newest 7.
+Backups are **off-site by the database server itself**. The Flexible Server is
+provisioned with `backup_retention_days = 35`, so Azure keeps rolling daily
+backups plus transaction-log point-in-time restore (PITR) for the last 35
+days, stored in Azure's own backup storage — not on the VM's data disk. The
+old `hangout-backup.sh` / `.service` / `.timer` no longer exist.
 
-It uses `sqlite3 .backup` rather than copying the file: the database runs in WAL
-mode, so committed rows can still live in the `-wal` sidecar and a plain `cp`
-can capture a database that is missing them.
-
-The backup contains the database only. The rotating audit log remains on the
-same data disk at `/var/lib/hangout-automator/logs/` and is not included in
-these snapshots; copy it separately when preserving the trace history.
-
-Scope: this protects against application-level corruption, a bad migration, or
-deleting rows by accident. It is **not** off-site — the snapshots sit on the
-same managed disk as `app.db`, so restoring after losing that disk needs a
-separate copy (Azure disk snapshot, or pulling the `.gz` off the VM).
-
-Restore: stop `hangout-automator`, `gunzip -c backups/app-<stamp>.db.gz >
-/var/lib/hangout-automator/app.db`, remove any stale `app.db-wal` / `app.db-shm`,
-then start the service.
+- **Restore a point in time** (deleted rows, bad migration, corruption):
+  create a new Flexible Server from a restore point in the portal/CLI
+  (`az postgres flexible-server restore --source-server … --restore-time
+  …`), point `DATABASE_URL` at it, run `alembic upgrade head`, and cut over.
+  The original server's `prevent_destroy` keeps Terraform from replacing it.
+- **Off-site scope**: backups live in Azure storage, so losing the whole VM
+  does not lose the database. The rotating audit log still sits on the VM's
+  data disk (`/var/lib/hangout-automator/logs/`); copy it off the VM when
+  preserving trace history matters.
+- **Before an irreversible migration or a production cutover**: take an extra
+  pre-change restore point (`az postgres flexible-server restore` to a scratch
+  server, or a manual PITR restore) rather than trusting only the rolling
+  windows.
 
 ### Tearing down
 
-`terraform destroy` fails while the data disk carries `prevent_destroy = true`.
-That is deliberate — it is the only copy of the database. To intentionally
-destroy the environment, take a backup first, then drop the disk from state
-(`terraform state rm azurerm_managed_disk.data`) and destroy; the disk survives
-in Azure and must be deleted by hand once you are sure.
+`terraform destroy` fails while the data disk and the Flexible Server both
+carry `prevent_destroy = true`. The disk holds the audit log; the database
+lives on the Azure-managed server (with its own 35-day backups). To
+intentionally destroy the environment, export the audit log first, then drop
+both from state (`terraform state rm azurerm_managed_disk.data
+azurerm_postgresql_flexible_server.main`) and destroy; the disk and the server
+survive in Azure and must be deleted by hand once you are sure.
 
 ## Production go-live checklist (external prerequisites)
 
@@ -555,7 +558,7 @@ three units active, and the app answering locally:
 
 ```bash
 az vm run-command invoke -g <rg> -n <vm> --command-id RunShellScript \
-  --scripts "set -a; . /etc/hangout-automator.env; set +a; cloud-init status --long; systemctl is-active hangout-automator hangout-worker cloudflared hangout-backup.timer; curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:\${APP_PORT}/" \
+  --scripts "set -a; . /etc/hangout-automator.env; set +a; cloud-init status --long; systemctl is-active hangout-automator hangout-worker cloudflared; curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:\${APP_PORT}/" \
   --query "value[0].message" -o tsv
 ```
 

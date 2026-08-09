@@ -91,55 +91,9 @@ write_files:
       [Install]
       WantedBy=multi-user.target
 
-  - path: /usr/local/bin/hangout-backup.sh
-    owner: root:root
-    permissions: "0755"
-    content: |
-      #!/bin/bash
-      set -euo pipefail
-
-      DATA_DIR=/var/lib/hangout-automator
-      BACKUP_DIR="$DATA_DIR/backups"
-      KEEP=7
-
-      mkdir -p "$BACKUP_DIR"
-      DEST="$BACKUP_DIR/app-$(date -u +%Y%m%dT%H%M%SZ).db"
-      # sqlite3 .backup is safe while the app is writing; copying the file is
-      # not, because the committed data may still be in the -wal sidecar.
-      sqlite3 "$DATA_DIR/app.db" ".backup '$DEST'"
-      gzip -f "$DEST"
-      ls -1t "$BACKUP_DIR"/app-*.db.gz | tail -n +$((KEEP + 1)) | xargs -r rm --
-
-  - path: /etc/systemd/system/hangout-backup.service
-    owner: root:root
-    permissions: "0644"
-    content: |
-      [Unit]
-      Description=Snapshot the Hangout Automator SQLite database
-      RequiresMountsFor=/var/lib/hangout-automator
-
-      [Service]
-      Type=oneshot
-      User=${admin_username}
-      Group=${admin_username}
-      ExecStart=/usr/local/bin/hangout-backup.sh
-      NoNewPrivileges=true
-      PrivateTmp=true
-
-  - path: /etc/systemd/system/hangout-backup.timer
-    owner: root:root
-    permissions: "0644"
-    content: |
-      [Unit]
-      Description=Daily Hangout Automator database snapshot
-
-      [Timer]
-      OnCalendar=daily
-      Persistent=true
-      RandomizedDelaySec=15m
-
-      [Install]
-      WantedBy=timers.target
+  # Backups are off-site by Azure Database for PostgreSQL Flexible Server
+  # itself (35-day backup retention, point-in-time restore) — the old
+  # hangout-backup script/service/timer are gone.
 
   - path: /etc/cloudflared/token.env
     owner: root:root
@@ -250,7 +204,6 @@ write_files:
       systemctl restart hangout-automator
       systemctl enable --now hangout-worker
       systemctl restart hangout-worker
-      systemctl enable --now hangout-backup.timer
 
 runcmd:
   - install -d -m 0755 /usr/share/keyrings /etc/cloudflared
