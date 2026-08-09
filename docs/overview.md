@@ -1,10 +1,12 @@
 # Overview
 
-Hangout Automator is a single shared-dataset FastAPI app. When
-`CLERK_ENABLED=true`, its browser UI and JSON API require a verified Clerk
-session; the authenticated users still see and edit the same profiles and
-hangouts. There is no per-user ownership or multi-tenancy. Local development
-keeps Clerk disabled until its instance values are configured.
+Hangout Automator is a multi-tenant FastAPI app: every tenant row belongs to a
+`workspace`, and each authenticated user sees only their own workspace's
+profiles and hangouts ([tenancy.md](./tenancy.md)). When `CLERK_ENABLED=true`,
+its browser UI and JSON API require a verified Clerk session and resolve the
+request to the user's workspace (provisioned on first use). With
+`CLERK_ENABLED=false` everything runs in the seeded `default` workspace, which
+is how local development behaves until Clerk is configured.
 
 ## Runtime shape
 

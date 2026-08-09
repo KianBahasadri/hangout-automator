@@ -11,6 +11,7 @@
 - [invites-and-followups.md](./invites-and-followups.md) — Hangout activation, invite sends, follow-up scheduler
 - [organizer-notifications.md](./organizer-notifications.md) — Interval digests and threshold alerts
 - [testing.md](./testing.md) — Test suite layout, the generated smoke matrix, running it
+- [tenancy.md](./tenancy.md) — Workspaces, how requests resolve, inbound-SMS routing ambiguity
 - [deploy.md](./deploy.md) — Azure Terraform + rsync deploy scripts
 
 ## Notes

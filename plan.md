@@ -1,6 +1,6 @@
 # Plan: make Hangout Automator survive growth
 
-Status: **Phases 1-2 complete** (2026-08-08) — CI/ruff/verify_plan.sh; Postgres + Alembic landed, suite green on Postgres, sqlite purged from app/. Phase 3 (tenancy) in progress.
+Status: **Phases 1-2 complete** (2026-08-08) — CI/ruff/verify_plan.sh; Postgres + Alembic landed, suite green on Postgres, sqlite purged from app/. Phases 1-3 complete (2026-08-08) — tenancy landed with isolation matrix green. Phase 4 (worker) in progress..
 Owner: unattended agent loop
 Baseline commit: `5891d75` (2026-08-08)
 
@@ -347,7 +347,7 @@ gets exponentially more expensive with every table and every route added.
       create two workspaces: rely on the `UNIQUE (workspace_id, clerk_user_id)`
       constraint from P3.1 and re-read on conflict. Add a test that a brand-new
       user gets an empty workspace and cannot see the `default` one's data.
-- [ ] **P3.11** Write `docs/tenancy.md`: the workspace model, how a request
+- [x] **P3.11** Write `docs/tenancy.md`: the workspace model, how a request
       resolves to a workspace, the `CLERK_ENABLED=false` default-workspace
       behavior, the inbound-SMS routing rule and its known ambiguity, and the
       per-workspace-Twilio-number upgrade path. Add it to `docs/README.md`'s
