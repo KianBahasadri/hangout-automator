@@ -55,6 +55,11 @@ locals {
   }
 }
 
+#
+# ttl is 3600 rather than 1 ("automatic") to match what Clerk's own Cloudflare
+# integration writes. The value is irrelevant to Clerk's verification, but the
+# dashboard's "configure automatically" button rewrites these records, and a
+# config that disagrees turns every re-sync into drift.
 resource "cloudflare_dns_record" "clerk" {
   for_each = local.clerk_dns_records
 
@@ -62,7 +67,7 @@ resource "cloudflare_dns_record" "clerk" {
   name    = "${each.key}.${var.cloudflare_hostname}"
   type    = "CNAME"
   content = each.value
-  ttl     = 1
+  ttl     = 3600
   proxied = false
 }
 

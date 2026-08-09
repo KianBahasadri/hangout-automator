@@ -639,10 +639,24 @@ remaining external or operator-controlled steps:
    verification mail comes from `@hangout.bahasadri.com`, keeping the whole
    footprint under the subdomain the app already owns.
 
-   Clerk then issues a set of CNAME records (frontend API, account portal, and
-   the mail/DKIM entries) to add to the `bahasadri.com` zone. Terraform manages
-   individual `cloudflare_dns_record` resources rather than the zone as a
-   whole, so adding these by hand does not create drift.
+   Clerk then issues five CNAME records (frontend API, account portal, and the
+   mail/DKIM entries) for the `bahasadri.com` zone. `cloudflare_dns_record.clerk`
+   in `terraform/cloudflare.tf` creates them, keyed off `clerk_dns_id`.
+
+   **Do not use Clerk's "configure automatically" Cloudflare integration on a
+   zone Terraform manages.** It does not adopt existing records — it deletes
+   them and creates its own with new record ids, which strands Terraform's
+   state on five ids that no longer exist. The failure is delayed and ugly: a
+   plan reports `5 to add` with `Warning: Resource not found`, and the apply
+   then fails partway trying to create CNAMEs that already exist (Cloudflare
+   error 81053). Recovery is `terraform state rm` plus `terraform import
+   '<zone id>/<record id>'` for each of the five, reading the live ids from
+   `GET /zones/<zone id>/dns_records`. The records' `ttl` is `3600` to match
+   what that integration writes, so a re-sync does not show up as drift.
+
+   Terraform manages individual `cloudflare_dns_record` resources rather than
+   the zone as a whole, so *hand-adding* a record is safe; it is specifically
+   the delete-and-recreate integration that breaks state.
 
    Afterwards set `CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, and
    `CLERK_FRONTEND_API_URL` (which becomes `https://clerk.hangout.bahasadri.com`)
