@@ -29,7 +29,3 @@ if ! docker compose exec -T postgres psql -U hangout -d hangout -tAc \
 fi
 
 echo "Postgres ready: postgresql://hangout:hangout@localhost:5432/hangout (test db: hangout_test)"
-
-echo "Postgres did not become ready in 30s." >&2
-echo "Check the container: docker compose logs postgres" >&2
-exit 1
