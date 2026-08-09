@@ -429,7 +429,7 @@ workspace filter.
 Small, independent, genuinely needed before real traffic. `docs/deploy.md:456`
 already flags the first one.
 
-- [ ] **P5.1** Rate-limit `POST /webhooks/sms`. It is publicly reachable by
+- [x] **P5.1** Rate-limit `POST /webhooks/sms`. It is publicly reachable by
       design (Cloudflare Access bypasses it for Twilio) and every hit can cost
       money. Per-source-phone and global ceilings, 429 past them, backed by a
       Postgres counter table — no new infrastructure dependency. Signature
