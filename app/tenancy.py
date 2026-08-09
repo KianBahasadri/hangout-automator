@@ -55,10 +55,12 @@ def current_workspace(request: Request, db: Session = Depends(get_db)) -> Worksp
     if member is not None:
         return db.get(Workspace, member.workspace_id)
 
-    return _provision_workspace(db, clerk_user_id)
+    # Reaching here means the auth middleware already matched this user to an
+    # access grant, so provisioning is not a decision this function makes.
+    return _provision_workspace(db, clerk_user_id, getattr(request.state, "clerk_email", None))
 
 
-def _provision_workspace(db: Session, clerk_user_id: str) -> Workspace:
+def _provision_workspace(db: Session, clerk_user_id: str, email: str | None = None) -> Workspace:
     """First authenticated request from this user: create workspace + owner.
 
     The slug is derived deterministically from the user id, so the workspace
@@ -73,6 +75,7 @@ def _provision_workspace(db: Session, clerk_user_id: str) -> Workspace:
         WorkspaceMember(
             workspace_id=workspace.id,
             clerk_user_id=clerk_user_id,
+            email=email,
             role=WorkspaceRole.owner,
         )
     )

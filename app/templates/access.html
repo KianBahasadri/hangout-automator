@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}Access · Hangout Automator{% endblock %}
+{% block content %}
+{% set notices = {
+  "added": "Email added to the access list.",
+  "removed": "Access removed.",
+  "role-updated": "Role updated.",
+  "already-listed": "That email already has this role.",
+  "invalid-email": "That does not look like an email address.",
+  "last-admin": "Refused: that is the only admin left. Add another admin first.",
+  "not-found": "That entry no longer exists.",
+} %}
+<h1>Access</h1>
+<p class="muted">
+  Only these email addresses can sign in. Anyone else who creates a Clerk
+  account is refused before reaching the app. Admins can edit this list.
+</p>
+
+{% if notice and notice in notices %}
+<div class="alert">{{ notices[notice] }}</div>
+{% endif %}
+
+<div class="card">
+  <h2 style="margin-top:0;">Allowed emails</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Email</th>
+        <th>Role</th>
+        <th>Status</th>
+        <th>Added by</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for grant in grants %}
+      <tr>
+        <td>
+          {{ grant.email }}
+          {% if grant.email == current_email %}<span class="muted">(you)</span>{% endif %}
+        </td>
+        <td>
+          <span class="badge {{ 'badge-active' if grant.role.value == 'admin' else 'badge-pending' }}">
+            {{ grant.role.value }}
+          </span>
+        </td>
+        <td class="muted">
+          {{ "signed in" if grant.email in signed_in else "not signed in yet" }}
+        </td>
+        <td class="muted">{{ grant.created_by or "startup config" }}</td>
+        <td style="text-align:right;">
+          {% if grant.role.value == 'admin' and admin_total <= 1 %}
+          <span class="muted" title="The last admin cannot be removed">—</span>
+          {% else %}
+          <form method="post" action="/settings/access/{{ grant.id }}/delete"
+                data-confirm="Remove access for {{ grant.email }}?">
+            <button class="btn" type="submit">Remove</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="muted">Nobody is allowed in yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="card">
+  <h2 style="margin-top:0;">Add an email</h2>
+  <p class="muted" style="margin-top:0;">
+    They still have to create their own Clerk account with this exact address.
+    Adding it here does not send an invitation.
+  </p>
+  <form method="post" action="/settings/access" class="field-row" style="align-items:flex-end;">
+    <div style="flex:2;">
+      <label for="access_email">Email</label>
+      <input id="access_email" name="email" type="email" required maxlength="255"
+             placeholder="someone@example.com" style="margin-bottom:0;" />
+    </div>
+    <div style="flex:1;">
+      <label for="access_role">Role</label>
+      <select id="access_role" name="role" style="margin-bottom:0;">
+        <option value="member">Member — can use the app</option>
+        <option value="admin">Admin — can also edit this list</option>
+      </select>
+    </div>
+    <button class="btn" type="submit">Add</button>
+  </form>
+</div>
+{% endblock %}

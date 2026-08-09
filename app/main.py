@@ -17,6 +17,32 @@ configure_logging(settings)
 logger = logging.getLogger(__name__)
 
 
+def _bootstrap_access(settings) -> None:
+    """Seed admin grants, and say so loudly when nobody can get in.
+
+    An empty access list with Clerk enabled locks everyone out, including the
+    operator, and the symptom (a 403 on every page) does not name its cause.
+    """
+    from app.access import admin_count, sync_bootstrap_admins
+    from app.database import SessionLocal
+
+    created = sync_bootstrap_admins(settings.access_bootstrap_admin_list)
+    if created:
+        audit_event("access.bootstrap_admins_granted", emails=created)
+
+    db = SessionLocal()
+    try:
+        admins = admin_count(db)
+    finally:
+        db.close()
+    if admins == 0:
+        logger.error(
+            "No admin access grants exist and ACCESS_BOOTSTRAP_ADMINS is empty — "
+            "every signed-in user will be refused. Set ACCESS_BOOTSTRAP_ADMINS and restart."
+        )
+    audit_event("access.bootstrap_complete", admin_count=admins)
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     audit_event(
@@ -29,6 +55,8 @@ async def lifespan(_app: FastAPI):
         log_level=settings.log_level,
     )
     try:
+        if settings.clerk_enabled:
+            _bootstrap_access(settings)
         logger.info("Hangout Automator started (SMS provider=%s)", settings.sms_provider)
         audit_event(
             "server.started",

@@ -41,6 +41,11 @@ twilio_from_number = ""
 # clerk_secret_key         = "sk_live_..."
 # clerk_authorized_parties = "https://hangout.example.com"
 
+# Emails always granted admin on the app's access list, which is what decides
+# whether a Clerk account may use this deployment at all. Required alongside
+# clerk_enabled: with no admins, nobody can sign in or grant anyone else access.
+# access_bootstrap_admins = "you@example.com,cofounder@example.com"
+
 # Azure Database for PostgreSQL Flexible Server (private endpoint). The
 # password deliberately has no default: scripts/deploy/terraform.sh requires
 # POSTGRES_ADMIN_PASSWORD in the ignored .env.

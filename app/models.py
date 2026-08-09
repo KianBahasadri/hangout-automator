@@ -99,6 +99,43 @@ class WorkspaceRole(str, enum.Enum):
     member = "member"
 
 
+class AccessRole(str, enum.Enum):
+    """What an allowed email may do on this deployment, instance-wide."""
+
+    admin = "admin"
+    member = "member"
+
+
+class AccessGrant(Base):
+    """An email address permitted to sign in to this deployment.
+
+    Deliberately not workspace-scoped: this is the gate *in front of* workspace
+    provisioning, so it has to be answerable before a request has a workspace.
+    `admin` additionally means "may edit this table" — see app/access.py.
+    """
+
+    __tablename__ = "access_grants"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    # Normalized on the way in (stripped, lowercased) so the unique index is
+    # also the case-insensitive lookup index.
+    email: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+    role: Mapped[AccessRole] = mapped_column(
+        # VARCHAR + CHECK, not a native Postgres enum type (see Hangout.status).
+        Enum(
+            AccessRole,
+            native_enum=False,
+            values_callable=lambda x: [e.value for e in x],
+        ),
+        default=AccessRole.member,
+        nullable=False,
+    )
+    # The admin who added the row, for the audit trail. NULL for rows seeded
+    # from ACCESS_BOOTSTRAP_ADMINS at startup.
+    created_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class Workspace(Base):
     """A tenant: an isolated set of profiles, hangouts, tags, and log rows.
 
@@ -129,6 +166,11 @@ class WorkspaceMember(Base):
         ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
     )
     clerk_user_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    # The Clerk email this membership was provisioned for, recorded so the
+    # access list can be read against real people and so revoking a grant is
+    # traceable to the workspace it locks out. Nullable: memberships created
+    # directly (tests, fixtures) need not carry one.
+    email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     role: Mapped[WorkspaceRole] = mapped_column(
         # VARCHAR + CHECK, not a native Postgres enum type (see Hangout.status).
         Enum(

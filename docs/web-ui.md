@@ -52,7 +52,10 @@ string whatever characters it holds.
 | POST | `/hangouts/{id}/close` | End hangout |
 | POST | `/hangouts/{id}/delete` | Soft-delete (closed only) — sets `deleted_at`, hides from home |
 | POST | `/hangouts/{id}/restore` | Clear `deleted_at` so the hangout appears on home again |
-| GET | `/settings` | Dietary-restriction catalog, deleted hangouts, SMS simulator, log download |
+| GET | `/settings` | Dietary-restriction catalog, access, deleted hangouts, SMS simulator, log download |
+| GET | `/settings/access` | Admin-only: the email access list (`?notice=` feedback) |
+| POST | `/settings/access` | Admin-only: add an email or change its role → `/settings/access` |
+| POST | `/settings/access/{id}/delete` | Admin-only: revoke an email |
 | GET | `/settings/deleted-hangouts` | Soft-deleted hangouts; optional `?q=` motive search |
 | GET | `/settings/sms-simulator` | Preview sample outbound / auto-reply SMS layouts (not sent) |
 | GET | `/settings/logs` | Download the active JSONL audit log (`LOG_FILE`) |
@@ -122,6 +125,19 @@ Home list and `GET /api/hangouts` omit rows with `deleted_at` set.
 
 Dietary Restrictions catalog (same pill list pattern as tags; defaults
 `meat` and `pork` are seeded once into an empty catalog — deletions persist).
+**Access** card links to `GET /settings/access`, which lists every allowed
+email with its role, whether that person has signed in yet, and who added
+them, plus a form to add one. Non-admins get a 403 on all three routes; the
+card is still shown to them. Outcomes come back as `?notice=` codes
+(`added`, `removed`, `role-updated`, `already-listed`, `invalid-email`,
+`last-admin`, `not-found`) rendered as an `.alert`. Removing or demoting the
+last admin is refused. What the list means lives in
+[tenancy.md](./tenancy.md).
+
+A signed-in user with no grant never reaches any of these pages: the auth
+middleware answers 403 with the standalone `no_access.html`, which extends
+nothing so it renders without the app nav or Clerk widgets.
+
 **Deleted hangouts** lists soft-deleted rows with motive search (`?q=`).
 **SMS simulator** card links to `GET /settings/sms-simulator`, which renders
 sample invite / follow-up / RSVP / INFO / organizer copy in phone-style

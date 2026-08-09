@@ -117,6 +117,8 @@ def sample_data(db, workspace):
     the workspace itself.
     """
     from app.models import (
+        AccessGrant,
+        AccessRole,
         Allergy,
         Drive,
         Hangout,
@@ -126,6 +128,11 @@ def sample_data(db, workspace):
         Tag,
         YesNo,
     )
+
+    # Not workspace-scoped (the access list is instance-wide), but the id-taking
+    # routes under /settings/access need a real row to be driven against.
+    grant = AccessGrant(email="sample@example.test", role=AccessRole.member)
+    db.add(grant)
 
     tag = Tag(name="Core", workspace_id=workspace.id)
     allergy = Allergy(name="Peanuts", workspace_id=workspace.id)
@@ -176,4 +183,5 @@ def sample_data(db, workspace):
         "profile_id": profile.id,
         "hangout_id": hangouts["draft"],
         "hangouts": hangouts,
+        "grant_id": grant.id,
     }

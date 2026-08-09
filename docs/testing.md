@@ -15,10 +15,12 @@ sending a form as a form, say) turns a passing test into a test of nothing.
 | `conftest.py` | Postgres test database at `alembic upgrade head`, table wipe after each test, clients, `sample_data`, workspace fixtures |
 | `support/routes.py` | Route inventory read off the live FastAPI router |
 | `support/html_forms.py` | HTML form parser: what a browser would submit untouched |
+| `support/access.py` | `allow_clerk_user` — sign a fake Clerk user in without calling Clerk, and grant them access |
 | `test_route_surface.py` | Every route × blank and hostile input |
 | `test_ui_forms.py` | Every page, every button, form left untouched |
 | `test_api.py`, `test_profiles.py`, `test_web_ui.py`, `test_hangout_setup.py` | Endpoint behaviour |
 | `test_rsvp_flow.py`, `test_followups.py`, `test_sms_guard.py`, `test_webhook_security.py` | SMS in, invites/follow-ups out, webhook signatures |
+| `test_auth.py`, `test_access_control.py`, `test_tenant_isolation.py` | Clerk session verification, the email access list and who may edit it, workspace scoping |
 | `test_config.py`, `test_logging.py`, `test_migrations.py` | Settings, audit log, Alembic upgrade/downgrade/check |
 
 Fixtures: `client` (raises server exceptions), `client_no_raise` (returns the
@@ -67,6 +69,9 @@ while checking nothing.
   fails until you do.
 - New behaviour: assert it in the topic-specific file. The smoke matrix only
   ever says "this did not crash", never "this did the right thing".
+- A test that signs somebody in: use `allow_clerk_user` from
+  `support/access.py`. Patching only the Clerk verifier leaves the access list
+  unsatisfied, and the whole run turns into 403s that assert nothing.
 
 ## CI
 

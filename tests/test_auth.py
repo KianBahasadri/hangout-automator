@@ -6,6 +6,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from clerk_backend_api.security import AuthStatus, RequestState
 
 from app.config import Settings
+from tests.support.access import allow_clerk_user
 
 
 def _clerk_settings() -> Settings:
@@ -101,6 +102,7 @@ def test_authenticated_clerk_request_reaches_app(client, monkeypatch):
         )
 
     monkeypatch.setattr("app.auth.authenticate_clerk_request", fake_authenticate)
+    allow_clerk_user(monkeypatch, "user_test")
 
     response = client.get("/")
 
@@ -131,6 +133,7 @@ def test_clerk_jwt_key_authentication_reaches_app(client, monkeypatch):
     )
     monkeypatch.setattr("app.auth.get_settings", lambda: settings)
     monkeypatch.setattr("app.routers.web.get_settings", lambda: settings)
+    allow_clerk_user(monkeypatch, "user_jwt")
     token = jwt.encode(
         {
             "sub": "user_jwt",

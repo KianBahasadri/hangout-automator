@@ -4,27 +4,21 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from functools import lru_cache
 from typing import Any
 from urllib.parse import quote
 
-from clerk_backend_api import AuthenticateRequestOptions, Clerk
+from clerk_backend_api import AuthenticateRequestOptions
 from clerk_backend_api.security import RequestState
 from fastapi import Request
 from fastapi.responses import JSONResponse, RedirectResponse, Response
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 
+from app import access
 from app.config import Settings, get_settings
 
 logger = logging.getLogger(__name__)
 
 _PUBLIC_EXACT_PATHS = frozenset({"/api/health", "/sign-in"})
-
-
-@lru_cache(maxsize=8)
-def _clerk_client(secret_key: str) -> Clerk:
-    """Reuse Clerk's verifier/client while allowing credential rotation in tests."""
-    return Clerk(bearer_auth=secret_key or None)
 
 
 async def authenticate_clerk_request(request: Request, settings: Settings) -> RequestState:
@@ -34,7 +28,7 @@ async def authenticate_clerk_request(request: Request, settings: Settings) -> Re
         jwt_key=settings.clerk_jwt_key.strip() or None,
         authorized_parties=settings.clerk_authorized_party_list,
     )
-    client = _clerk_client(settings.clerk_secret_key.strip())
+    client = access.clerk_client(settings.clerk_secret_key.strip())
     # The SDK's public method is synchronous. Running it off-loop matters when
     # a secret key is used and Clerk's JWKS has to be fetched or refreshed.
     return await asyncio.to_thread(client.authenticate_request, request, options)
@@ -57,6 +51,17 @@ def _safe_destination(request: Request) -> str:
     if request.url.query:
         destination += "?" + request.url.query
     return destination
+
+
+def _service_unavailable(request: Request) -> Response:
+    """503 for anything that leaves the app unable to make an auth decision."""
+    if request.url.path.startswith("/api/"):
+        return JSONResponse({"detail": "Authentication service unavailable"}, status_code=503)
+    return Response(
+        "Authentication service unavailable",
+        status_code=503,
+        media_type="text/plain",
+    )
 
 
 def _authentication_failure(request: Request) -> Response:
@@ -89,25 +94,47 @@ class ClerkAuthMiddleware(BaseHTTPMiddleware):
                 "Clerk request verification failed",
                 extra={"path": request.url.path},
             )
-            return (
-                JSONResponse(
-                    {"detail": "Authentication service unavailable"},
-                    status_code=503,
-                )
-                if request.url.path.startswith("/api/")
-                else Response(
-                    "Authentication service unavailable",
-                    status_code=503,
-                    media_type="text/plain",
-                )
-            )
+            return _service_unavailable(request)
 
         if not request_state.is_authenticated:
             return _authentication_failure(request)
 
         request.state.clerk_auth = request_state
         payload: dict[str, Any] = request_state.payload or {}
-        request.state.clerk_user_id = payload.get("sub")
+        clerk_user_id = payload.get("sub")
+        request.state.clerk_user_id = clerk_user_id
         request.state.clerk_session_id = payload.get("sid")
         request.state.clerk_org_id = payload.get("org_id")
+
+        if not clerk_user_id:
+            # Verified, but carrying no subject claim, so the request cannot be
+            # attributed to anyone. Should be unreachable; refuse it as an
+            # identity failure rather than guessing at an access decision.
+            logger.error(
+                "Clerk-authenticated request has no subject claim; refusing",
+                extra={"path": request.url.path},
+            )
+            return _authentication_failure(request)
+
+        # Clerk vouches for who they are; the access list decides whether this
+        # deployment admits them. Every protected route runs behind this,
+        # including the ones that never resolve a workspace.
+        try:
+            email = await access.email_for_clerk_user(clerk_user_id, settings)
+        except access.IdentityLookupFailed:
+            # Unreachable Clerk is an outage, not a revoked grant. Telling a
+            # legitimate user they are "not on the access list" would send them
+            # to an admin over a problem no admin can fix.
+            return _service_unavailable(request)
+
+        role = await asyncio.to_thread(access.role_for_email, email) if email else None
+        if role is None:
+            logger.warning(
+                "Refusing signed-in user with no access grant",
+                extra={"path": request.url.path, "has_email": bool(email)},
+            )
+            return access.access_denied_response(request, email)
+
+        request.state.clerk_email = email
+        request.state.access_role = role
         return await call_next(request)

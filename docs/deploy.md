@@ -376,6 +376,7 @@ only through environment variables or a secret manager:
 | Public URL | `https://<app hostname>`, written to `PUBLIC_BASE_URL` for webhook signature validation |
 | SMS | `mock` by default; Twilio SID/token/number must be injected through secret environment variables before selecting `twilio` |
 | Google Places | Optional `GOOGLE_MAPS_API_KEY`, injected through the ignored `.env` when location autocomplete is enabled |
+| Access | `ACCESS_BOOTSTRAP_ADMINS` — comma-separated emails seeded as access-list admins at startup. Not a secret, but it names real people, so it lives in the ignored `.env` like the rest |
 | State | A locked remote Terraform backend should be configured before production apply |
 
 Never send a Twilio auth token, Cloudflare API token, Azure client secret,
@@ -455,17 +456,23 @@ credentials, `.env`, Terraform state, or private keys.
 
 ### Access control
 
-**Clerk is the only authentication boundary.** Cloudflare Access was removed on
-2026-08-09 (see [the removal record](./deployment-history.md)); the edge now
-passes every request straight to the app, and `CLERK_ENABLED=true` plus
-per-workspace scoping is what stands between a visitor and tenant data. Clerk
-identity maps to workspace ownership — see [tenancy.md](./tenancy.md).
+**Clerk plus the app's own access list is the authentication boundary.**
+Cloudflare Access was removed on 2026-08-09 (see
+[the removal record](./deployment-history.md)); the edge now passes every
+request straight to the app. Clerk verifies *who* a visitor is, the
+`access_grants` table decides whether this deployment admits them, and
+per-workspace scoping keeps admitted users apart. Both halves are owned by
+[tenancy.md](./tenancy.md).
 
-Because that switch is now load-bearing rather than an extra layer,
+Because `CLERK_ENABLED` is now load-bearing rather than an extra layer,
 `scripts/deploy/terraform.sh` refuses `apply` when it is anything but `true`
 (override with `HANGOUT_ALLOW_UNAUTHENTICATED_DEPLOY=1` for a deliberately
-public instance). It also refuses a `pk_test_` key, and a publishable key whose
-encoded host disagrees with `CLERK_FRONTEND_API_URL`.
+public instance). It also refuses a `pk_test_` key, a publishable key whose
+encoded host disagrees with `CLERK_FRONTEND_API_URL`, and an empty
+`ACCESS_BOOTSTRAP_ADMINS` while Clerk is on (override with
+`HANGOUT_ALLOW_NO_BOOTSTRAP_ADMINS=1` when the access list is already
+populated in the database) — that last one would otherwise ship a deployment
+nobody, including the operator, can sign in to.
 
 Two paths are deliberately outside the Clerk session check:
 
@@ -476,11 +483,12 @@ Two paths are deliberately outside the Clerk session check:
 - `/sign-in` and Clerk's own handshake routes, which must be reachable
   unauthenticated for anyone to sign in at all.
 
-Sign-up is open: the app provisions a workspace for any Clerk user who
-registers (see
-[tenancy.md](./tenancy.md#known-gap-any-signer-gets-a-workspace)). Restricting
-who may create an account is a Clerk Dashboard setting — **Configure →
-Restrictions**, allowlist mode — not something this repo configures.
+Clerk sign-*up* is open and cannot be narrowed on this plan (Clerk's allowlist
+and blocklist are paid features), so strangers can still create accounts
+against the instance. The app refuses them: without an `access_grants` row for
+their verified email they get a 403 on every route and no workspace. Adding
+someone is Settings → Access, by an admin. `ACCESS_BOOTSTRAP_ADMINS` seeds the
+first admins at startup and is the recovery path if the last one is lost.
 
 Defense in depth beyond Clerk:
 
@@ -635,11 +643,12 @@ remaining external or operator-controlled steps:
    the lookup when in doubt:
    `--resolve clerk.<host>:443:$(dig +short clerk.<host> @1.1.1.1 | grep -E '^[0-9]' | head -1)`.
 
-   Afterwards set `CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, and
-   `CLERK_FRONTEND_API_URL` (which becomes `https://clerk.hangout.bahasadri.com`)
-   in the ignored `.env`. The wrapper refuses to apply if `CLERK_ENABLED=true`
-   with a `pk_test_` key, or if the publishable key's encoded host disagrees
-   with `CLERK_FRONTEND_API_URL`. **These reach the VM only through
+   Afterwards set `CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`,
+   `CLERK_FRONTEND_API_URL` (which becomes `https://clerk.hangout.bahasadri.com`),
+   and `ACCESS_BOOTSTRAP_ADMINS` in the ignored `.env`. The wrapper refuses to
+   apply if `CLERK_ENABLED=true` with a `pk_test_` key, if the publishable
+   key's encoded host disagrees with `CLERK_FRONTEND_API_URL`, or if
+   `ACCESS_BOOTSTRAP_ADMINS` is empty. **These reach the VM only through
    cloud-init**, whose `custom_data` is under `ignore_changes` — a plain
    `apply` will not deliver new keys. Either replace the VM or edit
    `/etc/hangout-automator.env` on the host and restart the units; a replace is

@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>No access · Hangout Automator</title>
+  <link rel="icon" href="/static/favicon.ico" sizes="any" />
+  <link rel="stylesheet" href="/static/style.css?v=theme3" />
+</head>
+{# Standalone on purpose: this page renders for someone the app is refusing,
+   so it carries no nav into the app and loads no Clerk widgets. #}
+<body>
+  <main class="wrap" style="max-width:34rem;margin-top:4rem;">
+    <div class="card">
+      <h1 style="margin-top:0;">You are signed in, but not on the access list</h1>
+      {% if email %}
+      <p>
+        This deployment does not admit <strong>{{ email }}</strong>. Ask an
+        administrator to add that address, then reload.
+      </p>
+      {% else %}
+      <p>
+        Your Clerk account has no verified email address, so it cannot be
+        matched against the access list. Verify your email with Clerk and
+        reload.
+      </p>
+      {% endif %}
+      <p class="muted">
+        Signing in again will not change this — access is granted per email
+        address, not per session.
+      </p>
+    </div>
+  </main>
+</body>
+</html>

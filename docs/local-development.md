@@ -72,6 +72,7 @@ the process environment), so changing `APP_PORT` changes the listening port.
 | Clerk frontend API URL | `CLERK_FRONTEND_API_URL` | empty |
 | Clerk backend verification | `CLERK_SECRET_KEY` or `CLERK_JWT_KEY` | empty |
 | Clerk authorized origins | `CLERK_AUTHORIZED_PARTIES` | `PUBLIC_BASE_URL` when empty |
+| Bootstrap access admins | `ACCESS_BOOTSTRAP_ADMINS` | empty (required with `CLERK_ENABLED=true`) |
 | OpenAPI UI | `ENABLE_API_DOCS` | `true` (deployments set `false`) |
 | SMS provider | `SMS_PROVIDER` | `mock` (`mock` or `twilio`) |
 | Twilio | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER` | empty |
@@ -102,6 +103,15 @@ bootstrapping. `POST /webhooks/sms` is public only when
 integration authentication layer. A mock-provider webhook remains protected
 by Clerk.
 
+A Clerk session is necessary but not sufficient: with Clerk enabled, the app
+also requires the user's verified email to hold an `access_grants` row, and
+`ACCESS_BOOTSTRAP_ADMINS` is what seeds the first ones — set it or nobody can
+sign in. `CLERK_SECRET_KEY` becomes effectively required too, because
+`CLERK_JWT_KEY` alone cannot reach the Backend API to resolve a user's email
+(the app logs a warning and refuses everyone). With `CLERK_ENABLED=false` the
+access list is not consulted at all, so local development is unaffected. See
+[tenancy.md](./tenancy.md).
+
 The sign-in page mounts Clerk's browser component and safely returns to the
 original internal path after login. Authenticated pages mount Clerk's user
 button, which supplies the sign-out action; no application-specific password or
@@ -111,7 +121,9 @@ logout endpoint is stored in this repo.
 
 ## Startup side effects
 
-On app start (`app/main.py` lifespan): audit events are emitted and the
+On app start (`app/main.py` lifespan): with Clerk enabled,
+`ACCESS_BOOTSTRAP_ADMINS` is synced into `access_grants` (additive only) and
+an error is logged if no admin exists; audit events are emitted and the
 scheduler registers (a separate worker process runs it in deployments — see
 [background-jobs.md](./background-jobs.md)). **No `init_db()`**: schema
 migrations are an explicit `alembic upgrade head` step, never an app-startup

@@ -138,6 +138,7 @@ resource "azurerm_linux_virtual_machine" "main" {
     clerk_secret_key         = var.clerk_secret_key
     clerk_jwt_key            = var.clerk_jwt_key
     clerk_authorized_parties = var.clerk_authorized_parties
+    access_bootstrap_admins  = var.access_bootstrap_admins
     followup_hours           = var.followup_hours
     organizer_interval_hours = var.organizer_interval_hours
     app_port                 = var.app_port

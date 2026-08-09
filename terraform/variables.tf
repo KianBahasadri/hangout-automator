@@ -141,6 +141,20 @@ variable "clerk_authorized_parties" {
   default     = ""
 }
 
+variable "access_bootstrap_admins" {
+  description = "Comma-separated emails always granted admin on the app's access list."
+  type        = string
+  default     = ""
+
+  validation {
+    condition = var.access_bootstrap_admins == "" || alltrue([
+      for email in split(",", var.access_bootstrap_admins) :
+      can(regex("^[^@,[:space:]]+@[^@,[:space:]]+\\.[^@,[:space:]]+$", trimspace(email)))
+    ])
+    error_message = "access_bootstrap_admins must be a comma-separated list of email addresses."
+  }
+}
+
 variable "app_port" {
   description = "Port on which the app listens and the Cloudflare Tunnel connects. The dotenv-aware wrapper maps APP_PORT to this variable."
   type        = number

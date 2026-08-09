@@ -11,9 +11,10 @@ datasets. The key structures are `app/tenancy.py`, the `Workspace` /
 
 - **`workspaces`** — `id`, `name`, unique `slug`, `created_at`.
 - **`workspace_members`** — maps `clerk_user_id` → workspace + `role`
-  (`owner` / `member`), with `UNIQUE (workspace_id, clerk_user_id)`. Clerk is
-  purely an identity provider; membership is app-owned, so no Clerk plan
-  feature gates multi-tenancy and `CLERK_ENABLED=false` works locally.
+  (`owner` / `member`), with `UNIQUE (workspace_id, clerk_user_id)`, plus the
+  `email` the membership was provisioned for. Clerk is purely an identity
+  provider; membership is app-owned, so no Clerk plan feature gates
+  multi-tenancy and `CLERK_ENABLED=false` works locally.
 
 ## How a request resolves to a workspace
 
@@ -28,34 +29,92 @@ every route that touches tenant data:
 3. **No membership** — not an error: the first authenticated request from a
    user provisions a workspace plus an `owner` membership (deterministic slug
    `user-<clerk_user_id>`, whose unique constraint makes concurrent first
-   requests collapse to one workspace via re-read on conflict).
+   requests collapse to one workspace via re-read on conflict), recording the
+   email the middleware resolved. Reaching this step already means the access
+   list admitted them, so provisioning is not a decision this function makes.
 
-A request the middleware admitted but that carries no usable `sub` is refused
-with a 401, and the anomaly is logged. It should be unreachable — the
+A request that carries no usable `sub` is refused as an authentication failure
+by the middleware, and again with a 401 by `current_workspace` if it somehow
+gets that far. The anomaly is logged. It should be unreachable — the
 middleware only populates `request.state` after `is_authenticated` — but the
 alternative to refusing is resolving to the shared `default` workspace, which
 would hand an unattributable request another tenant's data. Failing closed
 here is what the *no identity, so no workspace* rule means;
 `test_authenticated_request_without_a_subject_is_refused` pins it.
 
-### Known gap: any signer gets a workspace
+## The access list: who this deployment admits
 
-Nothing in the app refuses an *unknown* Clerk user — step 3 simply provisions
-a workspace for them. Whoever can sign up can get an account.
+Clerk says *who* someone is; it never says whether this deployment wants them.
+Step 3 above would otherwise provision a workspace for any stranger who can
+create a Clerk account — the gap Cloudflare Access used to cover until it was
+removed on 2026-08-09. `access_grants` closes it in the app.
 
-Until 2026-08-09 a Cloudflare Access email allowlist in front of the app was
-the compensating control. It is gone, so this gap is now live: **whoever can
-create a Clerk account gets a workspace on this deployment.** The only place
-that can be narrowed is the Clerk Dashboard (**Configure → Restrictions**);
-nothing in this repo enforces it.
+- **One row per allowed email**, with a role of `admin` or `member`. Anyone
+  else is refused after authenticating, whether or not they have a Clerk
+  account.
+- **`member`** may use the app. **`admin`** may additionally edit the list, at
+  Settings → Access. Nothing else distinguishes them.
+- Matching is on the **verified primary** email Clerk holds for the user. An
+  unverified address never matches, or sign-up would let anyone claim an
+  allowed address and inherit its grant.
+- The list is **instance-wide, not workspace-scoped** — it is the gate in front
+  of workspace provisioning, so it has to be answerable before a request has a
+  workspace.
 
-What that does and does not expose:
+### Why it is not in Clerk
 
-- It does **not** expose existing tenants' data. A new signer lands in their
-  own workspace, and every read is scoped — see below.
-- It **does** let a stranger use the organizer features, which send SMS
+Clerk's own allowlist and blocklist are paid-plan features on this instance
+(the API answers `unsupported_subscription_plan_features`), its restrictions
+endpoint is write-only (`GET /v1/instance/restrictions` → 405, so a setting
+could not be audited), and Clerk has no notion of an *app user* permitted to
+edit sign-up restrictions — only Dashboard seats, which carry control of the
+whole instance. Keeping the list here makes it enforceable, testable, and
+editable by exactly the three people who should edit it.
+
+### Where it is enforced
+
+In `ClerkAuthMiddleware` (`app/auth.py`), not in `current_workspace`. Some
+protected routes — `/settings/logs`, `/settings/sms-simulator` — never resolve
+a workspace, so a check living in the dependency would hand a signed-in
+stranger the audit log. The middleware resolves the Clerk user id to an email
+(Backend API, cached in-process for 5 minutes) and looks the grant up in the
+database on **every** request, so removing a grant takes effect on the next
+one. A refusal is a **403** with a standalone page, not a redirect to
+`/sign-in`, which would loop.
+
+An unreachable Clerk Backend API is a **503**, not a 403: "we cannot ask who
+you are" and "you are not on the list" are different answers, and collapsing
+them would tell every legitimate user they had been removed whenever Clerk
+hiccuped.
+
+`tests/test_access_control.py` pins all of this; `tests/support/access.py` is
+the seam other tests use to sign somebody in without calling Clerk.
+
+### Bootstrapping and lockout
+
+`ACCESS_BOOTSTRAP_ADMINS` (comma-separated emails) is applied at startup and
+guarantees each address an `admin` grant. It is **additive only** — it never
+demotes or deletes — which makes it the way back in if the last admin is ever
+lost: put the address there and restart. The flip side is that an address left
+in the variable reappears after a restart even if an admin removed it in the
+UI; remove it from both.
+
+Two guards protect against locking everyone out: the UI refuses to remove or
+demote the last remaining admin, and `scripts/deploy/terraform.sh` refuses an
+apply with `CLERK_ENABLED=true` and an empty `ACCESS_BOOTSTRAP_ADMINS`. With no
+admins at all the app still starts, logging an error, because refusing to boot
+would turn a bootstrap problem into an outage.
+
+### What the list does and does not protect
+
+- It stops a stranger from using the organizer features, which send SMS
   through the deployment's shared Twilio credentials at the operator's
-  expense. That is the concrete cost of leaving sign-up open.
+  expense. That was the concrete cost of leaving sign-up open.
+- It is not tenant isolation. Allowed users still land in **separate**
+  workspaces and cannot read each other's data — see below.
+- Sign-*up* at Clerk remains open; the app simply refuses the account. A
+  stranger can still create a Clerk user against this instance, so Clerk's user
+  count is not a count of people with access.
 
 ### Scoping
 

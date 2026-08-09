@@ -13,6 +13,8 @@ session/audit machinery.
 | `HangoutStatus` | `draft`, `active`, `closed` | |
 | `InviteStatus` | `pending`, `confirmed`, `remind`, `declined`, `no_response`, `failed_send` | |
 | `MessageDirection` | `outbound`, `inbound` | |
+| `WorkspaceRole` | `owner`, `member` | Membership in one workspace |
+| `AccessRole` | `admin`, `member` | Instance-wide; `admin` may edit `access_grants` |
 
 Optional enums use a string `TypeDecorator`: empty string and `"unknown"` bind/result as `NULL`.
 
@@ -68,6 +70,18 @@ constraint on `profile_id`.
 ### `message_logs`
 
 `invite_id` / `hangout_id` (nullable), `direction`, `phone`, `body`, `success`, `error`, `created_at`.
+
+### `access_grants`
+
+`id`, unique `email` (255, stored normalized: stripped and lowercased), `role`,
+`created_by` (the admin who added it; `NULL` for rows seeded from
+`ACCESS_BOOTSTRAP_ADMINS`), `created_at`.
+
+Instance-wide, deliberately without a `workspace_id`: it is the gate in front
+of workspace provisioning, so it must be answerable before a request has a
+workspace. Tenant tables are the ones that carry `workspace_id` — see
+[tenancy.md](./tenancy.md), which owns what the list means and where it is
+enforced.
 
 ### `app_settings`
 

@@ -42,6 +42,7 @@ export TF_VAR_clerk_secret_key="${TF_VAR_clerk_secret_key:-${CLERK_SECRET_KEY:-}
 export TF_VAR_clerk_jwt_key="${TF_VAR_clerk_jwt_key:-${CLERK_JWT_KEY:-}}"
 export TF_VAR_clerk_authorized_parties="${TF_VAR_clerk_authorized_parties:-${CLERK_AUTHORIZED_PARTIES:-}}"
 export TF_VAR_clerk_dns_id="${TF_VAR_clerk_dns_id:-${CLERK_DNS_ID:-}}"
+export TF_VAR_access_bootstrap_admins="${TF_VAR_access_bootstrap_admins:-${ACCESS_BOOTSTRAP_ADMINS:-}}"
 
 # Cloudflare Access used to sit in front of the Tunnel and gate every path, so
 # CLERK_ENABLED=false still left an edge login. Access is gone, so that switch
@@ -52,6 +53,18 @@ if [[ "${COMMAND}" == "apply" && "${TF_VAR_clerk_enabled}" != "true" \
       && "${HANGOUT_ALLOW_UNAUTHENTICATED_DEPLOY:-}" != "1" ]]; then
   echo "Refusing apply: CLERK_ENABLED is '${TF_VAR_clerk_enabled}', but Clerk is the only authentication boundary since Cloudflare Access was removed." >&2
   echo "Set CLERK_ENABLED=true, or set HANGOUT_ALLOW_UNAUTHENTICATED_DEPLOY=1 to deploy a deliberately public instance." >&2
+  exit 1
+fi
+
+# A Clerk account only reaches the app if its verified email holds an access
+# grant, and only an admin can add one. Shipping with no bootstrap admins and
+# an empty access_grants table locks everyone out of production, including the
+# operator, and the symptom (403 on every page) does not name its cause.
+if [[ "${COMMAND}" == "apply" && "${TF_VAR_clerk_enabled}" == "true" \
+      && -z "${TF_VAR_access_bootstrap_admins}" \
+      && "${HANGOUT_ALLOW_NO_BOOTSTRAP_ADMINS:-}" != "1" ]]; then
+  echo "Refusing apply: CLERK_ENABLED=true with an empty ACCESS_BOOTSTRAP_ADMINS." >&2
+  echo "List the admin emails, or set HANGOUT_ALLOW_NO_BOOTSTRAP_ADMINS=1 if the access list is already populated in the database." >&2
   exit 1
 fi
 

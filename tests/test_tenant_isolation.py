@@ -25,6 +25,7 @@ from app.models import (
     WorkspaceRole,
     YesNo,
 )
+from tests.support.access import allow_clerk_user
 from tests.support.routes import ALL_ROUTES, fill_path
 
 _IDS_IN_BODY = ("profile_ids", "tag_ids", "allergy_ids", "organizer_profile_id")
@@ -147,6 +148,10 @@ def _as_clerk_user(client, monkeypatch, sub: str):
         )
 
     monkeypatch.setattr("app.auth.authenticate_clerk_request", fake_authenticate)
+    # The access list gates every protected route, so an isolation run has to
+    # be a user this deployment actually admits — otherwise the whole matrix
+    # would pass on 403s that prove nothing about scoping.
+    allow_clerk_user(monkeypatch, sub)
     return client
 
 

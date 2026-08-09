@@ -10,10 +10,19 @@ from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Resp
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session, joinedload
 
+from app.access import (
+    admin_count,
+    grant_for_email,
+    is_valid_email,
+    normalize_email,
+    require_admin,
+)
 from app.config import get_settings
 from app.database import get_db
 from app.ids import RowId, RowIdPath, parse_row_id
 from app.models import (
+    AccessGrant,
+    AccessRole,
     Allergy,
     Drive,
     Hangout,
@@ -22,6 +31,7 @@ from app.models import (
     Profile,
     Tag,
     Workspace,
+    WorkspaceMember,
     YesNo,
 )
 from app.tenancy import current_workspace, get_scoped, scoped
@@ -804,6 +814,90 @@ def sms_simulator_page(request: Request) -> HTMLResponse:
         "sms_simulator.html",
         {"messages": preview_message_catalog()},
     )
+
+
+@router.get("/settings/access", response_class=HTMLResponse)
+def access_page(
+    request: Request,
+    notice: str = "",
+    db: Session = Depends(get_db),
+    _: None = Depends(require_admin),
+) -> HTMLResponse:
+    grants = db.query(AccessGrant).order_by(AccessGrant.role.asc(), AccessGrant.email.asc()).all()
+    # Which allowed emails have actually signed in, so an admin can tell a
+    # pending invitation from a live account before revoking one.
+    signed_in = {
+        email
+        for (email,) in db.query(WorkspaceMember.email).filter(WorkspaceMember.email.isnot(None))
+    }
+    return templates.TemplateResponse(
+        request,
+        "access.html",
+        {
+            "grants": grants,
+            "signed_in": signed_in,
+            "notice": notice,
+            "current_email": getattr(request.state, "clerk_email", None),
+            "admin_total": admin_count(db),
+        },
+    )
+
+
+@router.post("/settings/access")
+def access_grant_create(
+    request: Request,
+    email: str = Form(..., max_length=255),
+    role: str = Form("member"),
+    db: Session = Depends(get_db),
+    _: None = Depends(require_admin),
+) -> RedirectResponse:
+    cleaned = normalize_email(email)
+    if not is_valid_email(cleaned):
+        return RedirectResponse("/settings/access?notice=invalid-email", status_code=303)
+
+    try:
+        new_role = AccessRole(role)
+    except ValueError:
+        new_role = AccessRole.member
+
+    existing = grant_for_email(db, cleaned)
+    if existing is not None:
+        if existing.role is new_role:
+            return RedirectResponse("/settings/access?notice=already-listed", status_code=303)
+        # Demoting the last admin would leave the list uneditable by anyone.
+        if existing.role is AccessRole.admin and admin_count(db) <= 1:
+            return RedirectResponse("/settings/access?notice=last-admin", status_code=303)
+        existing.role = new_role
+        db.commit()
+        return RedirectResponse("/settings/access?notice=role-updated", status_code=303)
+
+    db.add(
+        AccessGrant(
+            email=cleaned,
+            role=new_role,
+            created_by=getattr(request.state, "clerk_email", None),
+        )
+    )
+    db.commit()
+    return RedirectResponse("/settings/access?notice=added", status_code=303)
+
+
+@router.post("/settings/access/{grant_id}/delete")
+def access_grant_delete(
+    grant_id: RowIdPath,
+    db: Session = Depends(get_db),
+    _: None = Depends(require_admin),
+) -> RedirectResponse:
+    grant = db.get(AccessGrant, grant_id)
+    if grant is None:
+        return RedirectResponse("/settings/access?notice=not-found", status_code=303)
+    # Removing the final admin would leave nobody able to grant access again —
+    # only an operator with database or ACCESS_BOOTSTRAP_ADMINS access.
+    if grant.role is AccessRole.admin and admin_count(db) <= 1:
+        return RedirectResponse("/settings/access?notice=last-admin", status_code=303)
+    db.delete(grant)
+    db.commit()
+    return RedirectResponse("/settings/access?notice=removed", status_code=303)
 
 
 @router.get("/settings/logs", response_class=FileResponse)

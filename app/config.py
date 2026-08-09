@@ -28,6 +28,12 @@ class Settings(BaseSettings):
     # (azp) check. An empty value falls back to PUBLIC_BASE_URL.
     clerk_authorized_parties: str = ""
 
+    # Comma-separated emails guaranteed an `admin` access grant at startup.
+    # Declarative and only ever additive, so it doubles as the way back in if
+    # the last admin is ever removed: put the address here and restart. See
+    # docs/tenancy.md.
+    access_bootstrap_admins: str = ""
+
     # Interactive OpenAPI UI (/docs, /redoc, /openapi.json). When Clerk is
     # enabled, these routes are protected by the same auth middleware.
     enable_api_docs: bool = True
@@ -102,7 +108,20 @@ class Settings(BaseSettings):
             missing.append("CLERK_SECRET_KEY or CLERK_JWT_KEY")
         if missing:
             raise ValueError("CLERK_ENABLED=true requires: " + ", ".join(missing))
+        if not self.clerk_secret_key.strip():
+            # CLERK_JWT_KEY alone verifies sessions offline but cannot reach
+            # Clerk's Backend API, and the access list is keyed by the user's
+            # verified email, which only that API can supply. Without it every
+            # signed-in user would be refused.
+            logger.warning(
+                "CLERK_SECRET_KEY is unset; the access list cannot resolve emails "
+                "and every signed-in user will be refused"
+            )
         return self
+
+    @property
+    def access_bootstrap_admin_list(self) -> list[str]:
+        return [part.strip() for part in self.access_bootstrap_admins.split(",") if part.strip()]
 
     @property
     def followup_hour_list(self) -> list[float]:
