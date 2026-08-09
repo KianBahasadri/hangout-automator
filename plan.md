@@ -450,14 +450,14 @@ already flags the first one.
 
 ## Phase 6 — Final documentation sweep
 
-- [ ] **P6.1** Re-read `docs/README.md` and confirm every topic file listed still
+- [x] **P6.1** Re-read `docs/README.md` and confirm every topic file listed still
       exists, every new file (`tenancy.md`, `background-jobs.md`) is indexed, and
       no fact is duplicated across two files — the repo rule in `CLAUDE.md`.
-- [ ] **P6.2** Update `docs/overview.md`'s package layout block for the new
+- [x] **P6.2** Update `docs/overview.md`'s package layout block for the new
       modules (`tenancy.py`, `locks.py`, `worker.py`, `migrations/`).
-- [ ] **P6.3** Update `README.md` quickstart: Docker Compose, `alembic upgrade
+- [x] **P6.3** Update `README.md` quickstart: Docker Compose, `alembic upgrade
       head`, running web and worker.
-- [ ] **P6.4** Run `./scripts/verify_plan.sh`. All six checks must pass.
+- [x] **P6.4** Run `./scripts/verify_plan.sh`. All six checks must pass.
 
 ---
 
