@@ -1,5 +1,10 @@
+import base64
+import binascii
+import os
 from functools import lru_cache
 import logging
+from pathlib import Path
+from urllib.parse import urlsplit
 
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -7,8 +12,36 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 logger = logging.getLogger(__name__)
 
 
+_ENVIRONMENT_VARIABLE = "HANGOUT_ENV"
+_ENVIRONMENT_FILES = {
+    "development": ".env.development",
+    "production": ".env.production",
+}
+
+
+def active_environment() -> str:
+    """Return the explicit runtime environment, defaulting to local development."""
+    environment = os.environ.get(_ENVIRONMENT_VARIABLE, "development").strip().lower()
+    if environment not in _ENVIRONMENT_FILES:
+        expected = ", ".join(sorted(_ENVIRONMENT_FILES))
+        raise ValueError(f"{_ENVIRONMENT_VARIABLE} must be one of: {expected}")
+    return environment
+
+
+def environment_file(environment: str | None = None) -> Path:
+    """Return the ignored dotenv file assigned to one runtime environment."""
+    selected = environment or active_environment()
+    try:
+        return Path(_ENVIRONMENT_FILES[selected])
+    except KeyError as exc:
+        expected = ", ".join(sorted(_ENVIRONMENT_FILES))
+        raise ValueError(f"{_ENVIRONMENT_VARIABLE} must be one of: {expected}") from exc
+
+
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    # get_settings() supplies the environment-specific dotenv file. Keeping the
+    # model itself file-free makes direct Settings(...) use deterministic in tests.
+    model_config = SettingsConfigDict(env_file=None, env_file_encoding="utf-8", extra="ignore")
 
     app_host: str = "0.0.0.0"
     app_port: int = 9000
@@ -146,6 +179,56 @@ class Settings(BaseSettings):
         return configured or [self.public_base_url.strip().rstrip("/")]
 
 
+def _clerk_frontend_host(publishable_key: str) -> str | None:
+    """Decode the Clerk Frontend API host encoded in a publishable key."""
+    for prefix in ("pk_test_", "pk_live_"):
+        if publishable_key.startswith(prefix):
+            encoded = publishable_key.removeprefix(prefix)
+            break
+    else:
+        return None
+
+    try:
+        padded = encoded + "=" * (-len(encoded) % 4)
+        return base64.urlsafe_b64decode(padded).decode("utf-8").rstrip("$")
+    except (binascii.Error, UnicodeDecodeError, ValueError):
+        return None
+
+
+def _validate_runtime_clerk_environment(settings: Settings, environment: str) -> None:
+    """Prevent a local process or a deploy from accidentally using the wrong instance."""
+    if not settings.clerk_enabled:
+        return
+
+    expected_publishable_prefix = "pk_test_" if environment == "development" else "pk_live_"
+    expected_secret_prefix = "sk_test_" if environment == "development" else "sk_live_"
+    if not settings.clerk_publishable_key.startswith(expected_publishable_prefix):
+        raise ValueError(
+            f"HANGOUT_ENV={environment!r} requires a {expected_publishable_prefix} Clerk "
+            "publishable key"
+        )
+    if settings.clerk_secret_key.strip() and not settings.clerk_secret_key.startswith(
+        expected_secret_prefix
+    ):
+        raise ValueError(
+            f"HANGOUT_ENV={environment!r} requires a {expected_secret_prefix} Clerk secret key"
+        )
+
+    encoded_host = _clerk_frontend_host(settings.clerk_publishable_key)
+    configured_host = urlsplit(settings.clerk_frontend_api_url).hostname
+    if not encoded_host:
+        raise ValueError("CLERK_PUBLISHABLE_KEY must encode a Clerk Frontend API host")
+    if not configured_host:
+        raise ValueError("CLERK_FRONTEND_API_URL must be an absolute URL")
+    if encoded_host != configured_host:
+        raise ValueError(
+            "CLERK_PUBLISHABLE_KEY and CLERK_FRONTEND_API_URL reference different Clerk instances"
+        )
+
+
 @lru_cache
 def get_settings() -> Settings:
-    return Settings()
+    environment = active_environment()
+    settings = Settings(_env_file=environment_file(environment))
+    _validate_runtime_clerk_environment(settings, environment)
+    return settings

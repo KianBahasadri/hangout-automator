@@ -12,6 +12,7 @@ write_files:
     owner: root:root
     permissions: "0600"
     content: |
+      HANGOUT_ENV=production
       APP_HOST=127.0.0.1
       APP_PORT=${app_port}
       # Azure Flexible Server, reached via private endpoint + private DNS zone.

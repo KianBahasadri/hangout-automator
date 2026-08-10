@@ -23,10 +23,11 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
-# Settings reads ./.env relative to the working directory, so anchor to the repo
-# root no matter where this was invoked from.
+# This command can alter the live Twilio webhook. Force it onto the production
+# configuration before importing Settings, and anchor that file at the repo root.
 sys.path.insert(0, str(REPO_ROOT))
 os.chdir(REPO_ROOT)
+os.environ["HANGOUT_ENV"] = "production"
 
 try:
     from twilio.base.exceptions import TwilioException, TwilioRestException
@@ -81,7 +82,7 @@ def main() -> int:
         if not (value or "").strip()
     ]
     if missing:
-        print(f"Missing in .env: {', '.join(missing)}", file=sys.stderr)
+        print(f"Missing in production configuration: {', '.join(missing)}", file=sys.stderr)
         return 1
 
     base_url = settings.public_base_url.rstrip("/")

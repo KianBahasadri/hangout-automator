@@ -1,5 +1,5 @@
 # Optional reference values for a local terraform.tfvars. The wrapper can use
-# the ignored .env and the active Azure CLI without this file.
+# the ignored .env.production and the active Azure CLI without this file.
 
 # Region and size are constrained by subscription policy and capacity, not
 # preference. See docs/deploy.md "Region and VM size capacity" before editing.
@@ -9,7 +9,7 @@ vm_size  = "Standard_B2ats_v2"
 data_disk_size_gb = 32
 
 # Account and zone IDs are 32-char hex values from the Cloudflare dashboard.
-# The wrapper normally reads them from the ignored .env instead.
+# The wrapper normally reads them from the ignored .env.production instead.
 cloudflare_account_id  = "00000000000000000000000000000000"
 cloudflare_zone_id     = "00000000000000000000000000000000"
 cloudflare_hostname    = "hangout.example.com"
@@ -34,7 +34,7 @@ twilio_from_number = ""
 # public_base_url = "https://hangout.example.com"
 
 # Optional in-app Clerk authentication. The wrapper reads these from the
-# ignored .env so no real credential belongs in this example file.
+# ignored .env.production so no real credential belongs in this example file.
 # clerk_enabled            = true
 # clerk_publishable_key    = "pk_live_..."
 # clerk_frontend_api_url   = "https://...clerk.accounts.dev"
@@ -48,5 +48,5 @@ twilio_from_number = ""
 
 # Azure Database for PostgreSQL Flexible Server (private endpoint). The
 # password deliberately has no default: scripts/deploy/terraform.sh requires
-# POSTGRES_ADMIN_PASSWORD in the ignored .env.
+# POSTGRES_ADMIN_PASSWORD in the ignored .env.production.
 # postgres_admin_user = "hangout"

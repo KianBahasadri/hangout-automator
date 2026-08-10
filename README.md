@@ -24,7 +24,7 @@ uv run alembic upgrade head # apply schema migrations
 Then run the two processes, each in its own terminal — both are long-running:
 
 ```bash
-uv run dev                  # web process (http://127.0.0.1:9000)
+uv run dev                  # web process (http://127.0.0.1:8000)
 uv run worker               # background jobs: follow-ups and organizer digests
 ```
 
@@ -35,7 +35,7 @@ organizer SMS is ever sent.
 Mock SMS prints invites and replies to the terminal. Simulate an inbound reply:
 
 ```bash
-curl -X POST http://127.0.0.1:9000/webhooks/sms \
+curl -X POST http://127.0.0.1:8000/webhooks/sms \
   -H 'Content-Type: application/json' \
   -d '{"from":"+15551234567","body":"confirm"}'
 ```
@@ -53,7 +53,7 @@ curl -X POST http://127.0.0.1:9000/webhooks/sms \
 
 ## Configuration
 
-Copy `.env.example` to `.env` or export env vars:
+Copy `.env.example` to `.env.development` for local work, or export env vars:
 
 | Variable | Default | Notes |
 |----------|---------|--------|
@@ -62,7 +62,8 @@ Copy `.env.example` to `.env` or export env vars:
 | `DATABASE_URL` | `postgresql+psycopg://hangout:hangout@localhost:5432/hangout` | Compose Postgres |
 | `FOLLOWUP_HOURS` | `24,48` | Delays for follow-up 1 and 2 |
 | `ORGANIZER_INTERVAL_HOURS` | `6` | Digest spacing |
-| `PUBLIC_BASE_URL` | `http://localhost:9000` | Canonical public URL; must match the Twilio console webhook URL when `SMS_PROVIDER=twilio` (signature validation) |
+| `APP_PORT` | `8000` | Development-template HTTP port (the code fallback is `9000`) |
+| `PUBLIC_BASE_URL` | `http://127.0.0.1:8000` | Development-template canonical URL; must match the Twilio console webhook URL when `SMS_PROVIDER=twilio` (signature validation) |
 | `ENABLE_API_DOCS` | `true` | Serves `/docs`, `/redoc`, `/openapi.json`. Deployments set it to `false` |
 
 Twilio inbound webhook: `POST /webhooks/sms`
@@ -91,8 +92,8 @@ CI runs this suite plus `ruff` on every push and pull request
 Terraform provisions an Azure VM with **no public IP**, reached only through a
 Cloudflare Tunnel, plus an Azure Database for PostgreSQL Flexible Server
 (private endpoint, 35-day backups). State lives in a remote Azure Storage
-backend, and both Azure and Cloudflare inputs come from the ignored `.env` via
-a wrapper script:
+backend, and both Azure and Cloudflare inputs come from the ignored
+`.env.production` via a wrapper script:
 
 ```bash
 ./scripts/deploy/bootstrap_state.sh apply   # once: creates the remote state backend

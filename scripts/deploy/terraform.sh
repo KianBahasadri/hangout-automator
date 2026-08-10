@@ -2,27 +2,27 @@
 set -euo pipefail
 
 REPO_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
-ENV_FILE="${REPO_DIR}/.env"
+DEPLOY_ENV_FILE="${HANGOUT_DEPLOY_ENV_FILE:-${REPO_DIR}/.env.production}"
 COMMAND="${1:-}"
 
-if [[ ! -f "${ENV_FILE}" ]]; then
-  echo "Missing ${ENV_FILE}; copy the deployment secrets/settings into the ignored .env first." >&2
+if [[ ! -f "${DEPLOY_ENV_FILE}" ]]; then
+  echo "Missing ${DEPLOY_ENV_FILE}; copy the production secrets/settings into the ignored .env.production first." >&2
   exit 1
 fi
 
 # Terraform does not read dotenv files itself. This wrapper keeps the provider
-# token and deployment inputs in the ignored .env while exporting only the
-# TF_VAR names Terraform expects for this root module.
+# token and deployment inputs in the ignored production file while exporting
+# only the TF_VAR names Terraform expects for this root module.
 set -a
 # shellcheck disable=SC1090
-. "${ENV_FILE}"
+. "${DEPLOY_ENV_FILE}"
 set +a
 export ARM_USE_AZUREAD="${ARM_USE_AZUREAD:-true}"
 
-: "${CLOUDFLARE_API_TOKEN:?CLOUDFLARE_API_TOKEN is required in .env}"
-: "${CLOUDFLARE_ACCOUNT_ID:?CLOUDFLARE_ACCOUNT_ID is required in .env}"
-: "${CLOUDFLARE_ZONE_ID:?CLOUDFLARE_ZONE_ID is required in .env}"
-: "${CLOUDFLARE_TUNNEL_HOSTNAME:?CLOUDFLARE_TUNNEL_HOSTNAME is required in .env}"
+: "${CLOUDFLARE_API_TOKEN:?CLOUDFLARE_API_TOKEN is required in .env.production}"
+: "${CLOUDFLARE_ACCOUNT_ID:?CLOUDFLARE_ACCOUNT_ID is required in .env.production}"
+: "${CLOUDFLARE_ZONE_ID:?CLOUDFLARE_ZONE_ID is required in .env.production}"
+: "${CLOUDFLARE_TUNNEL_HOSTNAME:?CLOUDFLARE_TUNNEL_HOSTNAME is required in .env.production}"
 
 export TF_VAR_cloudflare_account_id="${TF_VAR_cloudflare_account_id:-${CLOUDFLARE_ACCOUNT_ID}}"
 export TF_VAR_cloudflare_zone_id="${TF_VAR_cloudflare_zone_id:-${CLOUDFLARE_ZONE_ID}}"
@@ -96,8 +96,8 @@ if [[ -n "${TF_VAR_clerk_publishable_key}" && -n "${TF_VAR_clerk_frontend_api_ur
   fi
 fi
 # Postgres admin password has no Terraform default by design; the operator's
-# .env is the only source.
-: "${POSTGRES_ADMIN_PASSWORD:?POSTGRES_ADMIN_PASSWORD is required in .env}"
+# .env.production is the only source for Terraform's database administrator password.
+: "${POSTGRES_ADMIN_PASSWORD:?POSTGRES_ADMIN_PASSWORD is required in .env.production}"
 export TF_VAR_postgres_admin_password="${TF_VAR_postgres_admin_password:-${POSTGRES_ADMIN_PASSWORD}}"
 if [[ -z "${TF_VAR_subscription_id:-}" ]]; then
   export TF_VAR_subscription_id="$(az account show --query id -o tsv)"

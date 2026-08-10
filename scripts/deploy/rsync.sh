@@ -19,6 +19,7 @@ rsync -avz --delete \
   --exclude '*.db' \
   --exclude '*.db-*' \
   --exclude '.env' \
+  --exclude '.env.*' \
   "$ROOT/" "$HOST:/opt/hangout-automator/"
 
 ssh "$HOST" 'set -e

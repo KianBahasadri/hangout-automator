@@ -55,7 +55,9 @@ Preferred:
 uv run dev
 ```
 
-Runs Uvicorn on `app.main:app` with reload, host/port from settings (default `0.0.0.0:9000`).
+Runs Uvicorn on `app.main:app` with reload, host/port from the selected
+environment file (the code fallback is `0.0.0.0:9000`; the local template uses
+port `8000`).
 
 Background jobs run in a second, separate process — start it in its own
 terminal, since both are long-running:
@@ -75,14 +77,31 @@ uv run --group dev pytest
 
 What the suite covers and how it is structured: [testing.md](./testing.md).
 
-Open `http://127.0.0.1:9000` by default. Interactive OpenAPI UI is at `/docs`
-(served only when `ENABLE_API_DOCS` is true).
+With the local template, open `http://127.0.0.1:8000`. Interactive OpenAPI UI
+is at `/docs` (served only when `ENABLE_API_DOCS` is true).
 
 ## Environment
 
-Copy `.env.example` as needed. Settings are loaded by `app/config.py` (`pydantic-settings`).
-Both local launch commands read `APP_HOST` and `APP_PORT` from `.env` (or from
-the process environment), so changing `APP_PORT` changes the listening port.
+Settings are loaded by `app/config.py` (`pydantic-settings`) from one ignored,
+environment-specific file. Copy `.env.example` to `.env.development` for local
+work. `HANGOUT_ENV` is read from the process environment and defaults to
+`development`; process environment variables override the selected file.
+
+| Environment | Selector | Local source | Clerk key kind |
+|---|---|---|---|
+| Development | `HANGOUT_ENV=development` (default) | `.env.development` | `pk_test_` / `sk_test_` |
+| Production | `HANGOUT_ENV=production` | `.env.production` for deployment inputs; `/etc/hangout-automator.env` on the VM | `pk_live_` / `sk_live_` |
+
+The app rejects a live Clerk key in development, a test key in production, or
+a malformed or mismatched publishable-key/Frontend-API pair.
+`NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` is not read by this FastAPI app; use
+`CLERK_PUBLISHABLE_KEY`.
+
+For local Clerk development, point `PUBLIC_BASE_URL` and
+`CLERK_AUTHORIZED_PARTIES` at the exact browser origin, such as
+`http://127.0.0.1:8000`. A Clerk development instance uses its own
+`*.accounts.dev` Frontend API. Do not reuse a production custom domain or
+`pk_live_`/`sk_live_` pair locally.
 
 | Setting | Env var | Default (code) |
 |---------|---------|----------------|
@@ -116,7 +135,7 @@ To enable Clerk locally, create an application in the Clerk Dashboard and set
 `CLERK_ENABLED=true`, its publishable key, frontend API URL, and either the
 backend secret key or PEM JWT key. `CLERK_AUTHORIZED_PARTIES` is a
 comma-separated list of browser origins such as
-`http://localhost:9000,https://app.example.com`; the verifier checks the
+`http://127.0.0.1:8000,https://app.example.com`; the verifier checks the
 session token's authorized-party claim against this list. With Clerk enabled,
 the UI and `/api/*` routes require a session, while `/api/health`, static
 assets, and `/sign-in` remain reachable for health checks and browser
@@ -139,7 +158,8 @@ original internal path after login. Authenticated pages mount Clerk's user
 button, which supplies the sign-out action; no application-specific password or
 logout endpoint is stored in this repo.
 
-`.env`, `*.db`, `.venv`, and Terraform state are gitignored — do not put secrets in docs or commits.
+`.env` and `.env.*`, `*.db`, `.venv`, and Terraform state are gitignored — do
+not put secrets in docs or commits.
 
 ## Startup side effects
 

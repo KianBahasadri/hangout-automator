@@ -8,7 +8,9 @@ any apply that changes real infrastructure.
 
 Directory: `terraform/`. Requires Terraform ≥ 1.5, AzureRM provider ~> 4.0,
 and Cloudflare provider ~> 5.22. Run it through `./scripts/deploy/terraform.sh` so
-the ignored `.env` is loaded and dotenv values are mapped to Terraform inputs.
+the ignored `.env.production` is loaded and dotenv values are mapped to Terraform
+inputs. The local `.env.development` file is never a deployment input; set
+`HANGOUT_DEPLOY_ENV_FILE` only to explicitly select another production secrets file.
 
 Provisions roughly: resource group, VNet `10.20.0.0/16`, private subnet
 `10.20.1.0/24`, an NSG with no inbound allow rules, an Ubuntu 24.04 LTS Gen2
@@ -20,7 +22,7 @@ holds the audit log. The database is an Azure Database for PostgreSQL Flexible
 Server (`B_Standard_B1ms`, 35-day backup retention) with `prevent_destroy =
 true`, reachable only through a private endpoint in the `10.20.1.0/24` subnet
 plus a private DNS zone; the server has no public network access. The admin
-password comes from `POSTGRES_ADMIN_PASSWORD` in the ignored `.env` and has no
+password comes from `POSTGRES_ADMIN_PASSWORD` in the ignored `.env.production` and has no
 Terraform default (`terraform/postgres.tf`).
 
 Notable variables (`variables.tf` / `terraform.tfvars.example`): `prefix`,
@@ -31,12 +33,12 @@ account id, zone id, and `cloudflare_hostname`, optional `git_repo_url` /
 settings, optional `GOOGLE_MAPS_API_KEY`, Clerk settings, `public_base_url`,
 `app_port`, `followup_hours`, `organizer_interval_hours`, and the Postgres
 admin user/password (`scripts/deploy/terraform.sh` requires `POSTGRES_ADMIN_PASSWORD`
-in the ignored `.env` — no default).
-`scripts/deploy/terraform.sh` maps these values from the ignored `.env` to Terraform.
+in the ignored `.env.production` — no default).
+`scripts/deploy/terraform.sh` maps these values from the ignored `.env.production` to Terraform.
 
 `cloudflare_hostname` deliberately has **no default** and the example tfvars
 carries placeholders: the deployed hostname is a sensitive deployment boundary,
-so it stays in the ignored `.env` rather than in this public repository.
+so it stays in the ignored `.env.production` rather than in this public repository.
 `scripts/deploy/terraform.sh` supplies it from `CLOUDFLARE_TUNNEL_HOSTNAME`.
 
 Validation (fails at plan/apply, before anything is created):
@@ -357,7 +359,7 @@ az vm delete -g <rg> -n <vm> --yes
 ```
 
 Persist Azure's offered alternative as an explicit ignored deployment input,
-for example `TF_VAR_vm_size=Standard_B2ts_v2` in `.env`, then re-run
+for example `TF_VAR_vm_size=Standard_B2ts_v2` in `.env.production`, then re-run
 `./scripts/deploy/terraform.sh plan` and `apply`. The recovery plan should create the
 VM and data-disk attachment only. After the apply, wait for cloud-init and run
 a final Terraform plan; it should report no changes. During the outage,
@@ -370,22 +372,22 @@ only through environment variables or a secret manager:
 
 | Area | Input used by this deployment |
 |------|-------------------------------|
-| Cloudflare | Zone, app hostname, account ID, and zone ID — all in the ignored `.env`, never in this repo |
+| Cloudflare | Zone, app hostname, account ID, and zone ID — all in the ignored `.env.production`, never in this repo |
 | Cloudflare | API token exported as `CLOUDFLARE_API_TOKEN`; it needs Tunnel Edit and DNS Edit. Before concluding this token is broken, read item 4 of the [go-live checklist](#production-go-live-checklist-external-prerequisites) — the obvious health-check endpoint reports a healthy token as invalid |
 | Compute | Azure CLI login, region/VM size, repository URL/branch, and an SSH public key for the VM administrator (not direct public access) |
 | Public URL | `https://<app hostname>`, written to `PUBLIC_BASE_URL` for webhook signature validation |
 | SMS | `mock` by default; Twilio SID/token/number must be injected through secret environment variables before selecting `twilio` |
-| Google Places | Optional `GOOGLE_MAPS_API_KEY`, injected through the ignored `.env` when location autocomplete is enabled |
-| Access | `ACCESS_BOOTSTRAP_ADMINS` — comma-separated emails seeded as access-list admins at startup. Not a secret, but it names real people, so it lives in the ignored `.env` like the rest |
+| Google Places | Optional `GOOGLE_MAPS_API_KEY`, injected through the ignored `.env.production` when location autocomplete is enabled |
+| Access | `ACCESS_BOOTSTRAP_ADMINS` — comma-separated emails seeded as access-list admins at startup. Not a secret, but it names real people, so it lives in the ignored `.env.production` like the rest |
 | State | A locked remote Terraform backend should be configured before production apply |
 
 Never send a Twilio auth token, Cloudflare API token, Azure client secret,
-Terraform state, SSH private key, or `.env` contents in chat.
+Terraform state, SSH private key, or `.env.production` contents in chat.
 
 ### What can be configured from this repository
 
 `./scripts/deploy/terraform.sh init`, `validate`, `plan`, and `apply` use the values in
-`.env` plus the logged-in Azure CLI. Applying the plan changes the Cloudflare
+`.env.production` plus the logged-in Azure CLI. Applying the plan changes the Cloudflare
 and Azure accounts; review the plan before applying. The wrapper also reads a
 local public key (or `TF_VAR_ssh_public_key`) so a separate tfvars file is not
 needed for the default configuration.
@@ -433,8 +435,8 @@ because that binding silently overrides `SmsUrl`.
 Template `cloud-init.yaml.tftpl`:
 
 - Installs Python, git, and `cloudflared` from Cloudflare's apt repo
-- Writes `/etc/hangout-automator.env` (app on `127.0.0.1:${APP_PORT}`, with
-  `APP_PORT` supplied from the ignored `.env`; DB
+- Writes `/etc/hangout-automator.env` (with `HANGOUT_ENV=production`, app on
+  `127.0.0.1:${APP_PORT}`, and `APP_PORT` supplied from the ignored `.env.production`; DB
   `postgresql+psycopg://<admin>:<password>@<server>.postgres.database.azure.com/hangout`
   from the Postgres variables, `ENABLE_API_DOCS=false`, SMS settings and
   optional Google Places key from Terraform, and `LOG_*` settings for
@@ -452,7 +454,7 @@ Template `cloud-init.yaml.tftpl`:
 The cloudflared service token, Clerk backend credentials, and SMS secrets are
 rendered into root-readable machine configuration and Terraform state; use a
 remote encrypted backend and restrict state access. Never commit real
-credentials, `.env`, Terraform state, or private keys.
+credentials, `.env.production`, Terraform state, or private keys.
 
 ### Access control
 
@@ -582,7 +584,7 @@ remaining external or operator-controlled steps:
 5. **Azure**: `az login`, then review `./scripts/deploy/terraform.sh plan` and run `./scripts/deploy/terraform.sh apply`.
 6. **Postgres**: after the server exists (the flexible server, private DNS
    zone, and private endpoint are Terraform resources), `POSTGRES_ADMIN_PASSWORD`
-   must be in the ignored `.env` before any plan/apply. cloud-init runs
+   must be in the ignored `.env.production` before any plan/apply. cloud-init runs
    `alembic upgrade head` during bootstrap, so the schema is already applied by
    the time the app starts.
 7. **Clerk production instance**: the deployment runs Clerk *development* keys
@@ -645,7 +647,7 @@ remaining external or operator-controlled steps:
 
    Afterwards set `CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`,
    `CLERK_FRONTEND_API_URL` (which becomes `https://clerk.hangout.bahasadri.com`),
-   and `ACCESS_BOOTSTRAP_ADMINS` in the ignored `.env`. The wrapper refuses to
+   and `ACCESS_BOOTSTRAP_ADMINS` in the ignored `.env.production`. The wrapper refuses to
    apply if `CLERK_ENABLED=true` with a `pk_test_` key, if the publishable
    key's encoded host disagrees with `CLERK_FRONTEND_API_URL`, or if
    `ACCESS_BOOTSTRAP_ADMINS` is empty. **These reach the VM only through
@@ -682,7 +684,10 @@ leaves a process that starts but refuses every sign-in (see
 
 New *environment variables* are a separate problem with a separate answer:
 they live in `/etc/hangout-automator.env`, and Terraform cannot deliver them to
-a running VM (see the `custom_data` note above).
+a running VM (see the `custom_data` note above). Before upgrading an existing
+VM to code that selects environment-specific files, add
+`HANGOUT_ENV=production` to that file and restart both app units; otherwise the
+runtime defaults to development and deliberately rejects the live Clerk keys.
 
 ### Verifying a fresh deploy
 
@@ -721,8 +726,8 @@ usable for this private-VM topology. Initial code and service setup come from
 Terraform-rendered cloud-init; a future release pipeline should use Azure Run
 Command or another private management path for updates.
 
-It excludes `.env`, `terraform.tfvars`, `backend.hcl`, state files, and all
-`*.db*` files, so running it cannot copy local secrets or a development
+It excludes `.env` and `.env.*`, `terraform.tfvars`, `backend.hcl`, state files, and all
+`*.db*` files, so running it cannot copy local or production secrets or a development
 database onto a VM. It runs `alembic upgrade head` before the restart, for the
 same ordering reason as above; it had synced code and restarted without ever
 migrating, which is survivable only while no release carries a migration.

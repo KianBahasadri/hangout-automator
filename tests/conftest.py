@@ -9,7 +9,7 @@ os.environ["DATABASE_URL"] = os.environ.get(
 )
 os.environ["SMS_PROVIDER"] = "mock"
 os.environ["FOLLOWUP_HOURS"] = "1,2"
-# Keep the application import hermetic when a developer's .env enables Clerk.
+# Keep the application import hermetic when a developer's .env.development enables Clerk.
 # Auth-specific tests construct their own enabled Settings and monkeypatch the
 # middleware verifier explicitly.
 os.environ["CLERK_ENABLED"] = "false"
