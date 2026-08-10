@@ -1,7 +1,6 @@
 # Docs
 
-- [functional-specification.md](./functional-specification.md) — Product MVP requirements (hand-written; what the system should do)
-- [overview.md](./overview.md) — Runtime architecture, shared-data assumptions, and package layout
+- [overview.md](./overview.md) — Runtime architecture and package layout
 - [local-development.md](./local-development.md) — Stack, env vars, and how to run locally
 - [logging.md](./logging.md) — Verbose JSONL event logging, trace IDs, retention, and operations
 - [data-model.md](./data-model.md) — SQLAlchemy models, enums, Alembic migrations
@@ -22,10 +21,11 @@ current behavior.
 
 ## Notes
 
-These docs (except `functional-specification.md`) are AI-generated after the fact from the current repo. They describe how the implementation works, not a design target.
+These docs are AI-generated after the fact from the current repo. They describe
+how the implementation works, not a separate design target.
 
-Each fact should live in exactly one topic file. If something belongs to two topics, put it in the better fit and link from the other.
+Each fact should live in exactly one topic file. If something belongs to two
+topics, put it in the better fit and link from the other.
 
-`functional-specification.md` is the product requirements document and is maintained separately from the implementation topic set. Prefer updating it when product intent changes; prefer the other topic files when code behavior changes.
-
-Experiments and dead-ends that remain in the repo should get their own doc file rather than being folded into live-feature docs.
+Experiments and dead-ends that remain in the repo should get their own doc file
+rather than being folded into live-feature docs.

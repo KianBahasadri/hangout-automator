@@ -44,10 +44,11 @@ app/
   templates/        Jinja pages
   static/           CSS, JS, icons
 migrations/         Alembic schema migrations (versions/)
-docs/               topic docs + functional specification (archive/ is historical)
+docs/               topic docs (archive/ is historical)
 tests/              pytest suite + generated route/form smoke matrix
 terraform/          Azure VM + Flexible Server + cloud-init
 scripts/            db_up.sh, check.sh, deploy/
 ```
 
-Product intent (MVP requirements) lives in [functional-specification.md](./functional-specification.md). Implementation details are split across the other topic files listed in [README.md](./README.md).
+Implementation details are split across the topic files listed in
+[README.md](./README.md).

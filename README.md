@@ -10,7 +10,7 @@ MVP website that plans hangouts and invites people by SMS.
 - **Separate worker process** for background jobs, with two-layer send locking
 - **Terraform** deploys an Azure VM (no public IP) + PostgreSQL Flexible Server, reached through a Cloudflare Tunnel
 
-See [docs/functional-specification.md](docs/functional-specification.md) for product requirements.
+See [docs/README.md](docs/README.md) for how the system works.
 
 ## Quick start (local)
 
