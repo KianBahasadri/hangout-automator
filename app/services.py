@@ -75,10 +75,12 @@ def profile_allergies_label(profile: Profile) -> str | None:
 
 
 def resolve_organizer_phone(db: Session, hangout: Hangout) -> str | None:
-    """Phone for organizer SMS: selected profile, then legacy hangout phone.
+    """Phone for organizer SMS: selected contact profile, then hangout stamp.
 
-    The fallback lookup is filtered to the hangout's own workspace so this
-    stays safe when called from the worker's cross-workspace sweep.
+    The hangout stamp may come from a selected profile or from the creator's
+    My Profile phone (copied at create/edit time). The profile lookup is
+    filtered to the hangout's own workspace so this stays safe when called
+    from the worker's cross-workspace sweep.
     """
     if hangout.organizer_profile_id:
         profile = hangout.organizer

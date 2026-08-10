@@ -83,9 +83,23 @@ workspace. Tenant tables are the ones that carry `workspace_id` — see
 [tenancy.md](./tenancy.md), which owns what the list means and where it is
 enforced.
 
+### `users` (My Profile)
+
+Account-holder settings for the signed-in organizer — **not** the
+workspace-scoped invitee directory (`profiles`).
+
+- Unique `clerk_user_id` (Clerk `sub`, or `local-dev` when Clerk is off)
+- Optional `display_name`, `phone`, `phone_verified_at` (OTP verification is
+  not wired yet; changing phone clears `phone_verified_at`)
+- Optional `email` (mirrored from Clerk when known)
+- Default organizer-SMS prefs: `default_notify_*` mirrors hangout notify
+  columns and prefills **new** hangouts (overridable per hangout)
+
+Helpers: `app/users.py`. UI: `GET/POST /me`.
+
 ### `app_settings`
 
-Legacy singleton table (`id=1`) may still exist in older databases; it is no longer declared in `models.py` and nothing reads or writes it. Organizer SMS requires selecting an organizer profile on the hangout.
+Legacy singleton table (`id=1`) may still exist in older databases; it is no longer declared in `models.py` and nothing reads or writes it.
 
 ## Clamped UI/API option sets (`services.py`)
 

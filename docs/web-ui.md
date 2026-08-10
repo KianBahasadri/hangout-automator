@@ -4,10 +4,16 @@ HTML routes: `app/routers/web.py`. Templates: `app/templates/`. Styles/scripts: 
 
 ## UX principles (as implemented)
 
-- Minimal chrome: nav is Home, Profiles, Settings, plus a light/dark theme toggle
-- Labels and placeholders only — no instructional hint/lead paragraphs on forms
+- Minimal chrome: nav is Home, Profiles, **My Profile**, Settings, plus a light/dark theme toggle
+- **Labels and placeholders only** — no instructional help copy, lead paragraphs, or
+  explainer text under headings. Bad examples (do not reintroduce):
+  - “Your personal account settings. This is not the contacts list under Profiles…”
+  - “Prefills new hangouts. You can still change each hangout.”
+  - “Saved for organizer SMS. Phone confirmation will land with a later update.”
+  Empty states (“No tags yet”), flash alerts after an action, and field
+  placeholders are fine; prose that teaches the product on the form is not.
 - Optional fields use a blank first option (or unchecked pills), not an “unknown” value
-- Shared data: when Clerk is enabled, every authenticated visitor sees the same profiles/hangouts; with Clerk disabled, every visitor does
+- Multi-tenant: each authenticated user works in their own workspace; My Profile is personal (account-holder), while Profiles is the invitee directory for the active workspace
 
 ## Theme
 
@@ -39,13 +45,14 @@ string whatever characters it holds.
 | Method | Path | Page / action |
 |--------|------|----------------|
 | GET | `/` | Hangout list without database ID numbers; “New hangout” sits immediately beside the page heading |
-| GET | `/profiles` | Profiles page; tags and existing profiles |
+| GET/POST | `/me` | My Profile: account-holder name, phone, default organizer SMS prefs |
+| GET | `/profiles` | Profiles page; tags and existing profiles (invitee contacts for this workspace) |
 | GET | `/profiles/new` | Add one or more profiles, with optional phone contact import |
 | POST | `/profiles` | Validate and save the add-profiles batch |
 | POST | `/profiles/{id}/delete` | Delete profile |
 | POST | `/tags` | Create tag → redirect `/profiles` |
 | POST | `/tags/{id}/delete` | Delete tag |
-| GET/POST | `/hangouts/new` | Create hangout (`action=draft` or `setup`) |
+| GET/POST | `/hangouts/new` | Create hangout (`action=draft` or `setup`); organizer SMS is not on this form — stamped from My Profile on create |
 | GET/POST | `/hangouts/{id}/edit` | Draft-only prefilled edit form (`action=draft` or `setup`) |
 | GET | `/hangouts/{id}` | Detail / status (`?error=need_profiles`) |
 | POST | `/hangouts/{id}/setup` | Activate / (re)send invites |

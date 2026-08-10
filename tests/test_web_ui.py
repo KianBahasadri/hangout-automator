@@ -142,13 +142,9 @@ def test_draft_hangout_opens_a_prefilled_edit_form(client, db):
     assert '<option value="no" selected>no</option>' in html
     assert "Bring a blanket" in html
     assert re.search(rf'name="profile_ids" value="{organizer.id}"\s+checked', html)
-    assert f'name="organizer_profile_id" id="organizer_profile_id" value="{organizer.id}"' in html
-    assert re.search(r'name="notify_enabled" id="notify_enabled" checked', html)
-    assert re.search(r'name="notify_interval" id="notify_interval" checked', html)
-    assert re.search(r'name="notify_threshold" id="notify_threshold" checked', html)
-    assert '<option value="8" selected>' in html
-    assert '<option value="4" selected>' in html
-    assert '<option value="15" selected>' in html
+    # Organizer SMS is configured on My Profile, not on this form.
+    assert "Organizer SMS" not in html
+    assert 'name="notify_enabled"' not in html
     assert "Save changes" not in html
     assert "Save draft" not in html
     assert "data-draft-autosave" in html
@@ -172,6 +168,12 @@ def test_draft_edit_saves_updated_details_and_invitees(client, db):
     )
     db.commit()
 
+    hangout.notify_enabled = True
+    hangout.notify_interval_hours = 12
+    hangout.organizer_profile_id = organizer.id
+    hangout.organizer_phone = organizer.phone
+    db.commit()
+
     response = client.post(
         f"/hangouts/{hangout.id}/edit",
         data={
@@ -183,15 +185,6 @@ def test_draft_edit_saves_updated_details_and_invitees(client, db):
             "alcohol_involved": "no",
             "weed_involved": "yes",
             "notes": "Meet at the south gate",
-            "organizer_profile_id": str(organizer.id),
-            "notify_enabled": "on",
-            "notify_interval": "on",
-            "notify_threshold": "on",
-            "notify_interval_hours": "12",
-            "notify_on_decline": "on",
-            "notify_on_ride_needed": "on",
-            "notify_confirm_goal": "3",
-            "notify_threshold_cooldown_minutes": "30",
             "profile_ids": str(organizer.id),
             "action": "draft",
         },
@@ -211,19 +204,11 @@ def test_draft_edit_saves_updated_details_and_invitees(client, db):
     assert hangout.alcohol_involved == YesNo.no
     assert hangout.weed_involved == YesNo.yes
     assert hangout.notes == "Meet at the south gate"
+    # Organizer SMS stamped at create is preserved across detail-only edits.
     assert hangout.organizer_profile_id == organizer.id
     assert hangout.organizer_phone == organizer.phone
     assert hangout.notify_enabled is True
-    assert hangout.notify_interval is True
-    assert hangout.notify_threshold is True
     assert hangout.notify_interval_hours == 12
-    assert hangout.notify_interval_only_if_changed is False
-    assert hangout.notify_on_new_confirm is False
-    assert hangout.notify_on_decline is True
-    assert hangout.notify_on_allergy is False
-    assert hangout.notify_on_ride_needed is True
-    assert hangout.notify_confirm_goal == 3
-    assert hangout.notify_threshold_cooldown_minutes == 30
     assert {invite.profile_id for invite in hangout.invites} == {organizer.id}
 
 

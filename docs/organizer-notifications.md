@@ -6,10 +6,18 @@ Configured per hangout (web new-hangout form or API). Phone resolution and send 
 
 `resolve_organizer_phone` order:
 
-1. Selected organizer profile’s phone (`organizer_profile_id`)
-2. Legacy hangout `organizer_phone`
+1. Selected organizer **contact** profile’s phone (`organizer_profile_id`)
+2. Hangout `organizer_phone` (stamped at create/edit from that contact, or
+   from the creator’s **My Profile** phone when no contact is selected)
 
-If none resolve, notifications cannot send (web create leaves notify off; API returns 400 when enabling notify without an organizer profile phone).
+If none resolve, notifications cannot send (web create leaves notify off; API
+returns 400 when enabling notify without a resolvable phone).
+
+Account-holder defaults live on **My Profile** (`/me`, `users` table): phone
+and default notify toggles. On hangout **create**, those defaults are stamped
+onto the hangout (matching contact profile by phone when one exists). The new
+hangout form does not expose per-hangout organizer SMS controls. Defaults are
+personal, not workspace-scoped — two users never share a My Profile row.
 
 ## Interval digests
 

@@ -136,6 +136,53 @@ class AccessGrant(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class User(Base):
+    """Account-holder record for My Profile (personal, not a contact profile).
+
+    Instance-wide and keyed by Clerk subject (or a local-dev stand-in). This is
+    the organizer's own name/phone and default notify prefs — not the
+    workspace-scoped invitee directory in `profiles`.
+    """
+
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    clerk_user_id: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+    display_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    # Set by the phone OTP flow (KIAN-527). Cleared whenever phone changes.
+    phone_verified_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    # Defaults applied when creating a new hangout; still overridable per hangout.
+    default_notify_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    default_notify_interval: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    default_notify_threshold: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    default_notify_interval_hours: Mapped[int] = mapped_column(Integer, default=6, nullable=False)
+    default_notify_interval_only_if_changed: Mapped[bool] = mapped_column(
+        Boolean, default=True, nullable=False
+    )
+    default_notify_on_new_confirm: Mapped[bool] = mapped_column(
+        Boolean, default=True, nullable=False
+    )
+    default_notify_on_decline: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    default_notify_on_allergy: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    default_notify_on_ride_needed: Mapped[bool] = mapped_column(
+        Boolean, default=True, nullable=False
+    )
+    default_notify_confirm_goal: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    default_notify_threshold_cooldown_minutes: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False
+    )
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
 class Workspace(Base):
     """A tenant: an isolated set of profiles, hangouts, tags, and log rows.
 

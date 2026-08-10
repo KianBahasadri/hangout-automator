@@ -7,7 +7,7 @@ from pathlib import Path
 from urllib.parse import quote
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi import Query
 from sqlalchemy import text
 from sqlalchemy.orm import Session, joinedload
@@ -554,18 +554,24 @@ def list_hangouts(
 
 @router.post("/hangouts", response_model=HangoutOut, status_code=201)
 def create_hangout(
+    request: Request,
     payload: HangoutCreate,
     db: Session = Depends(get_db),
     workspace: Workspace = Depends(current_workspace),
 ) -> Hangout:
+    from app.users import user_for_request
+
     org_profile = None
     if payload.organizer_profile_id is not None:
         org_profile = get_scoped(db, Profile, payload.organizer_profile_id, workspace)
         if org_profile is None:
             raise HTTPException(400, "Organizer profile not found")
-    org_phone = org_profile.phone if org_profile else None
+    org_phone = org_profile.phone if org_profile else user_for_request(db, request).phone
     if payload.notify_enabled and not org_phone:
-        raise HTTPException(400, "Organizer profile required when notifications are enabled")
+        raise HTTPException(
+            400,
+            "Organizer profile or My Profile phone required when notifications are enabled",
+        )
     hangout = Hangout(
         day_date=payload.day_date or None,
         time=payload.time or None,
@@ -662,7 +668,10 @@ def update_hangout(
         setattr(hangout, k, v)
     if hangout.notify_enabled:
         if not resolve_organizer_phone(db, hangout):
-            raise HTTPException(400, "Organizer profile required when notifications are enabled")
+            raise HTTPException(
+                400,
+                "Organizer profile or hangout organizer phone required when notifications are enabled",
+            )
     db.commit()
     return load_hangout(db, hangout_id, workspace)  # type: ignore[return-value]
 

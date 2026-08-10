@@ -30,6 +30,7 @@ from app.models import (
     HangoutStatus,
     Profile,
     Tag,
+    User,
     Workspace,
     WorkspaceMember,
     YesNo,
@@ -49,6 +50,7 @@ from app.services import (
     setup_hangout,
 )
 from app.sms import format_phone, is_valid_phone, normalize_phone
+from app.users import apply_user_form, user_for_request
 
 router = APIRouter(tags=["web"])
 # Resolved from this file so the app does not depend on the working directory.
@@ -377,6 +379,79 @@ def profiles_delete(
     return RedirectResponse("/profiles", status_code=303)
 
 
+@router.get("/me", response_class=HTMLResponse)
+def my_profile(
+    request: Request,
+    db: Session = Depends(get_db),
+) -> HTMLResponse:
+    """Personal account settings — not the workspace contacts list."""
+    user = user_for_request(db, request)
+    db.commit()
+    return templates.TemplateResponse(
+        request,
+        "me.html",
+        _my_profile_context(user, notice=request.query_params.get("notice")),
+    )
+
+
+@router.post("/me")
+def my_profile_save(
+    request: Request,
+    display_name: str = Form(""),
+    phone: str = Form(""),
+    notify_enabled: str | None = Form(None),
+    notify_interval: str | None = Form(None),
+    notify_threshold: str | None = Form(None),
+    notify_interval_hours: str = Form("6"),
+    notify_interval_only_if_changed: str | None = Form(None),
+    notify_on_new_confirm: str | None = Form(None),
+    notify_on_decline: str | None = Form(None),
+    notify_on_allergy: str | None = Form(None),
+    notify_on_ride_needed: str | None = Form(None),
+    notify_confirm_goal: str = Form("0"),
+    notify_threshold_cooldown_minutes: str = Form("0"),
+    db: Session = Depends(get_db),
+) -> Response:
+    user = user_for_request(db, request)
+    error = apply_user_form(
+        user,
+        display_name=display_name,
+        phone=phone,
+        notify_enabled=notify_enabled,
+        notify_interval=notify_interval,
+        notify_threshold=notify_threshold,
+        notify_interval_hours=notify_interval_hours,
+        notify_interval_only_if_changed=notify_interval_only_if_changed,
+        notify_on_new_confirm=notify_on_new_confirm,
+        notify_on_decline=notify_on_decline,
+        notify_on_allergy=notify_on_allergy,
+        notify_on_ride_needed=notify_on_ride_needed,
+        notify_confirm_goal=notify_confirm_goal,
+        notify_threshold_cooldown_minutes=notify_threshold_cooldown_minutes,
+    )
+    if error:
+        return templates.TemplateResponse(
+            request,
+            "me.html",
+            _my_profile_context(user, notice=error),
+            status_code=400,
+        )
+    db.commit()
+    if "application/json" in request.headers.get("accept", ""):
+        return Response(status_code=204)
+    return RedirectResponse("/me?notice=saved", status_code=303)
+
+
+def _my_profile_context(user: User, *, notice: str | None = None) -> dict:
+    return {
+        "user": user,
+        "notice": notice,
+        "interval_hour_opts": INTERVAL_HOUR_OPTIONS,
+        "cooldown_minute_opts": COOLDOWN_MINUTE_OPTIONS,
+        "confirm_goal_opts": CONFIRM_GOAL_OPTIONS,
+    }
+
+
 @router.get("/hangouts/new", response_class=HTMLResponse)
 def hangout_new(
     request: Request,
@@ -386,7 +461,7 @@ def hangout_new(
     return templates.TemplateResponse(
         request,
         "hangout_new.html",
-        _hangout_form_context(db, workspace),
+        _hangout_form_context(db, workspace, request=request),
     )
 
 
@@ -396,7 +471,13 @@ def _hangout_form_context(
     *,
     hangout: Hangout | None = None,
     error: str | None = None,
+    request: Request | None = None,
 ) -> dict:
+    if hangout is None and request is not None:
+        # Ensure the account-holder row exists so create can stamp organizer defaults.
+        user_for_request(db, request)
+        db.flush()
+
     return {
         "hangout": hangout,
         "profiles": _profiles_with_tags(db, workspace),
@@ -406,15 +487,10 @@ def _hangout_form_context(
         "google_places_enabled": bool(get_settings().google_maps_api_key.strip()),
         "alcohol_opts": list(YesNo),
         "weed_opts": list(YesNo),
-        "interval_hour_opts": INTERVAL_HOUR_OPTIONS,
-        "cooldown_minute_opts": COOLDOWN_MINUTE_OPTIONS,
-        "confirm_goal_opts": CONFIRM_GOAL_OPTIONS,
     }
 
 
-def _apply_hangout_form(
-    db: Session,
-    workspace: Workspace,
+def _apply_hangout_details(
     hangout: Hangout,
     *,
     day_date: str,
@@ -425,29 +501,8 @@ def _apply_hangout_form(
     alcohol_involved: str,
     weed_involved: str,
     notes: str,
-    organizer_profile_id: str,
-    notify_enabled: str | None,
-    notify_interval: str | None,
-    notify_threshold: str | None,
-    notify_interval_hours: str,
-    notify_interval_only_if_changed: str | None,
-    notify_on_new_confirm: str | None,
-    notify_on_decline: str | None,
-    notify_on_allergy: str | None,
-    notify_on_ride_needed: str | None,
-    notify_confirm_goal: str,
-    notify_threshold_cooldown_minutes: str,
 ) -> None:
-    """Apply the shared new/edit form fields to a draft hangout."""
-    organizer_id = parse_row_id(organizer_profile_id)
-    org_profile = (
-        get_scoped(db, Profile, organizer_id, workspace) if organizer_id is not None else None
-    )
-    notify = notify_enabled is not None
-    # Notifications require an organizer profile with a phone.
-    if notify and not (org_profile and org_profile.phone):
-        notify = False
-
+    """Apply hangout detail fields from the create/edit form."""
     hangout.day_date = day_date.strip() or None
     hangout.time = time.strip() or None
     hangout.duration = duration.strip() or None
@@ -456,22 +511,46 @@ def _apply_hangout_form(
     hangout.alcohol_involved = _optional_enum_form(alcohol_involved, YesNo)
     hangout.weed_involved = _optional_enum_form(weed_involved, YesNo)
     hangout.notes = notes.strip() or None
+
+
+def _apply_organizer_from_user(
+    db: Session,
+    workspace: Workspace,
+    hangout: Hangout,
+    user: User,
+) -> None:
+    """Stamp organizer SMS settings from My Profile defaults (no per-hangout UI)."""
+    org_profile: Profile | None = None
+    if user.phone:
+        org_profile = (
+            scoped(db, Profile, workspace).filter(Profile.phone == user.phone).first()
+        )
+    organizer_phone = (org_profile.phone if org_profile else None) or user.phone
+    notify = bool(user.default_notify_enabled and organizer_phone)
+
     hangout.organizer = org_profile
     hangout.organizer_profile_id = org_profile.id if org_profile else None
-    hangout.organizer_phone = org_profile.phone if org_profile else None
+    hangout.organizer_phone = organizer_phone if notify or org_profile else user.phone
     hangout.notify_enabled = notify
-    hangout.notify_interval = notify and notify_interval is not None
-    hangout.notify_threshold = notify and notify_threshold is not None
-    hangout.notify_interval_hours = clamp_choice(notify_interval_hours, INTERVAL_HOUR_OPTIONS, 6)
-    hangout.notify_interval_only_if_changed = notify_interval_only_if_changed is not None
-    hangout.notify_on_new_confirm = notify_on_new_confirm is not None
-    hangout.notify_on_decline = notify_on_decline is not None
-    hangout.notify_on_allergy = notify_on_allergy is not None
-    hangout.notify_on_ride_needed = notify_on_ride_needed is not None
-    hangout.notify_confirm_goal = clamp_choice(notify_confirm_goal, CONFIRM_GOAL_OPTIONS, 0)
-    hangout.notify_threshold_cooldown_minutes = clamp_choice(
-        notify_threshold_cooldown_minutes, COOLDOWN_MINUTE_OPTIONS, 0
+    hangout.notify_interval = notify and user.default_notify_interval
+    hangout.notify_threshold = notify and user.default_notify_threshold
+    hangout.notify_interval_hours = clamp_choice(
+        user.default_notify_interval_hours, INTERVAL_HOUR_OPTIONS, 6
     )
+    hangout.notify_interval_only_if_changed = user.default_notify_interval_only_if_changed
+    hangout.notify_on_new_confirm = user.default_notify_on_new_confirm
+    hangout.notify_on_decline = user.default_notify_on_decline
+    hangout.notify_on_allergy = user.default_notify_on_allergy
+    hangout.notify_on_ride_needed = user.default_notify_on_ride_needed
+    hangout.notify_confirm_goal = clamp_choice(
+        user.default_notify_confirm_goal, CONFIRM_GOAL_OPTIONS, 0
+    )
+    hangout.notify_threshold_cooldown_minutes = clamp_choice(
+        user.default_notify_threshold_cooldown_minutes, COOLDOWN_MINUTE_OPTIONS, 0
+    )
+    if not notify:
+        # Keep a stamped phone for later enablement, but leave notify off.
+        hangout.organizer_phone = organizer_phone
 
 
 def _valid_profile_ids(
@@ -506,6 +585,7 @@ def _sync_draft_invitees(
 
 @router.post("/hangouts/new")
 def hangout_create(
+    request: Request,
     day_date: str = Form(""),
     time: str = Form(""),
     duration: str = Form(""),
@@ -514,27 +594,14 @@ def hangout_create(
     alcohol_involved: str = Form(""),
     weed_involved: str = Form(""),
     notes: str = Form(""),
-    organizer_profile_id: str = Form(""),
-    notify_enabled: str | None = Form(None),
-    notify_interval: str | None = Form(None),
-    notify_threshold: str | None = Form(None),
-    notify_interval_hours: str = Form("6"),
-    notify_interval_only_if_changed: str | None = Form(None),
-    notify_on_new_confirm: str | None = Form(None),
-    notify_on_decline: str | None = Form(None),
-    notify_on_allergy: str | None = Form(None),
-    notify_on_ride_needed: str | None = Form(None),
-    notify_confirm_goal: str = Form("0"),
-    notify_threshold_cooldown_minutes: str = Form("0"),
     profile_ids: Annotated[list[RowId] | None, Form()] = None,
     action: str = Form("draft"),
     db: Session = Depends(get_db),
     workspace: Workspace = Depends(current_workspace),
 ) -> RedirectResponse:
     hangout = Hangout(status=HangoutStatus.draft, workspace_id=workspace.id)
-    _apply_hangout_form(
-        db,
-        workspace,
+    user = user_for_request(db, request)
+    _apply_hangout_details(
         hangout,
         day_date=day_date,
         time=time,
@@ -544,19 +611,8 @@ def hangout_create(
         alcohol_involved=alcohol_involved,
         weed_involved=weed_involved,
         notes=notes,
-        organizer_profile_id=organizer_profile_id,
-        notify_enabled=notify_enabled,
-        notify_interval=notify_interval,
-        notify_threshold=notify_threshold,
-        notify_interval_hours=notify_interval_hours,
-        notify_interval_only_if_changed=notify_interval_only_if_changed,
-        notify_on_new_confirm=notify_on_new_confirm,
-        notify_on_decline=notify_on_decline,
-        notify_on_allergy=notify_on_allergy,
-        notify_on_ride_needed=notify_on_ride_needed,
-        notify_confirm_goal=notify_confirm_goal,
-        notify_threshold_cooldown_minutes=notify_threshold_cooldown_minutes,
     )
+    _apply_organizer_from_user(db, workspace, hangout, user)
     db.add(hangout)
     db.flush()
     ids = _valid_profile_ids(db, workspace, profile_ids)
@@ -609,18 +665,6 @@ def hangout_update_draft(
     alcohol_involved: str = Form(""),
     weed_involved: str = Form(""),
     notes: str = Form(""),
-    organizer_profile_id: str = Form(""),
-    notify_enabled: str | None = Form(None),
-    notify_interval: str | None = Form(None),
-    notify_threshold: str | None = Form(None),
-    notify_interval_hours: str = Form("6"),
-    notify_interval_only_if_changed: str | None = Form(None),
-    notify_on_new_confirm: str | None = Form(None),
-    notify_on_decline: str | None = Form(None),
-    notify_on_allergy: str | None = Form(None),
-    notify_on_ride_needed: str | None = Form(None),
-    notify_confirm_goal: str = Form("0"),
-    notify_threshold_cooldown_minutes: str = Form("0"),
     profile_ids: Annotated[list[RowId] | None, Form()] = None,
     action: str = Form("draft"),
     db: Session = Depends(get_db),
@@ -632,9 +676,9 @@ def hangout_update_draft(
     if hangout.status != HangoutStatus.draft or hangout.deleted_at is not None:
         return RedirectResponse(f"/hangouts/{hangout_id}", status_code=303)
 
-    _apply_hangout_form(
-        db,
-        workspace,
+    # Details + invitees only. Organizer SMS prefs were stamped from My Profile
+    # at create and stay on the hangout row (no per-hangout editor on this form).
+    _apply_hangout_details(
         hangout,
         day_date=day_date,
         time=time,
@@ -644,18 +688,6 @@ def hangout_update_draft(
         alcohol_involved=alcohol_involved,
         weed_involved=weed_involved,
         notes=notes,
-        organizer_profile_id=organizer_profile_id,
-        notify_enabled=notify_enabled,
-        notify_interval=notify_interval,
-        notify_threshold=notify_threshold,
-        notify_interval_hours=notify_interval_hours,
-        notify_interval_only_if_changed=notify_interval_only_if_changed,
-        notify_on_new_confirm=notify_on_new_confirm,
-        notify_on_decline=notify_on_decline,
-        notify_on_allergy=notify_on_allergy,
-        notify_on_ride_needed=notify_on_ride_needed,
-        notify_confirm_goal=notify_confirm_goal,
-        notify_threshold_cooldown_minutes=notify_threshold_cooldown_minutes,
     )
     ids = _valid_profile_ids(db, workspace, profile_ids)
     _sync_draft_invitees(db, workspace, hangout, ids)

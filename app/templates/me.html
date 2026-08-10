@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+{% block title %}My Profile · Hangout Automator{% endblock %}
+{% block content %}
+{% set notices = {
+  "saved": "Profile saved.",
+  "invalid-phone": "That phone number does not look dialable. Use a full number with country code.",
+} %}
+<div style="display:flex;align-items:baseline;gap:1rem;flex-wrap:wrap;margin-bottom:1.25rem;">
+  <h1 style="margin:0;">My Profile</h1>
+</div>
+
+{% if notice and notice in notices %}
+<div class="alert">{{ notices[notice] }}</div>
+{% endif %}
+
+<form method="post" action="/me" class="card">
+  <div class="field-row" style="margin-top:0;">
+    <div>
+      <input
+        id="display_name"
+        name="display_name"
+        type="text"
+        maxlength="120"
+        value="{{ user.display_name or '' }}"
+        placeholder="Your name"
+        aria-label="Your name"
+      />
+    </div>
+    <div>
+      <label for="phone">Phone</label>
+      <input
+        id="phone"
+        name="phone"
+        type="tel"
+        maxlength="32"
+        value="{{ user.phone|phone if user.phone else '' }}"
+        placeholder="+1 (555) 123-4567"
+        autocomplete="tel"
+      />
+    </div>
+  </div>
+
+  <h2>Default organizer SMS</h2>
+
+  <div class="notify-panel" id="notify-panel">
+    <label class="notify-master">
+      <input
+        type="checkbox"
+        name="notify_enabled"
+        id="notify_enabled"
+        {% if user.default_notify_enabled %}checked{% endif %}
+      />
+      Enable organizer SMS updates by default
+    </label>
+
+    <div class="notify-sections" id="notify-sections" hidden>
+      <fieldset class="notify-block">
+        <legend>
+          <label>
+            <input
+              type="checkbox"
+              name="notify_interval"
+              id="notify_interval"
+              {% if user.default_notify_interval %}checked{% endif %}
+            />
+            Interval digests
+          </label>
+        </legend>
+        <div class="notify-block-body" id="notify-interval-opts" hidden>
+          <label for="notify_interval_hours">How often</label>
+          <select id="notify_interval_hours" name="notify_interval_hours">
+            {% for h in interval_hour_opts %}
+            <option value="{{ h }}" {% if h == user.default_notify_interval_hours %}selected{% endif %}>
+              Every {{ h }} hour{% if h != 1 %}s{% endif %}
+            </option>
+            {% endfor %}
+          </select>
+          <label class="inline-check">
+            <input
+              type="checkbox"
+              name="notify_interval_only_if_changed"
+              {% if user.default_notify_interval_only_if_changed %}checked{% endif %}
+            />
+            Skip digest if nothing changed since last SMS
+          </label>
+        </div>
+      </fieldset>
+
+      <fieldset class="notify-block">
+        <legend>
+          <label>
+            <input
+              type="checkbox"
+              name="notify_threshold"
+              id="notify_threshold"
+              {% if user.default_notify_threshold %}checked{% endif %}
+            />
+            Threshold alerts
+          </label>
+        </legend>
+        <div class="notify-block-body" id="notify-threshold-opts" hidden>
+          <p class="chip-label" style="margin:0 0 0.35rem;">Alert me when</p>
+          <div class="checkbox-list" style="margin-bottom:0.75rem;">
+            <label>
+              <input
+                type="checkbox"
+                name="notify_on_new_confirm"
+                {% if user.default_notify_on_new_confirm %}checked{% endif %}
+              />
+              Someone newly confirms
+            </label>
+            <label>
+              <input
+                type="checkbox"
+                name="notify_on_decline"
+                {% if user.default_notify_on_decline %}checked{% endif %}
+              />
+              Someone declines
+            </label>
+            <label>
+              <input
+                type="checkbox"
+                name="notify_on_allergy"
+                {% if user.default_notify_on_allergy %}checked{% endif %}
+              />
+              A confirmer has dietary restrictions
+            </label>
+            <label>
+              <input
+                type="checkbox"
+                name="notify_on_ride_needed"
+                {% if user.default_notify_on_ride_needed %}checked{% endif %}
+              />
+              A confirmer needs a ride
+            </label>
+          </div>
+
+          <label for="notify_confirm_goal">Confirmed-count milestone</label>
+          <select id="notify_confirm_goal" name="notify_confirm_goal">
+            {% for g in confirm_goal_opts %}
+            <option value="{{ g }}" {% if g == user.default_notify_confirm_goal %}selected{% endif %}>
+              {% if g == 0 %}Off{% else %}Alert once when {{ g }} people have confirmed{% endif %}
+            </option>
+            {% endfor %}
+          </select>
+
+          <label for="notify_threshold_cooldown_minutes">Gap between routine alerts</label>
+          <select id="notify_threshold_cooldown_minutes" name="notify_threshold_cooldown_minutes">
+            {% for m in cooldown_minute_opts %}
+            <option value="{{ m }}" {% if m == user.default_notify_threshold_cooldown_minutes %}selected{% endif %}>
+              {% if m == 0 %}No limit (send immediately)
+              {% elif m < 60 %}{{ m }} minutes
+              {% else %}{{ (m / 60)|int }} hour{% endif %}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+      </fieldset>
+    </div>
+  </div>
+
+  <div class="actions">
+    <button class="btn" type="submit">Save</button>
+  </div>
+</form>
+<script src="/static/notify_panel.js"></script>
+<script src="/static/phone_format.js"></script>
+{% endblock %}

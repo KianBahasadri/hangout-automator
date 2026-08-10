@@ -42,6 +42,19 @@ would hand an unattributable request another tenant's data. Failing closed
 here is what the *no identity, so no workspace* rule means;
 `test_authenticated_request_without_a_subject_is_refused` pins it.
 
+## My Profile vs workspace contacts
+
+- **My Profile** (`users`, `/me`) — personal account-holder settings for the
+  signed-in identity (name, phone, default notify prefs). Instance-wide,
+  keyed by Clerk subject (or `local-dev` with Clerk off). Not tenant data.
+- **Profiles** (`profiles`, `/profiles`) — people you invite; workspace-scoped
+  contacts with tags and dietary restrictions.
+
+New hangouts prefill organizer SMS defaults from My Profile. If a contact in
+the active workspace shares the same phone, that contact is pre-selected as
+organizer; otherwise the hangout stamps `organizer_phone` from My Profile when
+notify is enabled without a selected contact.
+
 ## The access list: who this deployment admits
 
 Clerk says *who* someone is; it never says whether this deployment wants them.
