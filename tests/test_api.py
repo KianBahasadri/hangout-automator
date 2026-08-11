@@ -230,6 +230,60 @@ def test_preview_invite_sms_formats_duration_with_hours(client_no_raise):
     assert "When: August 15, 2026 at 7:00 PM (3 hours)" in body
 
 
+def test_preview_sms_catalog_live_fields(client_no_raise):
+    response = client_no_raise.post(
+        "/api/sms/preview",
+        json={
+            "recipient_name": "Sam",
+            "motive": "Dinner",
+            "day_date": "2026-08-15",
+            "time": "19:00",
+            "duration": "3",
+            "location": "Sam's place",
+            "alcohol_involved": "yes",
+        },
+    )
+    assert response.status_code == 200
+    messages = {m["key"]: m["body"] for m in response.json()["messages"]}
+    assert "invite" in messages
+    assert "Hey Sam!" in messages["invite"]
+    assert "Dinner" in messages["invite"]
+    assert "When: August 15, 2026 at 7:00 PM (3 hours)" in messages["invite"]
+    assert "Alcohol: yes" in messages["invite"]
+    assert "reminder (1)" in messages["followup"]
+    assert "You're confirmed for hangout #7" in messages["confirm_ack"]
+    assert "Coming: 0" in messages["info"]
+    assert "Hangout #7 update" in messages["organizer"]
+
+
+def test_preview_sms_catalog_uses_selected_contacts(client_no_raise):
+    a = _create_profile(client_no_raise, name="Alex Test", phone="+15551110011")
+    b = _create_profile(client_no_raise, name="Bo Test", phone="+15551110012")
+    before = client_no_raise.get("/api/hangouts")
+    assert before.status_code == 200
+    hangout_count = len(before.json())
+
+    response = client_no_raise.post(
+        "/api/sms/preview",
+        json={
+            "motive": "Game night",
+            "contact_ids": [a["id"], b["id"]],
+        },
+    )
+    assert response.status_code == 200
+    messages = {m["key"]: m["body"] for m in response.json()["messages"]}
+    assert "Hey Alex Test!" in messages["invite"]
+    assert "Game night" in messages["invite"]
+    # Simulated statuses: first pending, second confirmed.
+    assert "Alex Test" in messages["info2"]
+    assert "Bo Test" in messages["info2"]
+    assert "Coming (1): Bo Test" in messages["info2"]
+
+    after = client_no_raise.get("/api/hangouts")
+    assert after.status_code == 200
+    assert len(after.json()) == hangout_count
+
+
 def test_empty_hangout_payload_creates_a_draft(client_no_raise):
     hangout = _create_hangout(client_no_raise)
 

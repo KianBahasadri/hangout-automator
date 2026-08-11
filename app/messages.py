@@ -5,7 +5,7 @@ from datetime import datetime
 from types import SimpleNamespace
 from typing import Any
 
-from app.models import Drive, Hangout, HangoutInvite, InviteStatus, Profile, YesNo
+from app.models import Hangout, HangoutInvite, InviteStatus, Profile, YesNo
 
 
 def _yn(value: YesNo | None) -> str | None:
@@ -358,50 +358,117 @@ def craft_invite_preview(
     return craft_invite_message(hangout, profile)  # type: ignore[arg-type]
 
 
-def _sample_preview_scene() -> tuple[Any, Any, Any]:
-    """Sample hangout + invitee for the SMS simulator catalog."""
-    alex = SimpleNamespace(
-        name="Alex Rivera",
-        phone="+15551110001",
-        food_allergies_label="pork",
-        drive=Drive.no,
-    )
-    sam = SimpleNamespace(
-        name="Sam Chen",
-        phone="+15551110002",
-        food_allergies_label=None,
-        drive=Drive.yes,
-    )
-    jo = SimpleNamespace(
-        name="Jo Patel",
-        phone="+15551110003",
+# Simulated invite statuses for multi-person previews (not real RSVPs).
+_PREVIEW_STATUS_CYCLE = (
+    InviteStatus.pending,
+    InviteStatus.confirmed,
+    InviteStatus.declined,
+)
+
+
+def _preview_profile_from_name(name: str) -> SimpleNamespace:
+    return SimpleNamespace(
+        name=(name or "").strip() or "Alex",
+        phone="",
         food_allergies_label=None,
         drive=None,
     )
-    hangout = hangout_from_fields(
-        hangout_id=7,
-        day_date="2026-08-15",
-        time="19:00",
-        duration="3",
-        location="Sam's place",
-        motive="Game night",
-        alcohol_involved="yes",
-        weed_involved=None,
-        notes="Bring snacks if you can",
+
+
+def _preview_profile_from_contact(profile: Any) -> SimpleNamespace:
+    """Snapshot contact fields used by INFO / organizer logistics builders."""
+    label = None
+    if hasattr(profile, "food_allergies_label"):
+        label = profile.food_allergies_label
+    return SimpleNamespace(
+        name=getattr(profile, "name", None) or "Guest",
+        phone=getattr(profile, "phone", "") or "",
+        food_allergies_label=label,
+        drive=getattr(profile, "drive", None),
     )
-    invites = [
-        SimpleNamespace(status=InviteStatus.confirmed, profile=alex),
-        SimpleNamespace(status=InviteStatus.pending, profile=sam),
-        SimpleNamespace(status=InviteStatus.declined, profile=jo),
-    ]
-    hangout.invites = invites
-    requester = SimpleNamespace(status=InviteStatus.pending, profile=sam)
-    return hangout, sam, requester
 
 
-def preview_message_catalog() -> list[dict[str, str]]:
-    """Labeled sample SMS bodies for the settings simulator page."""
-    hangout, profile, invite = _sample_preview_scene()
+def build_preview_scene(
+    *,
+    hangout_id: int = 7,
+    day_date: str | None = None,
+    time: str | None = None,
+    duration: str | None = None,
+    location: str | None = None,
+    motive: str | None = None,
+    alcohol_involved: str | None = None,
+    weed_involved: str | None = None,
+    notes: str | None = None,
+    recipient_name: str = "Alex",
+    contacts: list[Any] | None = None,
+) -> tuple[Any, Any, Any]:
+    """In-memory hangout + primary invitee + INFO requester for SMS previews.
+
+    Selected contacts get synthetic statuses so group messages (INFO, digests)
+    look realistic without persisting anything. With no contacts, invite copy
+    uses ``recipient_name`` and headcounts stay empty.
+    """
+    hangout = hangout_from_fields(
+        hangout_id=hangout_id,
+        day_date=day_date,
+        time=time,
+        duration=duration,
+        location=location,
+        motive=motive,
+        alcohol_involved=alcohol_involved,
+        weed_involved=weed_involved,
+        notes=notes,
+    )
+    if contacts:
+        invite_profiles = [_preview_profile_from_contact(p) for p in contacts]
+        invites = [
+            SimpleNamespace(
+                status=_PREVIEW_STATUS_CYCLE[i % len(_PREVIEW_STATUS_CYCLE)],
+                profile=p,
+            )
+            for i, p in enumerate(invite_profiles)
+        ]
+        hangout.invites = invites
+        primary = invite_profiles[0]
+        requester = invites[0]
+        return hangout, primary, requester
+
+    primary = _preview_profile_from_name(recipient_name)
+    requester = SimpleNamespace(status=InviteStatus.pending, profile=primary)
+    hangout.invites = []
+    return hangout, primary, requester
+
+
+def preview_message_catalog(
+    *,
+    recipient_name: str = "Alex",
+    day_date: str | None = None,
+    time: str | None = None,
+    duration: str | None = None,
+    location: str | None = None,
+    motive: str | None = None,
+    alcohol_involved: str | None = None,
+    weed_involved: str | None = None,
+    notes: str | None = None,
+    contacts: list[Any] | None = None,
+) -> list[dict[str, str]]:
+    """Labeled SMS bodies from the same craft_* builders as production.
+
+    Used by the SMS simulator (SSR + live ``POST /api/sms/preview``). Does not
+    send SMS or create hangouts.
+    """
+    hangout, profile, invite = build_preview_scene(
+        day_date=day_date,
+        time=time,
+        duration=duration,
+        location=location,
+        motive=motive,
+        alcohol_involved=alcohol_involved,
+        weed_involved=weed_involved,
+        notes=notes,
+        recipient_name=recipient_name,
+        contacts=contacts,
+    )
     return [
         {
             "key": "invite",
@@ -430,13 +497,13 @@ def preview_message_catalog() -> list[dict[str, str]]:
         {
             "key": "info",
             "title": "INFO",
-            "description": "Counts only — no names.",
+            "description": "Counts only — no names. Guest statuses are simulated.",
             "body": craft_info_summary(hangout, invite),  # type: ignore[arg-type]
         },
         {
             "key": "info2",
             "title": "MORE INFO",
-            "description": "Named lists plus logistics for confirmed guests.",
+            "description": "Named lists plus logistics for confirmed guests (simulated statuses).",
             "body": craft_info_detail(hangout, invite),  # type: ignore[arg-type]
         },
         {

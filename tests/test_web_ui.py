@@ -425,14 +425,25 @@ def test_settings_links_without_log_download(client):
     assert "pork" in response.text
 
 
-def test_sms_simulator_page_renders_sample_messages(client):
+def test_sms_simulator_page_mirrors_create_form_and_previews(client):
     response = client.get("/settings/sms-simulator")
     assert response.status_code == 200
     assert "SMS simulator" in response.text
-    # Apostrophe is HTML-escaped in the preformatted body.
+    # Same form controls as create hangout (shared partial).
+    assert 'id="day_date"' in response.text
+    assert 'id="motive"' in response.text
+    assert 'id="location"' in response.text
+    assert 'name="contact_ids"' in response.text or "No contacts yet." in response.text
+    assert "data-sms-simulator" in response.text
+    assert "sms_simulator.js" in response.text
+    # SSR preview bodies from real builders (empty-form fallbacks).
     assert "invited:" in response.text
+    assert "a hangout" in response.text
     assert "MORE INFO" in response.text
     assert "Organizer digest" in response.text
+    # Simulator must not post create/setup actions.
+    assert 'action="/hangouts/new"' not in response.text
+    assert "Set up hangout" not in response.text
 
 
 def test_new_hangout_has_preview_invite_button(client):

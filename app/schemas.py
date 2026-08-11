@@ -49,6 +49,35 @@ class InviteSmsPreviewOut(BaseModel):
     body: str
 
 
+class SmsPreviewIn(BaseModel):
+    """Hangout form fields for the full SMS simulator catalog (preview only)."""
+
+    recipient_name: str = "Alex"
+    day_date: Optional[str] = None
+    time: Optional[str] = None
+    duration: Optional[str] = None
+    location: Optional[str] = None
+    motive: Optional[str] = None
+    alcohol_involved: Optional[str] = None
+    weed_involved: Optional[str] = None
+    notes: Optional[str] = None
+    contact_ids: list[RowId] = Field(
+        default_factory=list,
+        validation_alias=AliasChoices("contact_ids", "profile_ids"),
+    )
+
+
+class SmsPreviewMessageOut(BaseModel):
+    key: str
+    title: str
+    description: str
+    body: str
+
+
+class SmsPreviewOut(BaseModel):
+    messages: list[SmsPreviewMessageOut]
+
+
 class PlaceSuggestionOut(BaseModel):
     place_id: str
     text: str

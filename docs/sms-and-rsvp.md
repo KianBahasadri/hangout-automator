@@ -28,8 +28,8 @@ provider, recorded as an unsuccessful message, and emitted as an
 
 ## Previewing copy
 
-- **Settings → SMS simulator** (`GET /settings/sms-simulator`) — sample messages for every outbound/auto-reply type against a fictional hangout
-- **New hangout → Preview invite SMS** — dialog uses `POST /api/sms/preview-invite` with the form’s current fields
+- **Settings → SMS simulator** (`GET /settings/sms-simulator`) — same create-hangout form fields and invitee picker; previews for every outbound/auto-reply type **live-update** as fields change via `POST /api/sms/preview` (debounced in `sms_simulator.js`). Optional selected contacts personalize names and sample guest lists (INFO / MORE INFO / organizer digests use synthetic RSVP statuses for preview only). Empty fields use the same fallbacks as real invites (`"a hangout"`, omitted optional lines). Nothing is saved or sent.
+- **New hangout → Preview invite SMS** — dialog still uses `POST /api/sms/preview-invite` with the form’s current fields (invite body only)
 
 ## Outbound copy
 

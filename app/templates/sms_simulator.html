@@ -6,26 +6,42 @@
   <a class="btn btn-secondary btn-sm" href="/settings">← Settings</a>
 </div>
 <p class="muted" style="margin-top:0.35rem;">
-  Sample outbound and auto-reply texts for a fictional hangout (Game night · #7).
-  Nothing is sent from this page.
+  Same form as creating a hangout. Previews update as you edit — nothing is saved or sent.
 </p>
 
-<div class="sms-sim-grid">
-  {% for msg in messages %}
-  <article class="card sms-sim-card" id="msg-{{ msg.key }}">
-    <h2 class="sms-sim-title">{{ msg.title }}</h2>
-    <p class="muted sms-sim-desc">{{ msg.description }}</p>
-    <div class="sms-phone">
-      <div class="sms-phone-bezel">
-        <div class="sms-phone-notch" aria-hidden="true"></div>
-        <div class="sms-phone-screen">
-          <div class="sms-bubble sms-bubble-out">
-            <pre class="sms-body">{{ msg.body }}</pre>
+<div class="sms-sim-layout" data-sms-simulator>
+  <form class="card sms-sim-form" data-hangout-form data-sms-sim-form onsubmit="return false;">
+    {% include "_hangout_form_fields.html" %}
+    <p class="muted" style="margin:1rem 0 0;">
+      Select invitees to personalize names and sample guest lists.
+      Statuses in INFO / MORE INFO / organizer digests are simulated for preview only.
+    </p>
+  </form>
+
+  <div class="sms-sim-previews">
+    <div class="sms-sim-preview-status muted" data-sms-sim-status aria-live="polite"></div>
+    <div class="sms-sim-grid" data-sms-sim-grid>
+      {% for msg in messages %}
+      <article class="card sms-sim-card" data-sms-key="{{ msg.key }}" id="msg-{{ msg.key }}">
+        <h2 class="sms-sim-title">{{ msg.title }}</h2>
+        <p class="muted sms-sim-desc">{{ msg.description }}</p>
+        <div class="sms-phone">
+          <div class="sms-phone-bezel">
+            <div class="sms-phone-notch" aria-hidden="true"></div>
+            <div class="sms-phone-screen">
+              <div class="sms-bubble sms-bubble-out">
+                <pre class="sms-body" data-sms-body>{{ msg.body }}</pre>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
+      </article>
+      {% endfor %}
     </div>
-  </article>
-  {% endfor %}
+  </div>
 </div>
+{% endblock %}
+{% block scripts %}
+<script src="/static/location_autocomplete.js"></script>
+<script src="/static/sms_simulator.js"></script>
 {% endblock %}

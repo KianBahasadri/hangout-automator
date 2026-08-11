@@ -10,6 +10,7 @@ JSON routes in `app/routers/api.py`, prefix `/api`. Schemas in `app/schemas.py`.
 | GET | `/api/places/autocomplete` | Google Places (New) predictions for a location query; returns a disabled response when the integration is not configured |
 | GET | `/api/places/details` | Resolves a selected Google place ID to its formatted address and coordinates; requires `place_id` |
 | POST | `/api/sms/preview-invite` | Craft invite SMS body from hangout fields (preview only; does not send) |
+| POST | `/api/sms/preview` | Full SMS simulator catalog (`messages[]` with key/title/description/body) from hangout fields + optional `contact_ids`; does not create or send |
 | GET | `/api/tags` | List tags |
 | POST | `/api/tags` | 201; normalized name; case-insensitive unique |
 | DELETE | `/api/tags/{id}` | 204 |

@@ -944,12 +944,15 @@ def deleted_hangouts_page(
 
 
 @router.get("/settings/sms-simulator", response_class=HTMLResponse)
-def sms_simulator_page(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse(
-        request,
-        "sms_simulator.html",
-        {"messages": preview_message_catalog()},
-    )
+def sms_simulator_page(
+    request: Request,
+    db: Session = Depends(get_db),
+    workspace: Workspace = Depends(current_workspace),
+) -> HTMLResponse:
+    """Live SMS preview against the same form as create-hangout (nothing sent)."""
+    ctx = _hangout_form_context(db, workspace, request=request)
+    ctx["messages"] = preview_message_catalog()
+    return templates.TemplateResponse(request, "sms_simulator.html", ctx)
 
 
 @router.get("/admin", response_class=HTMLResponse)

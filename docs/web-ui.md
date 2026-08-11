@@ -77,7 +77,7 @@ string whatever characters it holds.
 | POST | `/settings/access`, `/settings/access/{id}/delete` | Legacy aliases for the admin access POST routes |
 | GET | `/settings/logs` | Legacy redirect (307) to `/admin/logs` |
 | GET | `/settings/deleted-hangouts` | Soft-deleted hangouts; optional `?q=` motive search |
-| GET | `/settings/sms-simulator` | Preview sample outbound / auto-reply SMS layouts (not sent) |
+| GET | `/settings/sms-simulator` | Live SMS simulator: create-hangout form + all message-type previews (not sent) |
 | POST | `/allergies` | Create dietary restriction → `/settings` |
 | POST | `/allergies/{id}/delete` | Delete dietary restriction |
 
@@ -152,9 +152,13 @@ Dietary Restrictions catalog (same pill list pattern as tags; defaults
 `meat` and `pork` are seeded once into an empty catalog — deletions persist).
 
 **Deleted hangouts** lists soft-deleted rows with motive search (`?q=`).
-**SMS simulator** card links to `GET /settings/sms-simulator`, which renders
-sample invite / follow-up / RSVP / INFO / organizer copy in phone-style
-bubbles (nothing is sent).
+**SMS simulator** card links to `GET /settings/sms-simulator`. That page reuses
+the same hangout detail + invitee form as **New hangout** (shared partial
+`_hangout_form_fields.html`) beside live phone-style bubbles for every
+outbound/auto-reply type. Editing fields or invitee selection debounces
+(~400ms) and refreshes via `POST /api/sms/preview` (same `craft_*` builders as
+production). The form never creates a hangout or sends SMS. See
+[sms-and-rsvp.md](./sms-and-rsvp.md).
 
 ## Admin Panel
 

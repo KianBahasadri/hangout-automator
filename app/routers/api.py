@@ -25,7 +25,7 @@ from app.models import (
     Workspace,
     not_null_columns,
 )
-from app.messages import craft_invite_preview
+from app.messages import craft_invite_preview, preview_message_catalog
 from app.schemas import (
     AllergyCreate,
     AllergyOut,
@@ -40,6 +40,9 @@ from app.schemas import (
     ProfileOut,
     ProfileUpdate,
     SetupHangoutRequest,
+    SmsPreviewIn,
+    SmsPreviewMessageOut,
+    SmsPreviewOut,
     TagCreate,
     TagOut,
 )
@@ -353,6 +356,46 @@ def preview_invite_sms(payload: InviteSmsPreviewIn) -> InviteSmsPreviewOut:
             notes=payload.notes,
         )
     )
+
+
+@router.post("/sms/preview", response_model=SmsPreviewOut)
+def preview_sms_catalog(
+    payload: SmsPreviewIn,
+    db: Session = Depends(get_db),
+    workspace: Workspace = Depends(current_workspace),
+) -> SmsPreviewOut:
+    """Build all simulator SMS types from hangout form fields (preview only).
+
+    Does not create a hangout or send SMS. Optional ``contact_ids`` personalize
+    names and sample guest lists using workspace contacts.
+    """
+    contacts: list[Profile] = []
+    if payload.contact_ids:
+        # Preserve selection order; ignore ids outside this workspace.
+        by_id = {
+            p.id: p
+            for p in (
+                scoped(db, Profile, workspace)
+                .options(joinedload(Profile.allergies))
+                .filter(Profile.id.in_(list(payload.contact_ids)))
+                .all()
+            )
+        }
+        contacts = [by_id[i] for i in payload.contact_ids if i in by_id]
+
+    messages = preview_message_catalog(
+        recipient_name=payload.recipient_name,
+        day_date=payload.day_date,
+        time=payload.time,
+        duration=payload.duration,
+        location=payload.location,
+        motive=payload.motive,
+        alcohol_involved=payload.alcohol_involved,
+        weed_involved=payload.weed_involved,
+        notes=payload.notes,
+        contacts=contacts or None,
+    )
+    return SmsPreviewOut(messages=[SmsPreviewMessageOut(**m) for m in messages])
 
 
 # --- Tags ---
