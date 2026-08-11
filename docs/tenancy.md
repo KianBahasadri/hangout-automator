@@ -47,7 +47,7 @@ here is what the *no identity, so no workspace* rule means;
 - **My Profile** (`users`, `/me`) — personal account-holder settings for the
   signed-in identity (name, phone, default notify prefs). Instance-wide,
   keyed by Clerk subject (or `local-dev` with Clerk off). Not tenant data.
-- **Profiles** (`profiles`, `/profiles`) — people you invite; workspace-scoped
+- **Contacts** (`profiles` table, `/contacts`) — people you invite; workspace-scoped
   contacts with tags and dietary restrictions.
 
 New hangouts prefill organizer SMS defaults from My Profile. If a contact in

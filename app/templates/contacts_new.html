@@ -1,9 +1,9 @@
 {% extends "base.html" %}
-{% block title %}Add Profiles · Hangout Automator{% endblock %}
+{% block title %}Add Contacts · Hangout Automator{% endblock %}
 {% block content %}
 <div style="display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap;align-items:center;margin-bottom:1.25rem;">
-  <h1 style="margin:0;">Add profiles</h1>
-  <a href="/profiles">← All profiles</a>
+  <h1 style="margin:0;">Add contacts</h1>
+  <a href="/contacts">← All contacts</a>
 </div>
 
 {% if error %}
@@ -15,28 +15,28 @@
   <span class="muted" data-import-status role="status" aria-live="polite"></span>
 </div>
 
-<form method="post" action="/profiles" id="profiles-form">
-  <div id="profile-drafts" data-next-index="{{ profile_rows|length }}">
+<form method="post" action="/contacts" id="contacts-form">
+  <div id="contact-drafts" data-next-index="{{ profile_rows|length }}">
     {% for profile in profile_rows %}
     {% with profile_index=loop.index0, profile_number=loop.index %}
-    {% include "_profile_draft.html" %}
+    {% include "_contact_draft.html" %}
     {% endwith %}
     {% endfor %}
   </div>
 
-  <button class="btn btn-secondary" type="button" data-add-profile>Add another profile</button>
+  <button class="btn btn-secondary" type="button" data-add-contact>Add another contact</button>
 
   <div class="actions" style="margin-top:1.25rem;">
-    <button class="btn" type="submit">Save profiles</button>
+    <button class="btn" type="submit">Save contacts</button>
   </div>
 </form>
 
-<template id="profile-draft-template">
+<template id="contact-draft-template">
   {% with profile=None, profile_index="__INDEX__", profile_number="" %}
-  {% include "_profile_draft.html" %}
+  {% include "_contact_draft.html" %}
   {% endwith %}
 </template>
 {% endblock %}
 {% block scripts %}
-<script src="/static/profiles_new.js"></script>
+<script src="/static/contacts_new.js"></script>
 {% endblock %}

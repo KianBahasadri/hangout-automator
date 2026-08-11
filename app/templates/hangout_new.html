@@ -2,8 +2,8 @@
 {% block title %}{% if hangout %}Edit hangout{% else %}New hangout{% endif %} · Hangout Automator{% endblock %}
 {% block content %}
 {% set is_edit = hangout is not none %}
-{% if error == 'need_profiles' %}
-<div class="alert">Select at least one profile before setting up the hangout.</div>
+{% if error == 'need_contacts' or error == 'need_profiles' %}
+<div class="alert">Select at least one contact before setting up the hangout.</div>
 {% endif %}
 <div style="display:flex;align-items:baseline;gap:1rem;flex-wrap:wrap;margin-bottom:1.25rem;">
   <h1 style="margin:0;">{% if is_edit %}Edit hangout{% else %}New hangout{% endif %}</h1>
@@ -87,7 +87,7 @@
   {% include "_invitee_picker.html" %}
   {% endwith %}
   {% else %}
-  <p class="empty">No profiles yet.</p>
+  <p class="empty">No contacts yet.</p>
   {% endif %}
 
   <div class="actions">

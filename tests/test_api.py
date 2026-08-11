@@ -293,7 +293,7 @@ def test_setup_without_profiles_returns_400_not_500(client_no_raise, payload):
     response = client_no_raise.post(f"/api/hangouts/{hangout['id']}/setup", **request)
 
     assert response.status_code == 400
-    assert response.json() == {"detail": "Select at least one profile to invite"}
+    assert response.json() == {"detail": "Select at least one contact to invite"}
     current = client_no_raise.get(f"/api/hangouts/{hangout['id']}")
     assert current.status_code == 200
     assert current.json()["status"] == "draft"
@@ -309,7 +309,7 @@ def test_setup_with_only_unknown_profiles_returns_400_not_500(client_no_raise):
     )
 
     assert response.status_code == 400
-    assert response.json() == {"detail": "No valid profiles to invite"}
+    assert response.json() == {"detail": "No valid contacts to invite"}
     current = client_no_raise.get(f"/api/hangouts/{hangout['id']}")
     assert current.json()["status"] == "draft"
     assert current.json()["invites"] == []
@@ -325,7 +325,7 @@ def test_setup_with_explicit_empty_selection_does_not_reuse_existing_invites(cli
     )
 
     assert response.status_code == 400
-    assert response.json() == {"detail": "Select at least one profile to invite"}
+    assert response.json() == {"detail": "Select at least one contact to invite"}
     current = client_no_raise.get(f"/api/hangouts/{hangout['id']}")
     assert current.json()["status"] == "draft"
     assert [invite["profile_id"] for invite in current.json()["invites"]] == [profile["id"]]

@@ -16,7 +16,9 @@
   }
 
   function firstSelectedInviteeName() {
-    const checked = form.querySelectorAll('input[name="profile_ids"]:checked');
+    const checked = form.querySelectorAll(
+      'input[name="contact_ids"]:checked, input[name="profile_ids"]:checked'
+    );
     for (const input of checked) {
       const row = input.closest(".invitee-row");
       const nameEl = row && row.querySelector(".invitee-name");

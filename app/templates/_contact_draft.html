@@ -1,0 +1,76 @@
+{% set current = profile or {} %}
+<div class="card profile-draft" data-contact-card data-contact-index="{{ profile_index }}">
+  <div class="profile-draft-header">
+    <h2 style="margin:0;">Contact <span data-contact-number>{{ profile_number|default('') }}</span></h2>
+    <button class="btn btn-secondary btn-sm" type="button" data-remove-contact>Remove</button>
+  </div>
+
+  <div class="field-row">
+    <div>
+      <label for="contact-{{ profile_index }}-name">Name *</label>
+      <input id="contact-{{ profile_index }}-name" name="contacts[{{ profile_index }}][name]" data-field="name" type="text" value="{{ current.name|default('') }}" required />
+    </div>
+    <div>
+      <label for="contact-{{ profile_index }}-phone">Phone *</label>
+      <input id="contact-{{ profile_index }}-phone" name="contacts[{{ profile_index }}][phone]" data-field="phone" type="tel" value="{{ current.phone|default('') }}" required placeholder="+1 (555) 123-4567" />
+    </div>
+  </div>
+
+  <div class="field-row prefs-row">
+    <div>
+      <label for="contact-{{ profile_index }}-drinks">Drinks?</label>
+      <select id="contact-{{ profile_index }}-drinks" name="contacts[{{ profile_index }}][drinks]" data-field="drinks">
+        <option value=""></option>
+        {% for o in drinks_opts %}
+        <option value="{{ o.value }}" {% if current.drinks|default('') == o.value %}selected{% endif %}>{{ o.value }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="contact-{{ profile_index }}-smokes">Smokes?</label>
+      <select id="contact-{{ profile_index }}-smokes" name="contacts[{{ profile_index }}][smokes]" data-field="smokes">
+        <option value=""></option>
+        {% for o in smokes_opts %}
+        <option value="{{ o.value }}" {% if current.smokes|default('') == o.value %}selected{% endif %}>{{ o.value }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="contact-{{ profile_index }}-drive">Drive?</label>
+      <select id="contact-{{ profile_index }}-drive" name="contacts[{{ profile_index }}][drive]" data-field="drive">
+        <option value=""></option>
+        {% for o in drive_opts %}
+        <option value="{{ o.value }}" {% if current.drive|default('') == o.value %}selected{% endif %}>{{ o.value }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+
+  <label>Dietary Restrictions</label>
+  {% if allergies %}
+  <div class="tag-checkboxes" data-field="allergy_ids">
+    {% for a in allergies %}
+    <label>
+      <input type="checkbox" name="contacts[{{ profile_index }}][allergy_ids]" value="{{ a.id }}" {% if a.id|string in current.allergy_ids|default([]) %}checked{% endif %} />
+      {{ a.name }}
+    </label>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="muted" style="margin-top:0;">No restrictions defined yet.</p>
+  {% endif %}
+
+  <label>Tags</label>
+  {% if tags %}
+  <div class="tag-checkboxes" data-field="tag_ids">
+    {% for t in tags %}
+    <label>
+      <input type="checkbox" name="contacts[{{ profile_index }}][tag_ids]" value="{{ t.id }}" {% if t.id|string in current.tag_ids|default([]) %}checked{% endif %} />
+      {{ t.name }}
+    </label>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="muted" style="margin-top:0;">No tags defined yet.</p>
+  {% endif %}
+</div>

@@ -2,8 +2,8 @@
 {% from "_status_badge.html" import hangout_status_badge %}
 {% block title %}Hangout #{{ hangout.id }} · Hangout Automator{% endblock %}
 {% block content %}
-{% if error == 'need_profiles' %}
-<div class="alert">Select at least one profile before setting up the hangout.</div>
+{% if error == 'need_contacts' or error == 'need_profiles' %}
+<div class="alert">Select at least one contact before setting up the hangout.</div>
 {% endif %}
 
 <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:1rem;flex-wrap:wrap;">
@@ -126,7 +126,7 @@
       {% if hangout.status.value == 'draft' %}Set up hangout (send invites){% else %}Send / update invites{% endif %}
     </button>
     {% else %}
-    <p class="empty">No profiles.</p>
+    <p class="empty">No contacts.</p>
     {% endif %}
   </form>
 </div>

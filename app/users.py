@@ -1,7 +1,7 @@
 """Account-holder (My Profile) helpers.
 
 `User` rows are personal, instance-wide settings for the signed-in organizer.
-They are not the workspace-scoped contact directory (`profiles`).
+They are not the workspace-scoped contact directory (`profiles` table / Contacts UI).
 """
 
 from __future__ import annotations

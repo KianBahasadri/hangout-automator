@@ -149,16 +149,17 @@ def home(
     )
 
 
-PROFILE_ERRORS = {
+CONTACT_ERRORS = {
     "bad_phone": "That phone number isn't usable — enter a full number like +1 (555) 123-4567.",
-    "duplicate_phone": "A profile with that phone number already exists.",
+    "duplicate_phone": "A contact with that phone number already exists.",
     "missing_name": "Name is required.",
 }
 
-_PROFILE_FIELD_RE = re.compile(r"^profiles\[(\d+)\]\[([a-z_]+)\]$")
+# Prefer contacts[i][field]; still accept legacy profiles[i][field] form names.
+_CONTACT_FIELD_RE = re.compile(r"^(?:contacts|profiles)\[(\d+)\]\[([a-z_]+)\]$")
 
 
-def _profile_form_context(
+def _contact_form_context(
     db: Session, workspace: Workspace, *, error: str | None = None, profile_rows=None
 ) -> dict:
     return {
@@ -172,11 +173,11 @@ def _profile_form_context(
     }
 
 
-def _profile_rows_from_form(form) -> tuple[list[dict], bool]:  # type: ignore[no-untyped-def]
-    """Read indexed profile cards, retaining legacy single-profile submissions."""
+def _contact_rows_from_form(form) -> tuple[list[dict], bool]:  # type: ignore[no-untyped-def]
+    """Read indexed contact cards; accept legacy single-field and profiles[] names."""
     indexes: set[int] = set()
     for key, _ in form.multi_items():
-        match = _PROFILE_FIELD_RE.match(str(key))
+        match = _CONTACT_FIELD_RE.match(str(key))
         if match:
             indexes.add(int(match.group(1)))
 
@@ -197,14 +198,20 @@ def _profile_rows_from_form(form) -> tuple[list[dict], bool]:  # type: ignore[no
 
     rows: list[dict] = []
     for index in sorted(indexes):
-        prefix = f"profiles[{index}]"
-
+        # Prefer contacts[] when both prefixes are present for the same index.
         def first(field: str) -> str:
-            values = form.getlist(f"{prefix}[{field}]")
-            return str(values[0]) if values else ""
+            for prefix in (f"contacts[{index}]", f"profiles[{index}]"):
+                values = form.getlist(f"{prefix}[{field}]")
+                if values:
+                    return str(values[0])
+            return ""
 
         def many(field: str) -> list[str]:
-            return [str(value) for value in form.getlist(f"{prefix}[{field}]")]
+            for prefix in (f"contacts[{index}]", f"profiles[{index}]"):
+                values = form.getlist(f"{prefix}[{field}]")
+                if values:
+                    return [str(value) for value in values]
+            return []
 
         rows.append(
             {
@@ -220,15 +227,21 @@ def _profile_rows_from_form(form) -> tuple[list[dict], bool]:  # type: ignore[no
     return rows, True
 
 
-@router.get("/profiles", response_class=HTMLResponse)
-def profiles_page(
+def _legacy_profiles_redirect(request: Request, new_path: str) -> RedirectResponse:
+    qs = request.url.query
+    target = f"{new_path}?{qs}" if qs else new_path
+    return RedirectResponse(target, status_code=307)
+
+
+@router.get("/contacts", response_class=HTMLResponse)
+def contacts_page(
     request: Request,
     db: Session = Depends(get_db),
     workspace: Workspace = Depends(current_workspace),
 ) -> HTMLResponse:
     return templates.TemplateResponse(
         request,
-        "profiles.html",
+        "contacts.html",
         {
             "profiles": _profiles_with_tags(db, workspace),
             "tags": _all_tags(db, workspace),
@@ -236,26 +249,38 @@ def profiles_page(
             "drinks_opts": list(YesNo),
             "smokes_opts": list(YesNo),
             "drive_opts": list(Drive),
-            "error": PROFILE_ERRORS.get(request.query_params.get("error", "")),
+            "error": CONTACT_ERRORS.get(request.query_params.get("error", "")),
         },
     )
 
 
-@router.get("/profiles/new", response_class=HTMLResponse)
-def profiles_new_page(
+@router.get("/profiles")
+def profiles_page_redirect(request: Request) -> RedirectResponse:
+    """Legacy path — keep bookmarks working during the rename."""
+    return _legacy_profiles_redirect(request, "/contacts")
+
+
+@router.get("/contacts/new", response_class=HTMLResponse)
+def contacts_new_page(
     request: Request,
     db: Session = Depends(get_db),
     workspace: Workspace = Depends(current_workspace),
 ) -> HTMLResponse:
     return templates.TemplateResponse(
         request,
-        "profiles_new.html",
-        _profile_form_context(
+        "contacts_new.html",
+        _contact_form_context(
             db,
             workspace,
-            error=PROFILE_ERRORS.get(request.query_params.get("error", "")),
+            error=CONTACT_ERRORS.get(request.query_params.get("error", "")),
         ),
     )
+
+
+@router.get("/profiles/new")
+def profiles_new_page_redirect(request: Request) -> RedirectResponse:
+    """Legacy path — keep bookmarks working during the rename."""
+    return _legacy_profiles_redirect(request, "/contacts/new")
 
 
 @router.post("/tags")
@@ -270,7 +295,7 @@ def tags_create(
         if not existing:
             db.add(Tag(name=cleaned, workspace_id=workspace.id))
             db.commit()
-    return RedirectResponse("/profiles", status_code=303)
+    return RedirectResponse("/contacts", status_code=303)
 
 
 @router.post("/tags/{tag_id}/delete")
@@ -283,19 +308,20 @@ def tags_delete(
     if tag:
         db.delete(tag)
         db.commit()
-    return RedirectResponse("/profiles", status_code=303)
+    return RedirectResponse("/contacts", status_code=303)
 
 
-@router.post("/profiles", response_model=None)
-async def profiles_create(
+@router.post("/contacts", response_model=None)
+@router.post("/profiles", response_model=None, include_in_schema=False)
+async def contacts_create(
     request: Request,
     db: Session = Depends(get_db),
     workspace: Workspace = Depends(current_workspace),
 ) -> RedirectResponse | HTMLResponse:
     form = await request.form()
-    rows, is_batch = _profile_rows_from_form(form)
+    rows, is_batch = _contact_rows_from_form(form)
     if not rows:
-        return RedirectResponse("/profiles?error=missing_name", status_code=303)
+        return RedirectResponse("/contacts?error=missing_name", status_code=303)
 
     errors: list[str] = []
     validated_rows: list[dict] = []
@@ -304,7 +330,7 @@ async def profiles_create(
         name = row["name"].strip()
         phone = row["phone"].strip()
         phone_n = normalize_phone(phone)
-        prefix = f"Profile {position}: " if is_batch else ""
+        prefix = f"Contact {position}: " if is_batch else ""
         if not name:
             errors.append(f"{prefix}Name is required.")
         if not is_valid_phone(phone_n):
@@ -314,7 +340,7 @@ async def profiles_create(
         elif phone_n in seen_phones or (
             scoped(db, Profile, workspace).filter(Profile.phone == phone_n).first()
         ):
-            errors.append(f"{prefix}A profile with that phone number already exists.")
+            errors.append(f"{prefix}A contact with that phone number already exists.")
         else:
             seen_phones.add(phone_n)
         validated_rows.append(
@@ -334,11 +360,11 @@ async def profiles_create(
                 error_key = "duplicate_phone"
             else:
                 error_key = "missing_name"
-            return RedirectResponse(f"/profiles?error={error_key}", status_code=303)
+            return RedirectResponse(f"/contacts?error={error_key}", status_code=303)
         return templates.TemplateResponse(
             request,
-            "profiles_new.html",
-            _profile_form_context(
+            "contacts_new.html",
+            _contact_form_context(
                 db, workspace, error=" ".join(errors), profile_rows=validated_rows
             ),
             status_code=400,
@@ -363,20 +389,21 @@ async def profiles_create(
         profile.allergies = load_allergies_by_ids(db, allergy_ids, workspace)
         db.add(profile)
     db.commit()
-    return RedirectResponse("/profiles", status_code=303)
+    return RedirectResponse("/contacts", status_code=303)
 
 
-@router.post("/profiles/{profile_id}/delete")
-def profiles_delete(
-    profile_id: RowIdPath,
+@router.post("/contacts/{contact_id}/delete")
+@router.post("/profiles/{contact_id}/delete", include_in_schema=False)
+def contacts_delete(
+    contact_id: RowIdPath,
     db: Session = Depends(get_db),
     workspace: Workspace = Depends(current_workspace),
 ) -> RedirectResponse:
-    profile = get_scoped(db, Profile, profile_id, workspace)
+    profile = get_scoped(db, Profile, contact_id, workspace)
     if profile:
         db.delete(profile)
         db.commit()
-    return RedirectResponse("/profiles", status_code=303)
+    return RedirectResponse("/contacts", status_code=303)
 
 
 @router.get("/me", response_class=HTMLResponse)
@@ -553,31 +580,47 @@ def _apply_organizer_from_user(
         hangout.organizer_phone = organizer_phone
 
 
-def _valid_profile_ids(
-    db: Session, workspace: Workspace, profile_ids: list[RowId] | None
+def _valid_contact_ids(
+    db: Session, workspace: Workspace, contact_ids: list[RowId] | None
 ) -> list[int]:
     return list(
         dict.fromkeys(
-            pid for pid in profile_ids or [] if get_scoped(db, Profile, pid, workspace) is not None
+            pid for pid in contact_ids or [] if get_scoped(db, Profile, pid, workspace) is not None
         )
     )
 
 
+def _form_contact_ids(
+    contact_ids: list[RowId] | None,
+    profile_ids: list[RowId] | None,
+) -> list[RowId] | None:
+    """HTML forms use contact_ids; accept legacy profile_ids."""
+    if contact_ids:
+        return contact_ids
+    return profile_ids
+
+
+def _setup_error_query(error: str | None) -> str:
+    if error in {"need_contacts", "need_profiles"}:
+        return "?error=need_contacts"
+    return ""
+
+
 def _sync_draft_invitees(
-    db: Session, workspace: Workspace, hangout: Hangout, profile_ids: list[int]
+    db: Session, workspace: Workspace, hangout: Hangout, contact_ids: list[int]
 ) -> None:
     """Make a draft's selected invitees match its edit form."""
-    selected_ids = set(profile_ids)
+    selected_ids = set(contact_ids)
     existing_ids = {invite.profile_id for invite in hangout.invites}
     for invite in list(hangout.invites):
         if invite.profile_id not in selected_ids:
             db.delete(invite)
-    for profile_id in profile_ids:
-        if profile_id not in existing_ids:
+    for contact_id in contact_ids:
+        if contact_id not in existing_ids:
             db.add(
                 HangoutInvite(
                     hangout_id=hangout.id,
-                    profile_id=profile_id,
+                    profile_id=contact_id,
                     workspace_id=workspace.id,
                 )
             )
@@ -594,6 +637,7 @@ def hangout_create(
     alcohol_involved: str = Form(""),
     weed_involved: str = Form(""),
     notes: str = Form(""),
+    contact_ids: Annotated[list[RowId] | None, Form()] = None,
     profile_ids: Annotated[list[RowId] | None, Form()] = None,
     action: str = Form("draft"),
     db: Session = Depends(get_db),
@@ -615,7 +659,7 @@ def hangout_create(
     _apply_organizer_from_user(db, workspace, hangout, user)
     db.add(hangout)
     db.flush()
-    ids = _valid_profile_ids(db, workspace, profile_ids)
+    ids = _valid_contact_ids(db, workspace, _form_contact_ids(contact_ids, profile_ids))
     _sync_draft_invitees(db, workspace, hangout, ids)
     db.commit()
 
@@ -625,7 +669,7 @@ def hangout_create(
             setup_hangout(db, hangout, ids, workspace)
         except ValueError:
             return RedirectResponse(
-                f"/hangouts/{hangout.id}/edit?error=need_profiles", status_code=303
+                f"/hangouts/{hangout.id}/edit?error=need_contacts", status_code=303
             )
 
     return RedirectResponse(f"/hangouts/{hangout.id}/edit", status_code=303)
@@ -665,6 +709,7 @@ def hangout_update_draft(
     alcohol_involved: str = Form(""),
     weed_involved: str = Form(""),
     notes: str = Form(""),
+    contact_ids: Annotated[list[RowId] | None, Form()] = None,
     profile_ids: Annotated[list[RowId] | None, Form()] = None,
     action: str = Form("draft"),
     db: Session = Depends(get_db),
@@ -689,7 +734,7 @@ def hangout_update_draft(
         weed_involved=weed_involved,
         notes=notes,
     )
-    ids = _valid_profile_ids(db, workspace, profile_ids)
+    ids = _valid_contact_ids(db, workspace, _form_contact_ids(contact_ids, profile_ids))
     _sync_draft_invitees(db, workspace, hangout, ids)
     db.commit()
 
@@ -699,7 +744,7 @@ def hangout_update_draft(
             setup_hangout(db, hangout, ids, workspace)
         except ValueError:
             return RedirectResponse(
-                f"/hangouts/{hangout_id}/edit?error=need_profiles", status_code=303
+                f"/hangouts/{hangout_id}/edit?error=need_contacts", status_code=303
             )
         return RedirectResponse(f"/hangouts/{hangout_id}", status_code=303)
 
@@ -719,8 +764,7 @@ def hangout_detail(
     if not hangout:
         return RedirectResponse("/", status_code=303)
     if hangout.status == HangoutStatus.draft and hangout.deleted_at is None:
-        error = request.query_params.get("error")
-        suffix = "?error=need_profiles" if error == "need_profiles" else ""
+        suffix = _setup_error_query(request.query_params.get("error"))
         return RedirectResponse(f"/hangouts/{hangout_id}/edit{suffix}", status_code=303)
     invited_ids = {i.profile_id for i in hangout.invites}
     return templates.TemplateResponse(
@@ -739,6 +783,7 @@ def hangout_detail(
 @router.post("/hangouts/{hangout_id}/setup")
 def hangout_setup(
     hangout_id: RowIdPath,
+    contact_ids: Annotated[list[RowId] | None, Form()] = None,
     profile_ids: Annotated[list[RowId] | None, Form()] = None,
     db: Session = Depends(get_db),
     workspace: Workspace = Depends(current_workspace),
@@ -746,11 +791,11 @@ def hangout_setup(
     hangout = load_hangout(db, hangout_id, workspace)
     if not hangout:
         return RedirectResponse("/", status_code=303)
-    ids = list(profile_ids or [])
+    ids = list(_form_contact_ids(contact_ids, profile_ids) or [])
     try:
         setup_hangout(db, hangout, ids if ids else None, workspace)
     except ValueError:
-        return RedirectResponse(f"/hangouts/{hangout_id}?error=need_profiles", status_code=303)
+        return RedirectResponse(f"/hangouts/{hangout_id}?error=need_contacts", status_code=303)
     return RedirectResponse(f"/hangouts/{hangout_id}", status_code=303)
 
 

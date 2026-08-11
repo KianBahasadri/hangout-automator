@@ -46,7 +46,7 @@
       data-tags="{% for t in p.tags %}{{ t.id }}{% if not loop.last %},{% endif %}{% endfor %}"
       data-tag-names="{% for t in p.tags %}{{ t.name|lower }}{% if not loop.last %} {% endif %}{% endfor %}"
     >
-      <input type="checkbox" name="profile_ids" value="{{ p.id }}"
+      <input type="checkbox" name="contact_ids" value="{{ p.id }}"
         {% if p.id in checked %}checked{% endif %} />
       <span class="invitee-meta">
         <span class="invitee-name">{{ p.name }}</span>

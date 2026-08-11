@@ -1,9 +1,9 @@
 {% extends "base.html" %}
-{% block title %}Profiles · Hangout Automator{% endblock %}
+{% block title %}Contacts · Hangout Automator{% endblock %}
 {% block content %}
 <div style="display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap;align-items:center;margin-bottom:1.25rem;">
-  <h1 style="margin:0;">Profiles</h1>
-  <a class="btn" href="/profiles/new">Add new profile</a>
+  <h1 style="margin:0;">Contacts</h1>
+  <a class="btn" href="/contacts/new">Add new contact</a>
 </div>
 
 {% if error %}
@@ -35,9 +35,9 @@
   </form>
 </div>
 
-<div class="profiles-list" id="profiles-browser">
+<div class="profiles-list" id="contacts-browser">
   <div class="profiles-list-header">
-    <h2 style="margin:0;">All profiles (<span data-visible-count>{{ profiles|length }}</span>/{{ profiles|length }})</h2>
+    <h2 style="margin:0;">All contacts (<span data-visible-count>{{ profiles|length }}</span>/{{ profiles|length }})</h2>
   </div>
 
   {% if profiles %}
@@ -52,7 +52,7 @@
   <div class="invitee-chips">
     <span class="chip-label">Tags</span>
     {% for t in tags %}
-    <button type="button" class="chip" data-filter-tag="{{ t.id }}" title="Show profiles tagged {{ t.name }}">{{ t.name }}</button>
+    <button type="button" class="chip" data-filter-tag="{{ t.id }}" title="Show contacts tagged {{ t.name }}">{{ t.name }}</button>
     {% endfor %}
   </div>
   {% endif %}
@@ -75,7 +75,7 @@
     {% set profile_tag_ids = p.tags|map(attribute='id')|list %}
     <div
       class="card profile-editor"
-      data-profile-id="{{ p.id }}"
+      data-contact-id="{{ p.id }}"
       data-name="{{ p.name|lower }}"
       data-phone="{{ p.phone }}"
       data-drinks="{{ p.drinks.value if p.drinks else '' }}"
@@ -98,7 +98,7 @@
         </div>
         <div class="profile-editor-actions">
           <span class="save-status muted" aria-live="polite"></span>
-          <form method="post" action="/profiles/{{ p.id }}/delete" data-confirm="Delete {{ p.name }}?">
+          <form method="post" action="/contacts/{{ p.id }}/delete" data-confirm="Delete {{ p.name }}?">
             <button class="btn btn-danger btn-sm" type="submit">Delete</button>
           </form>
         </div>
@@ -166,12 +166,12 @@
     {% endfor %}
   </div>
   {% else %}
-  <p class="empty">No profiles yet.</p>
+  <p class="empty">No contacts yet.</p>
   {% endif %}
 </div>
 
 {% endblock %}
 {% block scripts %}
-<script src="/static/profiles_autosave.js"></script>
-<script src="/static/profiles_filter.js"></script>
+<script src="/static/contacts_autosave.js"></script>
+<script src="/static/contacts_filter.js"></script>
 {% endblock %}

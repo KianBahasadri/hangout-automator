@@ -112,9 +112,9 @@ def sample_data(db, workspace):
     """One row of everything, so routes that take an id have something real to hit.
 
     Rows live in the default workspace (what requests resolve to with Clerk
-    disabled). Returns the ids by *path parameter name* (`profile_id`,
-    `hangout_id`, …) plus a `hangouts` map of the three lifecycle states and
-    the workspace itself.
+    disabled). Returns the ids by *path parameter name* (`contact_id` /
+    `profile_id`, `hangout_id`, …) plus a `hangouts` map of the three
+    lifecycle states and the workspace itself.
     """
     from app.models import (
         AccessGrant,
@@ -181,6 +181,7 @@ def sample_data(db, workspace):
         "tag_id": tag.id,
         "allergy_id": allergy.id,
         "profile_id": profile.id,
+        "contact_id": profile.id,
         "hangout_id": hangouts["draft"],
         "hangouts": hangouts,
         "grant_id": grant.id,

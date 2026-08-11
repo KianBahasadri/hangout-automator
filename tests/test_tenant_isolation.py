@@ -28,12 +28,13 @@ from app.models import (
 from tests.support.access import allow_clerk_user
 from tests.support.routes import ALL_ROUTES, fill_path
 
-_IDS_IN_BODY = ("profile_ids", "tag_ids", "allergy_ids", "organizer_profile_id")
+_IDS_IN_BODY = ("profile_ids", "contact_ids", "tag_ids", "allergy_ids", "organizer_profile_id")
 
 # Which row a web POST route's id path parameter refers to, for the
 # foreign-row-survives check below.
 _MODEL_FOR_ID_PARAM = {
     "profile_id": Profile,
+    "contact_id": Profile,
     "tag_id": Tag,
     "allergy_id": Allergy,
     "hangout_id": Hangout,
@@ -115,6 +116,7 @@ def _full_data(db, workspace, *, name: str, phone: str) -> dict:
     return {
         "workspace_id": workspace.id,
         "profile_id": profile.id,
+        "contact_id": profile.id,
         "tag_id": tag.id,
         "allergy_id": allergy.id,
         "hangout_id": hangouts["draft"],
@@ -164,11 +166,21 @@ def _body_with_b_ids(spec, data_b: dict) -> dict:
     """Body where every id-ish field holds workspace B's ids."""
     body: dict = {}
     for name in spec.field_names:
-        if name in _IDS_IN_BODY:
-            value = data_b.get(name.removesuffix("_id"))
-            if name.endswith("_ids"):
-                body[name] = [value] if value is not None else []
-            elif value is not None:
+        if name not in _IDS_IN_BODY:
+            continue
+        if name.endswith("_ids"):
+            singular = name[:-1]  # contact_ids -> contact_id
+            value = data_b.get(singular)
+            if value is None and name in ("profile_ids", "contact_ids"):
+                value = data_b.get("contact_id") or data_b.get("profile_id")
+            elif value is None and name == "tag_ids":
+                value = data_b.get("tag_id")
+            elif value is None and name == "allergy_ids":
+                value = data_b.get("allergy_id")
+            body[name] = [value] if value is not None else []
+        else:
+            value = data_b.get(name)
+            if value is not None:
                 body[name] = value
     return body
 
@@ -263,7 +275,7 @@ def test_route_inventory_covers_the_tenant_matrix():
     assert {
         "GET /hangouts/{hangout_id}",
         "GET /api/hangouts/{hangout_id}",
-        "PATCH /api/profiles/{profile_id}",
+        "PATCH /api/contacts/{contact_id}",
         "DELETE /api/tags/{tag_id}",
     } <= labels
 
@@ -280,7 +292,7 @@ def test_brand_new_user_gets_an_empty_workspace(client, monkeypatch, db, sample_
     tags = auth_client.get("/api/tags")
     assert tags.status_code == 200
     assert tags.json() == []
-    assert auth_client.get("/api/profiles").json() == []
+    assert auth_client.get("/api/contacts").json() == []
     assert auth_client.get("/api/hangouts").json() == []
 
     # The provisioned workspace exists with an owner membership.
@@ -323,7 +335,7 @@ def test_authenticated_request_without_a_subject_is_refused(client, monkeypatch,
     # The default workspace's data did not leak on the way out.
     hangout_id = sample_data["hangouts"]["active"]
     assert client.get(f"/api/hangouts/{hangout_id}").status_code == 401
-    assert "Sam Rivera" not in client.get("/api/profiles").text
+    assert "Sam Rivera" not in client.get("/api/contacts").text
 
 
 def test_repeated_first_requests_do_not_create_duplicate_workspaces(client, monkeypatch, db):

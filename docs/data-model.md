@@ -22,7 +22,7 @@ Optional enums use a string `TypeDecorator`: empty string and `"unknown"` bind/r
 
 ### `tags` / `allergies`
 
-Catalog rows: `id`, unique `name` (64), `created_at`. Dietary restrictions (table/API name: allergies) are managed in Settings; tags on the Profiles page.
+Catalog rows: `id`, unique `name` (64), `created_at`. Dietary restrictions (table/API name: allergies) are managed in Settings; tags on the Contacts page.
 
 The default catalog (`meat`, `pork`) is seeded by the baseline Alembic
 migration — a one-shot data migration that runs once by construction, so
@@ -34,9 +34,11 @@ re-runs of `alembic upgrade head`.
 - `profile_tags` — `(profile_id, tag_id)` PK, CASCADE deletes
 - `profile_allergies` — `(profile_id, allergy_id)` PK, CASCADE deletes
 
-### `profiles`
+### `profiles` (Contacts)
 
-- Required: `name` (120), `phone` (32, unique, normalized E.164-ish)
+Workspace invitee directory. Product language is **Contacts**; table/ORM name remains `profiles` / `Profile` for now.
+
+- Required: `name` (120), `phone` (32, unique per workspace, normalized E.164-ish)
 - Optional: `drinks`, `smokes` (`YesNo|None`), `drive` (`Drive|None`)
 - Legacy column `food_allergies` (`Text`) kept for migration; prefer M2M `allergies`
 - Properties: `food_allergies_label` (joined allergy names, else legacy text), `has_allergies`
@@ -62,7 +64,7 @@ Organizer / notify fields:
 `hangout_id`, `profile_id`, `status` (default `pending`), `followups_sent` (0), `last_outbound_at`, `responded_at`, `created_at`.
 
 Both FKs are `ON DELETE CASCADE`, and `Profile.invites` is mapped with
-`passive_deletes=True` so the database does the cascading. Deleting a profile
+`passive_deletes=True` so the database does the cascading. Deleting a contact
 therefore drops their invite rows (and NULLs the `message_logs.invite_id`
 pointing at them, keeping the SMS history) instead of failing the `NOT NULL`
 constraint on `profile_id`.
@@ -86,7 +88,7 @@ enforced.
 ### `users` (My Profile)
 
 Account-holder settings for the signed-in organizer — **not** the
-workspace-scoped invitee directory (`profiles`).
+workspace-scoped invitee directory (Contacts / `profiles` table).
 
 - Unique `clerk_user_id` (Clerk `sub`, or `local-dev` when Clerk is off)
 - Optional `display_name`, `phone`, `phone_verified_at` (OTP verification is

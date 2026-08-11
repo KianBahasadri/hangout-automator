@@ -15,7 +15,7 @@ from pydantic import Field
 
 MAX_ROW_ID = 2**63 - 1
 
-# Row id in a URL, e.g. /api/profiles/{profile_id}.
+# Row id in a URL, e.g. /api/contacts/{contact_id}.
 RowIdPath = Annotated[int, Path(ge=1, le=MAX_ROW_ID)]
 
 # Row id inside a JSON body or a form field.

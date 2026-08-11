@@ -399,12 +399,12 @@ def setup_hangout(
         audit_event(
             "hangout.setup.rejected",
             hangout_id=hangout.id,
-            reason="no_valid_profiles_selected" if requested_ids else "no_profiles_selected",
+            reason="no_valid_contacts_selected" if requested_ids else "no_contacts_selected",
         )
         raise ValueError(
-            "No valid profiles to invite"
+            "No valid contacts to invite"
             if requested_ids
-            else "Select at least one profile to invite"
+            else "Select at least one contact to invite"
         )
 
     existing = {inv.profile_id: inv for inv in hangout.invites}

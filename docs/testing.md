@@ -18,7 +18,7 @@ sending a form as a form, say) turns a passing test into a test of nothing.
 | `support/access.py` | `allow_clerk_user` — sign a fake Clerk user in without calling Clerk, and grant them access |
 | `test_route_surface.py` | Every route × blank and hostile input |
 | `test_ui_forms.py` | Every page, every button, form left untouched |
-| `test_api.py`, `test_profiles.py`, `test_web_ui.py`, `test_hangout_setup.py` | Endpoint behaviour |
+| `test_api.py`, `test_profiles.py` (contacts), `test_web_ui.py`, `test_hangout_setup.py` | Endpoint behaviour |
 | `test_rsvp_flow.py`, `test_followups.py`, `test_sms_guard.py`, `test_webhook_security.py` | SMS in, invites/follow-ups out, webhook signatures |
 | `test_auth.py`, `test_access_control.py`, `test_tenant_isolation.py` | Clerk session verification, the email access list and who may edit it, workspace scoping |
 | `test_my_profile.py` | My Profile save/load, isolation by identity, hangout prefill and organizer phone stamp |
@@ -50,7 +50,7 @@ does this against seeded data *and* against an empty database, follows
 redirects so the page a handler bounces to has to render too, and fails only on
 a 5xx. Which non-5xx answer a route gives is the feature tests' business.
 
-`test_ui_forms.py` opens each page (list, profiles, add profiles, settings, new
+`test_ui_forms.py` opens each page (list, contacts, add contacts, settings, new
 hangout, and a draft/active/closed hangout) and presses every button on it. That is the
 literal reported bug — "Set up hangout with nothing filled in" — and it catches
 what the route matrix cannot: the matrix does not know that `action=setup` is

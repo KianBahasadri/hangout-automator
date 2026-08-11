@@ -16,26 +16,27 @@ JSON routes in `app/routers/api.py`, prefix `/api`. Schemas in `app/schemas.py`.
 | GET | `/api/allergies` | List dietary restrictions (fresh catalogs seed meat, pork once) |
 | POST | `/api/allergies` | 201; same uniqueness rules as tags |
 | DELETE | `/api/allergies/{id}` | 204 |
-| GET | `/api/profiles` | Includes `tags` and `allergies` |
-| POST | `/api/profiles` | 201; phone unique after normalize; 400 when the normalized phone is not 8-15 digits |
-| PATCH | `/api/profiles/{id}` | Partial update; `tag_ids` / `allergy_ids` replace when present; same phone validation as create |
-| DELETE | `/api/profiles/{id}` | 204 |
-| GET | `/api/hangouts` | Nested invites + profiles |
+| GET | `/api/contacts` | Includes `tags` and `allergies` |
+| POST | `/api/contacts` | 201; phone unique after normalize; 400 when the normalized phone is not 8-15 digits |
+| PATCH | `/api/contacts/{id}` | Partial update; `tag_ids` / `allergy_ids` replace when present; same phone validation as create |
+| DELETE | `/api/contacts/{id}` | 204 |
+| * | `/api/profiles`, `/api/profiles/{id}` | Compatibility aliases for the contacts routes (same handlers) |
+| GET | `/api/hangouts` | Nested invites + contacts |
 | POST | `/api/hangouts` | Creates **draft** + invite rows; does not send SMS |
 | GET | `/api/hangouts/{id}` | |
 | PATCH | `/api/hangouts/{id}` | Clamps interval/goal/cooldown to allowed option sets; explicit `null` for a column the table requires (the `notify_*` settings) returns `400` |
-| POST | `/api/hangouts/{id}/setup` | Omit the body to reuse existing invitees; an explicit `{ "profile_ids": [...] }` selection returns `400` when empty or invalid, and **removes** invite rows left out of it that were never messaged (see [invites-and-followups.md](./invites-and-followups.md)) |
+| POST | `/api/hangouts/{id}/setup` | Omit the body to reuse existing invitees; an explicit `{ "profile_ids": [...] }` or `{ "contact_ids": [...] }` selection returns `400` when empty or invalid, and **removes** invite rows left out of it that were never messaged (see [invites-and-followups.md](./invites-and-followups.md)) |
 | POST | `/api/hangouts/{id}/close` | Sets `closed` |
 
-## Profile payloads
+## Contact payloads
 
-Create/update accept optional `drinks`, `smokes`, `drive`, `tag_ids`, `allergy_ids`. Output includes nested `tags` / `allergies` (`id`, `name`) and `created_at`.
+Create/update accept optional `drinks`, `smokes`, `drive`, `tag_ids`, `allergy_ids`. Output includes nested `tags` / `allergies` (`id`, `name`) and `created_at`. Schema class names still say `Profile*` while the table is `profiles` (ORM rename deferred).
 
 ## Hangout payloads
 
-Create defaults mirror the model/UI notify defaults (interval hours 6, skip-if-unchanged true, confirm/allergy/ride alerts on, decline off, goal 0, cooldown 0). Schema ranges are wider; service layer clamps to the option tuples in [data-model.md](./data-model.md).
+Create defaults mirror the model/UI notify defaults (interval hours 6, skip-if-unchanged true, confirm/allergy/ride alerts on, decline off, goal 0, cooldown 0). Schema ranges are wider; service layer clamps to the option tuples in [data-model.md](./data-model.md). Invitee id lists accept `profile_ids` or `contact_ids`.
 
-Enabling `notify_enabled` without a resolvable organizer phone (selected profile) returns **400** on API create/update.
+Enabling `notify_enabled` without a resolvable organizer phone (selected contact or My Profile) returns **400** on API create/update.
 
 ## Row ids
 
@@ -46,4 +47,4 @@ read as blank instead.
 
 ## Phone handling
 
-All profile phones go through `normalize_phone` in `app/sms.py` (see [sms-and-rsvp.md](./sms-and-rsvp.md)).
+All contact phones go through `normalize_phone` in `app/sms.py` (see [sms-and-rsvp.md](./sms-and-rsvp.md)).

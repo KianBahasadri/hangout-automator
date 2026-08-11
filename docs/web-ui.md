@@ -4,16 +4,16 @@ HTML routes: `app/routers/web.py`. Templates: `app/templates/`. Styles/scripts: 
 
 ## UX principles (as implemented)
 
-- Minimal chrome: nav is Home, Profiles, **My Profile**, Settings, plus a light/dark theme toggle
+- Minimal chrome: nav is Home, Contacts, **My Profile**, Settings, plus a light/dark theme toggle
 - **Labels and placeholders only** — no instructional help copy, lead paragraphs, or
   explainer text under headings. Bad examples (do not reintroduce):
-  - “Your personal account settings. This is not the contacts list under Profiles…”
+  - “Your personal account settings. This is not the contacts list under Contacts…”
   - “Prefills new hangouts. You can still change each hangout.”
   - “Saved for organizer SMS. Phone confirmation will land with a later update.”
   Empty states (“No tags yet”), flash alerts after an action, and field
   placeholders are fine; prose that teaches the product on the form is not.
 - Optional fields use a blank first option (or unchecked pills), not an “unknown” value
-- Multi-tenant: each authenticated user works in their own workspace; My Profile is personal (account-holder), while Profiles is the invitee directory for the active workspace
+- Multi-tenant: each authenticated user works in their own workspace; My Profile is personal (account-holder), while Contacts is the invitee directory for the active workspace
 
 ## Theme
 
@@ -28,7 +28,7 @@ HTML routes: `app/routers/web.py`. Templates: `app/templates/`. Styles/scripts: 
 
 ## Destructive-action confirmations
 
-Delete forms (profile, tag, dietary restriction) carry the prompt text in a
+Delete forms (contact, tag, dietary restriction) carry the prompt text in a
 `data-confirm` attribute; `static/confirm.js` binds one delegated `submit`
 listener on `document` and cancels the event when the user declines.
 
@@ -46,15 +46,17 @@ string whatever characters it holds.
 |--------|------|----------------|
 | GET | `/` | Hangout list without database ID numbers; “New hangout” sits immediately beside the page heading |
 | GET/POST | `/me` | My Profile: account-holder name, phone, default organizer SMS prefs |
-| GET | `/profiles` | Profiles page; tags and existing profiles (invitee contacts for this workspace) |
-| GET | `/profiles/new` | Add one or more profiles, with optional phone contact import |
-| POST | `/profiles` | Validate and save the add-profiles batch |
-| POST | `/profiles/{id}/delete` | Delete profile |
-| POST | `/tags` | Create tag → redirect `/profiles` |
+| GET | `/contacts` | Contacts page; tags and existing contacts (invitee directory for this workspace) |
+| GET | `/contacts/new` | Add one or more contacts, with optional phone contact import |
+| POST | `/contacts` | Validate and save the add-contacts batch |
+| POST | `/contacts/{id}/delete` | Delete contact |
+| GET | `/profiles`, `/profiles/new` | Legacy redirects (307) to `/contacts` / `/contacts/new` |
+| POST | `/profiles`, `/profiles/{id}/delete` | Legacy aliases for the contacts POST routes |
+| POST | `/tags` | Create tag → redirect `/contacts` |
 | POST | `/tags/{id}/delete` | Delete tag |
 | GET/POST | `/hangouts/new` | Create hangout (`action=draft` or `setup`); organizer SMS is not on this form — stamped from My Profile on create |
 | GET/POST | `/hangouts/{id}/edit` | Draft-only prefilled edit form (`action=draft` or `setup`) |
-| GET | `/hangouts/{id}` | Detail / status (`?error=need_profiles`) |
+| GET | `/hangouts/{id}` | Detail / status (`?error=need_contacts`) |
 | POST | `/hangouts/{id}/setup` | Activate / (re)send invites |
 | POST | `/hangouts/{id}/close` | End hangout |
 | POST | `/hangouts/{id}/delete` | Soft-delete (closed only) — sets `deleted_at`, hides from home |
@@ -71,19 +73,19 @@ string whatever characters it holds.
 
 Blank optional enums from forms are parsed to `None` via `_optional_enum_form`.
 
-## Profiles page
+## Contacts page
 
 - Tag catalog manager (pill list + × remove + add form)
-- “Add new profile” opens the dedicated add-profiles page
-- Existing profiles: 3-column card grid (responsive 2/1 columns)
-- **Autosave** (`profiles_autosave.js`): `PATCH /api/profiles/{id}`; text fields debounce 450ms; selects/tags/allergies save immediately
-- **Filters** (`profiles_filter.js`): search name/phone/tag; tag chips (OR); field chips AND (drinks/smokes/drive/allergies); clear filters; visible count
+- “Add new contact” opens the dedicated add-contacts page
+- Existing contacts: 3-column card grid (responsive 2/1 columns)
+- **Autosave** (`contacts_autosave.js`): `PATCH /api/contacts/{id}`; text fields debounce 450ms; selects/tags/allergies save immediately
+- **Filters** (`contacts_filter.js`): search name/phone/tag; tag chips (OR); field chips AND (drinks/smokes/drive/allergies); clear filters; visible count
 
-## Add profiles
+## Add contacts
 
-- Each profile card has name/phone fields, drinks/smokes/drive selects, and allergy/tag **pill checkboxes** (`.tag-checkboxes`)
-- “Add another profile” adds another editable card; “Save profiles” validates and saves the entire batch together
-- **Phone import** (`profiles_new.js`) uses the browser Contact Picker when available, requests name and phone, and fills one card per selected contact. The selected values remain editable and are not saved until the batch form is submitted; unsupported browsers show the manual-entry state.
+- Each contact card has name/phone fields, drinks/smokes/drive selects, and allergy/tag **pill checkboxes** (`.tag-checkboxes`)
+- “Add another contact” adds another editable card; “Save contacts” validates and saves the entire batch together
+- **Phone import** (`contacts_new.js`) uses the browser Contact Picker when available, requests name and phone, and fills one card per selected contact. The selected values remain editable and are not saved until the batch form is submitted; unsupported browsers show the manual-entry state.
 - Server-side validation rejects unusable or duplicate phone numbers and does not partially save a batch; rejected cards retain their entered values for correction. A phone that normalizes to fewer than 8 digits is rejected rather than silently stored — see [sms-and-rsvp.md](./sms-and-rsvp.md) for normalization
 
 ## Invitee picker
@@ -93,18 +95,15 @@ Partial `_invitee_picker.html` + `invitee_picker.js` (new/edit hangout form and 
 - Search filter; Select all / Invert (matched rows) / Clear (all)
 - Tag chips toggle-select everyone with that tag; field chips toggle groups
 - **Paginated 3×3 grid** (`PAGE_SIZE = 9`); Prev/Next when more than 9 matches
-- Checkboxes named `profile_ids`
+- Checkboxes named `contact_ids` (legacy `profile_ids` still accepted by form handlers)
 
 ## New hangout
 
 - All hangout detail fields optional (day, time, duration, location, motive, alcohol, weed, notes)
 - Header includes an **All hangouts** back button to return to the hangout list without submitting
 - Location uses Google Places (New) suggestions when configured; if the service is unavailable, the field remains free-text and shows an inline status message
-- Submitting setup without invitees keeps the hangout as a draft and returns the create/edit form with a profile-selection error
-- Organizer **combobox** (`combobox.js`): typeahead by name/phone → hidden `organizer_profile_id`
-- Notify panel (`notify_panel.js`): progressive disclosure (master → interval/threshold → nested options)
-- Form defaults: interval every 6h + skip-if-unchanged; threshold confirm/allergy/ride on, decline off; goal off; no cooldown
-- If notifications enabled but no organizer phone can be resolved (profile or app settings), notify flags are left off when saving
+- Submitting setup without invitees keeps the hangout as a draft and returns the create/edit form with a contact-selection error
+- Organizer SMS is **not** on this form — stamped from My Profile at create (matching contact by phone when one exists)
 - **Preview invite SMS** button (left of “Set up hangout”) opens a dialog; body from `POST /api/sms/preview-invite` using the current form fields and the first selected invitee’s name (or “Alex”)
 
 ## Draft editing

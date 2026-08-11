@@ -439,25 +439,28 @@ def delete_allergy(
     return Response(status_code=204)
 
 
-# --- Profiles ---
+# --- Contacts (invitee directory; table/ORM still Profile) ---
+# /api/profiles* remains as a compatibility alias during the rename.
 
 
-def _profile_query(db: Session, workspace: Workspace):
+def _contact_query(db: Session, workspace: Workspace):
     return scoped(db, Profile, workspace).options(
         joinedload(Profile.tags),
         joinedload(Profile.allergies),
     )
 
 
-@router.get("/profiles", response_model=list[ProfileOut])
-def list_profiles(
+@router.get("/contacts", response_model=list[ProfileOut])
+@router.get("/profiles", response_model=list[ProfileOut], include_in_schema=False)
+def list_contacts(
     db: Session = Depends(get_db), workspace: Workspace = Depends(current_workspace)
 ) -> list[Profile]:
-    return _profile_query(db, workspace).order_by(Profile.name).all()
+    return _contact_query(db, workspace).order_by(Profile.name).all()
 
 
-@router.post("/profiles", response_model=ProfileOut, status_code=201)
-def create_profile(
+@router.post("/contacts", response_model=ProfileOut, status_code=201)
+@router.post("/profiles", response_model=ProfileOut, status_code=201, include_in_schema=False)
+def create_contact(
     payload: ProfileCreate,
     db: Session = Depends(get_db),
     workspace: Workspace = Depends(current_workspace),
@@ -466,7 +469,7 @@ def create_profile(
     if not is_valid_phone(phone):
         raise HTTPException(400, "Phone number is not usable")
     if scoped(db, Profile, workspace).filter(Profile.phone == phone).first():
-        raise HTTPException(400, "A profile with this phone already exists")
+        raise HTTPException(400, "A contact with this phone already exists")
     profile = Profile(
         name=payload.name.strip(),
         phone=phone,
@@ -479,19 +482,20 @@ def create_profile(
     profile.allergies = load_allergies_by_ids(db, payload.allergy_ids, workspace)
     db.add(profile)
     db.commit()
-    return _profile_query(db, workspace).filter(Profile.id == profile.id).one()
+    return _contact_query(db, workspace).filter(Profile.id == profile.id).one()
 
 
-@router.patch("/profiles/{profile_id}", response_model=ProfileOut)
-def update_profile(
-    profile_id: RowIdPath,
+@router.patch("/contacts/{contact_id}", response_model=ProfileOut)
+@router.patch("/profiles/{contact_id}", response_model=ProfileOut, include_in_schema=False)
+def update_contact(
+    contact_id: RowIdPath,
     payload: ProfileUpdate,
     db: Session = Depends(get_db),
     workspace: Workspace = Depends(current_workspace),
 ) -> Profile:
-    profile = get_scoped(db, Profile, profile_id, workspace)
+    profile = get_scoped(db, Profile, contact_id, workspace)
     if not profile:
-        raise HTTPException(404, "Profile not found")
+        raise HTTPException(404, "Contact not found")
     data = payload.model_dump(exclude_unset=True)
     tag_ids = data.pop("tag_ids", None)
     allergy_ids = data.pop("allergy_ids", None)
@@ -503,11 +507,11 @@ def update_profile(
             raise HTTPException(400, "Phone number is not usable")
         clash = (
             scoped(db, Profile, workspace)
-            .filter(Profile.phone == data["phone"], Profile.id != profile_id)
+            .filter(Profile.phone == data["phone"], Profile.id != contact_id)
             .first()
         )
         if clash:
-            raise HTTPException(400, "A profile with this phone already exists")
+            raise HTTPException(400, "A contact with this phone already exists")
     if "name" in data:
         if not data["name"] or not str(data["name"]).strip():
             raise HTTPException(400, "Name is required")
@@ -519,18 +523,21 @@ def update_profile(
     if allergy_ids is not None:
         profile.allergies = load_allergies_by_ids(db, allergy_ids, workspace)
     db.commit()
-    return _profile_query(db, workspace).filter(Profile.id == profile_id).one()
+    return _contact_query(db, workspace).filter(Profile.id == contact_id).one()
 
 
-@router.delete("/profiles/{profile_id}", status_code=204, response_class=Response)
-def delete_profile(
-    profile_id: RowIdPath,
+@router.delete("/contacts/{contact_id}", status_code=204, response_class=Response)
+@router.delete(
+    "/profiles/{contact_id}", status_code=204, response_class=Response, include_in_schema=False
+)
+def delete_contact(
+    contact_id: RowIdPath,
     db: Session = Depends(get_db),
     workspace: Workspace = Depends(current_workspace),
 ) -> Response:
-    profile = get_scoped(db, Profile, profile_id, workspace)
+    profile = get_scoped(db, Profile, contact_id, workspace)
     if not profile:
-        raise HTTPException(404, "Profile not found")
+        raise HTTPException(404, "Contact not found")
     db.delete(profile)
     db.commit()
     return Response(status_code=204)
@@ -565,12 +572,12 @@ def create_hangout(
     if payload.organizer_profile_id is not None:
         org_profile = get_scoped(db, Profile, payload.organizer_profile_id, workspace)
         if org_profile is None:
-            raise HTTPException(400, "Organizer profile not found")
+            raise HTTPException(400, "Organizer contact not found")
     org_phone = org_profile.phone if org_profile else user_for_request(db, request).phone
     if payload.notify_enabled and not org_phone:
         raise HTTPException(
             400,
-            "Organizer profile or My Profile phone required when notifications are enabled",
+            "Organizer contact or My Profile phone required when notifications are enabled",
         )
     hangout = Hangout(
         day_date=payload.day_date or None,
@@ -644,7 +651,7 @@ def update_hangout(
         else:
             org_profile = get_scoped(db, Profile, org_id, workspace)
             if org_profile is None:
-                raise HTTPException(400, "Organizer profile not found")
+                raise HTTPException(400, "Organizer contact not found")
             hangout.organizer_profile_id = org_profile.id
             hangout.organizer_phone = org_profile.phone
     if "notify_interval_hours" in data and data["notify_interval_hours"] is not None:
@@ -670,7 +677,7 @@ def update_hangout(
         if not resolve_organizer_phone(db, hangout):
             raise HTTPException(
                 400,
-                "Organizer profile or hangout organizer phone required when notifications are enabled",
+                "Organizer contact or hangout organizer phone required when notifications are enabled",
             )
     db.commit()
     return load_hangout(db, hangout_id, workspace)  # type: ignore[return-value]

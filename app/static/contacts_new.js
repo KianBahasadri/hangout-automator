@@ -1,7 +1,7 @@
 (function () {
-  const drafts = document.getElementById("profile-drafts");
-  const template = document.getElementById("profile-draft-template");
-  const addButton = document.querySelector("[data-add-profile]");
+  const drafts = document.getElementById("contact-drafts");
+  const template = document.getElementById("contact-draft-template");
+  const addButton = document.querySelector("[data-add-contact]");
   const importButton = document.querySelector("[data-import-contacts]");
   const importStatus = document.querySelector("[data-import-status]");
   if (!drafts || !template) return;
@@ -9,17 +9,17 @@
   let nextIndex = Number(drafts.dataset.nextIndex || 0);
 
   function cards() {
-    return Array.from(drafts.querySelectorAll("[data-profile-card]"));
+    return Array.from(drafts.querySelectorAll("[data-contact-card]"));
   }
 
   function replaceIndex(card, index) {
-    ["id", "name", "for", "data-profile-index"].forEach((attribute) => {
+    ["id", "name", "for", "data-contact-index"].forEach((attribute) => {
       if (card.hasAttribute(attribute)) {
         card.setAttribute(attribute, card.getAttribute(attribute).replaceAll("__INDEX__", String(index)));
       }
     });
-    card.querySelectorAll("[id], [name], [for], [data-profile-index]").forEach((element) => {
-      ["id", "name", "for", "data-profile-index"].forEach((attribute) => {
+    card.querySelectorAll("[id], [name], [for], [data-contact-index]").forEach((element) => {
+      ["id", "name", "for", "data-contact-index"].forEach((attribute) => {
         if (element.hasAttribute(attribute)) {
           element.setAttribute(attribute, element.getAttribute(attribute).replaceAll("__INDEX__", String(index)));
         }
@@ -29,7 +29,7 @@
 
   function renumber() {
     cards().forEach((card, index) => {
-      const number = card.querySelector("[data-profile-number]");
+      const number = card.querySelector("[data-contact-number]");
       if (number) number.textContent = String(index + 1);
     });
   }
@@ -41,7 +41,7 @@
 
   function addCard(values) {
     const fragment = template.content.cloneNode(true);
-    const card = fragment.querySelector("[data-profile-card]");
+    const card = fragment.querySelector("[data-contact-card]");
     replaceIndex(card, nextIndex++);
     drafts.appendChild(fragment);
     const added = drafts.lastElementChild;
@@ -90,9 +90,9 @@
   }
 
   drafts.addEventListener("click", (event) => {
-    const remove = event.target.closest("[data-remove-profile]");
+    const remove = event.target.closest("[data-remove-contact]");
     if (!remove) return;
-    const card = remove.closest("[data-profile-card]");
+    const card = remove.closest("[data-contact-card]");
     if (!card) return;
     if (cards().length === 1) clearCard(card);
     else card.remove();
@@ -133,7 +133,7 @@
         if (error && error.name === "AbortError") {
           if (importStatus) importStatus.textContent = "No contacts selected.";
         } else if (importStatus) {
-          importStatus.textContent = "Contact import failed. Add the profile manually.";
+          importStatus.textContent = "Contact import failed. Add the contact manually.";
         }
       } finally {
         importButton.disabled = false;

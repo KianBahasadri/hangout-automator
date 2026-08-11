@@ -1,5 +1,5 @@
 (function () {
-  const root = document.getElementById("profiles-browser");
+  const root = document.getElementById("contacts-browser");
   if (!root) return;
 
   const cards = () => Array.from(root.querySelectorAll(".profile-editor"));
@@ -88,8 +88,7 @@
     search.addEventListener("input", applyFilters);
   }
 
-  // Allow autosave script to refresh filters after dataset updates
-  root.addEventListener("profiles:data-changed", applyFilters);
+  root.addEventListener("contacts:data-changed", applyFilters);
 
   applyFilters();
 })();

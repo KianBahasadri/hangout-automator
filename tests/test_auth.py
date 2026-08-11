@@ -24,10 +24,10 @@ def test_clerk_redirects_browser_requests_to_sign_in(client, monkeypatch):
     settings = _clerk_settings()
     monkeypatch.setattr("app.auth.get_settings", lambda: settings)
 
-    response = client.get("/profiles", follow_redirects=False)
+    response = client.get("/contacts", follow_redirects=False)
 
     assert response.status_code == 303
-    assert response.headers["location"] == "/sign-in?redirect_url=%2Fprofiles"
+    assert response.headers["location"] == "/sign-in?redirect_url=%2Fcontacts"
 
 
 def test_clerk_returns_json_401_for_api_requests(client, monkeypatch):
@@ -180,7 +180,7 @@ def test_clerk_verifier_exception_fails_closed(client, monkeypatch):
 
     monkeypatch.setattr("app.auth.authenticate_clerk_request", broken_authenticate)
 
-    response = client.get("/profiles")
+    response = client.get("/contacts")
 
     assert response.status_code == 503
 

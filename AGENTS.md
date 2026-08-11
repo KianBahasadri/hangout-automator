@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Hangout Automator is a FastAPI web app that plans hangouts, invites people from shared profiles via SMS, and tracks RSVPs with optional organizer SMS updates.
+Hangout Automator is a FastAPI web app that plans hangouts, invites people from shared contacts via SMS, and tracks RSVPs with optional organizer SMS updates.
 
 ## Documentation (read/write)
 

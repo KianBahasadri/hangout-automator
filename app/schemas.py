@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 from app.ids import RowId
 from app.models import Drive, HangoutStatus, InviteStatus, YesNo
@@ -110,7 +110,10 @@ class HangoutCreate(BaseModel):
     alcohol_involved: Optional[YesNo] = None
     weed_involved: Optional[YesNo] = None
     notes: Optional[str] = None
-    profile_ids: list[RowId] = Field(default_factory=list)
+    profile_ids: list[RowId] = Field(
+        default_factory=list,
+        validation_alias=AliasChoices("profile_ids", "contact_ids"),
+    )
     organizer_profile_id: Optional[RowId] = None
     notify_enabled: bool = False
     notify_interval: bool = False
@@ -195,4 +198,7 @@ class HangoutOut(BaseModel):
 
 
 class SetupHangoutRequest(BaseModel):
-    profile_ids: list[RowId] = Field(default_factory=list)
+    profile_ids: list[RowId] = Field(
+        default_factory=list,
+        validation_alias=AliasChoices("profile_ids", "contact_ids"),
+    )

@@ -2,7 +2,7 @@
 
 Hangout Automator is a multi-tenant FastAPI app: every tenant row belongs to a
 `workspace`, and each authenticated user sees only their own workspace's
-profiles and hangouts ([tenancy.md](./tenancy.md)). When `CLERK_ENABLED=true`,
+contacts and hangouts ([tenancy.md](./tenancy.md)). When `CLERK_ENABLED=true`,
 its browser UI and JSON API require a verified Clerk session and resolve the
 request to the user's workspace (provisioned on first use). With
 `CLERK_ENABLED=false` everything runs in the seeded `default` workspace, which
@@ -11,7 +11,7 @@ is how local development behaves until Clerk is configured.
 ## Runtime shape
 
 - **Web UI** — Jinja templates served by `app/routers/web.py`
-- **JSON API** — `app/routers/api.py` under `/api` (also powers profile autosave)
+- **JSON API** — `app/routers/api.py` under `/api` (also powers contact autosave)
 - **Authentication** — `app/auth.py` verifies Clerk sessions in middleware; `/sign-in` is rendered with ClerkJS when enabled
 - **SMS webhook** — `POST /webhooks/sms` in `app/routers/webhooks.py`
 - **Background jobs** — separate `hangout-worker` process, follow-ups every 5 minutes, organizer interval digests every 10 minutes ([background-jobs.md](./background-jobs.md))

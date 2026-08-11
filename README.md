@@ -44,11 +44,11 @@ curl -X POST http://127.0.0.1:8000/webhooks/sms \
 
 | Area | Behavior |
 |------|----------|
-| Profiles | Name + phone required; drinks, smokes, drive, tags optional (blank = unset); dietary restrictions picked from a shared list managed in Settings (defaults: meat, pork) |
+| Contacts | Name + phone required; drinks, smokes, drive, tags optional (blank = unset); dietary restrictions picked from a shared list managed in Settings (defaults: meat, pork) |
 | Hangouts | All detail fields optional; draft or set up immediately |
-| Invites | Individual SMS per profile; CONFIRM / NO / INFO / MORE INFO; bulk-select by tag or field |
+| Invites | Individual SMS per contact; CONFIRM / NO / INFO / MORE INFO; bulk-select by tag or field |
 | Follow-ups | Up to 2 automated follow-ups if no response, then stop |
-| Organizer SMS | Optional; pick organizer profile; customize interval cadence + threshold events |
+| Organizer SMS | Optional; defaults from My Profile; customize interval cadence + threshold events |
 | Status | Full invitee picture on the hangout page |
 
 ## Configuration
@@ -82,7 +82,7 @@ CI runs this suite plus `ruff` on every push and pull request
 ## API
 
 - Interactive docs: `/docs`
-- `GET/POST /api/profiles`
+- `GET/POST /api/contacts` (legacy alias: `/api/profiles`)
 - `GET/POST /api/hangouts`
 - `POST /api/hangouts/{id}/setup`
 - `POST /webhooks/sms`

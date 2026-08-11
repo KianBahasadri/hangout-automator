@@ -16,8 +16,9 @@ from tests.support.routes import PAGE_ROUTES, fill_path
 PAGE_LABELS = (
     "sign in",
     "hangout list",
-    "profiles",
-    "new profiles",
+    "contacts",
+    "new contacts",
+    "my profile",
     "settings",
     "access",
     "sms simulator",
@@ -31,7 +32,7 @@ PAGE_LABELS = (
 
 # Forms that must be found, so a broken parser fails loudly instead of quietly
 # reducing this file to a page-load test.
-EXPECTED_ACTIONS = frozenset({"/profiles", "/tags", "/allergies", "/hangouts/new"})
+EXPECTED_ACTIONS = frozenset({"/contacts", "/tags", "/allergies", "/hangouts/new"})
 
 
 def _pages(sample_data) -> dict[str, str]:
@@ -40,8 +41,9 @@ def _pages(sample_data) -> dict[str, str]:
     return {
         "sign in": "/sign-in",
         "hangout list": "/",
-        "profiles": "/profiles",
-        "new profiles": "/profiles/new",
+        "contacts": "/contacts",
+        "new contacts": "/contacts/new",
+        "my profile": "/me",
         "settings": "/settings",
         "access": "/settings/access",
         "sms simulator": "/settings/sms-simulator",
@@ -116,4 +118,4 @@ def test_set_up_hangout_with_nothing_filled_in_returns_to_the_form(client, sampl
 
     assert "Set up hangout" in button.label
     assert response.status_code == 303
-    assert response.headers["location"].endswith("?error=need_profiles")
+    assert response.headers["location"].endswith("?error=need_contacts")

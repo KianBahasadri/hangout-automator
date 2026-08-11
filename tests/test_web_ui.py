@@ -141,7 +141,7 @@ def test_draft_hangout_opens_a_prefilled_edit_form(client, db):
     assert '<option value="yes" selected>yes</option>' in html
     assert '<option value="no" selected>no</option>' in html
     assert "Bring a blanket" in html
-    assert re.search(rf'name="profile_ids" value="{organizer.id}"\s+checked', html)
+    assert re.search(rf'name="contact_ids" value="{organizer.id}"\s+checked', html)
     # Organizer SMS is configured on My Profile, not on this form.
     assert "Organizer SMS" not in html
     assert 'name="notify_enabled"' not in html
@@ -185,7 +185,7 @@ def test_draft_edit_saves_updated_details_and_invitees(client, db):
             "alcohol_involved": "no",
             "weed_involved": "yes",
             "notes": "Meet at the south gate",
-            "profile_ids": str(organizer.id),
+            "contact_ids": str(organizer.id),
             "action": "draft",
         },
         follow_redirects=False,
@@ -255,7 +255,7 @@ def test_draft_edit_can_set_up_the_saved_invitees(client, db):
         f"/hangouts/{hangout.id}/edit",
         data={
             "motive": "Dinner",
-            "profile_ids": str(invitee.id),
+            "contact_ids": str(invitee.id),
             "action": "setup",
         },
         follow_redirects=False,
@@ -386,7 +386,7 @@ def test_new_hangout_without_invitees_redirects_instead_of_500(client):
     )
 
     assert response.status_code == 303
-    assert response.headers["location"].endswith("?error=need_profiles")
+    assert response.headers["location"].endswith("?error=need_contacts")
 
 
 def test_existing_hangout_without_invitees_redirects_instead_of_500(client, db):
@@ -403,11 +403,11 @@ def test_existing_hangout_without_invitees_redirects_instead_of_500(client, db):
     )
 
     assert response.status_code == 303
-    assert response.headers["location"] == f"/hangouts/{hangout.id}?error=need_profiles"
+    assert response.headers["location"] == f"/hangouts/{hangout.id}?error=need_contacts"
 
     edit = client.get(response.headers["location"])
     assert edit.status_code == 200
-    assert "Select at least one profile before setting up the hangout." in edit.text
+    assert "Select at least one contact before setting up the hangout." in edit.text
     assert f'action="/hangouts/{hangout.id}/edit"' in edit.text
 
 
@@ -535,14 +535,14 @@ def test_delete_confirmations_survive_an_apostrophe(client, db):
     db.add(Allergy(name="Cow's milk", workspace_id=workspace_id))
     db.commit()
 
-    for path in ("/profiles", "/settings"):
+    for path in ("/contacts", "/settings"):
         html = client.get(path).text
         assert "onsubmit" not in html, f"{path} still builds JS by string interpolation"
         assert "confirm('" not in html
 
-    profiles_html = client.get("/profiles").text
-    assert 'data-confirm="Delete Kian O&#39;Brien?"' in profiles_html
-    assert 'data-confirm="Delete tag Sam&#39;s crew?"' in profiles_html
+    contacts_html = client.get("/contacts").text
+    assert 'data-confirm="Delete Kian O&#39;Brien?"' in contacts_html
+    assert 'data-confirm="Delete tag Sam&#39;s crew?"' in contacts_html
     assert 'data-confirm="Delete restriction Cow&#39;s milk?"' in client.get("/settings").text
 
 

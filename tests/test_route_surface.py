@@ -104,8 +104,8 @@ def test_route_inventory_reflects_the_real_app():
 
     assert {
         "GET /",
-        "GET /profiles/new",
-        "POST /profiles",
+        "GET /contacts/new",
+        "POST /contacts",
         "POST /hangouts/new",
         "GET /hangouts/{hangout_id}/edit",
         "POST /hangouts/{hangout_id}/edit",
@@ -117,7 +117,7 @@ def test_route_inventory_reflects_the_real_app():
     assert len(PAGE_ROUTES) >= 4
 
     hangout_form = next(spec for spec in ALL_ROUTES if spec.label == "POST /hangouts/new")
-    assert {"action", "profile_ids", "motive"} <= set(hangout_form.field_names)
+    assert {"action", "contact_ids", "motive"} <= set(hangout_form.field_names)
 
 
 def test_every_path_parameter_has_a_sample_row(sample_data):

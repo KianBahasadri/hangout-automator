@@ -27,11 +27,11 @@
     );
   }
 
-  async function patchProfile(editor, body) {
-    const id = editor.getAttribute("data-profile-id");
+  async function patchContact(editor, body) {
+    const id = editor.getAttribute("data-contact-id");
     setStatus(editor, "Saving…", "is-saving");
     try {
-      const res = await fetch(`/api/profiles/${id}`, {
+      const res = await fetch(`/api/contacts/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify(body),
@@ -82,7 +82,7 @@
       editor.dataset.tags = saved.tags.map((t) => t.id).join(",");
       editor.dataset.tagNames = saved.tags.map((t) => String(t.name || "").toLowerCase()).join(" ");
     }
-    editor.dispatchEvent(new Event("profiles:data-changed", { bubbles: true }));
+    editor.dispatchEvent(new Event("contacts:data-changed", { bubbles: true }));
   }
 
   function queueSave(editor, body, immediate) {
@@ -92,7 +92,7 @@
       const payload = editor._pending;
       editor._pending = null;
       if (!payload || !Object.keys(payload).length) return;
-      patchProfile(editor, payload);
+      patchContact(editor, payload);
     };
     if (immediate) run();
     else editor._timer = window.setTimeout(run, 450);
