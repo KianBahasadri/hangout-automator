@@ -59,19 +59,22 @@ string whatever characters it holds.
 | POST | `/profiles`, `/profiles/{id}/delete` | Legacy aliases for the contacts POST routes |
 | POST | `/tags` | Create tag → redirect `/contacts` |
 | POST | `/tags/{id}/delete` | Delete tag |
-| GET/POST | `/hangouts/new` | Create hangout (`action=draft` or `setup`); organizer SMS is not on this form — stamped from Settings → My Profile on create |
+| GET/POST | `/hangouts/new` | Create hangout (`action=draft` or `setup`); organizer SMS is not on this form — stamped from Settings → My Profile on create; invitee picker badges DNC phones as **won't be texted** |
 | GET/POST | `/hangouts/{id}/edit` | Draft-only prefilled edit form (`action=draft` or `setup`) |
-| GET | `/hangouts/{id}` | Detail / status (`?error=need_contacts`) |
+| GET | `/hangouts/{id}` | Detail / status (`?error=need_contacts`); invitee rows show DNC badge when applicable |
 | POST | `/hangouts/{id}/setup` | Activate / (re)send invites |
 | POST | `/hangouts/{id}/close` | End hangout |
 | POST | `/hangouts/{id}/delete` | Soft-delete (closed only) — sets `deleted_at`, hides from home |
 | POST | `/hangouts/{id}/restore` | Clear `deleted_at` so the hangout appears on home again |
 | GET | `/settings` | My Profile (name, phone, default organizer SMS), dietary-restriction catalog, deleted hangouts, SMS simulator |
 | POST | `/settings/profile` | Save My Profile fields → `/settings?notice=saved` |
-| GET | `/admin` | Admin-only: cost monitoring cards + links to access, log download, ops tools |
+| GET | `/admin` | Admin-only: cost monitoring cards + links to access, SMS opt-outs, log download, ops tools |
 | GET | `/admin/access` | Admin-only: the email access list (`?notice=` feedback) |
 | POST | `/admin/access` | Admin-only: add an email or change its role → `/admin/access` |
 | POST | `/admin/access/{id}/delete` | Admin-only: revoke an email |
+| GET | `/admin/opt-outs` | Admin-only: permanent SMS do-not-contact list |
+| POST | `/admin/opt-outs` | Admin-only: add a phone to DNC |
+| POST | `/admin/opt-outs/{id}/delete` | Admin-only: remove a phone from DNC |
 | GET | `/admin/logs` | Admin-only: download the active JSONL audit log (`LOG_FILE`) |
 | GET | `/settings/access` | Legacy redirect (307) to `/admin/access` |
 | POST | `/settings/access`, `/settings/access/{id}/delete` | Legacy aliases for the admin access POST routes |

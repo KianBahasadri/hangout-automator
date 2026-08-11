@@ -456,6 +456,26 @@ class SmsRateLimit(Base):
     __table_args__ = (UniqueConstraint("bucket", "window_start"),)
 
 
+class SmsOptOut(Base):
+    """Global permanent SMS do-not-contact list (STOP FOREVER / carrier STOP).
+
+    Unique on normalized phone. Not workspace-scoped: one STOP protects the
+    person across every tenant on this deployment. Cleared by START / UNSTOP
+    or by a platform admin.
+    """
+
+    __tablename__ = "sms_opt_outs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    phone: Mapped[str] = mapped_column(String(32), nullable=False, unique=True)
+    opted_out_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    # keyword | admin — how the row was created
+    source: Mapped[str] = mapped_column(String(32), nullable=False, default="keyword")
+    reason: Mapped[str | None] = mapped_column(String(120), nullable=True)
+
+
 class MessageLog(Base):
     __tablename__ = "message_logs"
 

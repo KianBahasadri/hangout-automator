@@ -12,11 +12,15 @@ Providers and phone normalization: `app/sms.py`. Message bodies and reply parsin
 App startup fails with a clear error when `SMS_PROVIDER=twilio` is set without all three Twilio credentials (config validated in `app/config.py`); `mock` requires none. Terraform also fails at plan time for the same misconfiguration (see [deploy.md](./deploy.md)).
 
 `send_sms` always writes a `message_logs` row (success or error, including a
-provider exception). It also performs a final destination check immediately
-before provider lookup/send: the normalized number must have a leading `+` and
-8–15 digits. Invalid destinations are rejected without invoking the SMS
-provider, recorded as an unsuccessful message, and emitted as an
-`sms.outbound.rejected` audit event.
+provider exception). Before provider lookup/send it:
+
+1. Rejects destinations that are not a leading `+` with 8–15 digits
+   (`reason=invalid_destination_phone`)
+2. Rejects numbers on the permanent do-not-contact list (`sms_opt_outs`;
+   `reason=do_not_contact`, error text *Number is on the do-not-contact list*)
+
+Both rejections skip the provider, log an unsuccessful `message_logs` row, and
+emit `sms.outbound.rejected`.
 
 ## Phone normalization
 
@@ -66,27 +70,51 @@ Messages use short multi-line layout (labels + blank lines) so they read clearly
 | info2 | `more info`, `moreinfo`, legacy `info 2` / `info2` / `info two`, or `info` + `2`/`two`/`full`/`list`/`details` |
 | info | `info` (alone) |
 | confirm | `confirm`, `yes`, `y`, `in`, `attending`, `coming` |
-| decline | `no`, `n`, `decline`, `can't`, `cant`, `out`, `nope`, plus the carrier opt-out words `stop`, `stopall`, `unsubscribe`, `cancel`, `end`, `quit` |
+| decline | `no`, `n`, `decline`, `can't`, `cant`, `out`, `nope`, plus permanent opt-out keywords (below) |
+| opt_in | `start`, `unstop`, `yesstart`, `opt in` / `optin`, `start forever` |
 | none | anything else → help reply listing CONFIRM / NO / INFO / MORE INFO |
 
 INFO and MORE INFO are **read-only**: they never change invite status.
 
-Opt-out keywords count as a decline because Twilio blocks the number at the
-provider; recording it as an answer stops the app retrying a number that can no
-longer receive messages.
+Hangout-only decline (`NO`, etc.) affects that invite only. **Permanent opt-out**
+is separate (global DNC).
 
-They also get **no auto-reply**: `process_inbound_sms` returns `""` for any
-opt-out body (`is_opt_out` in `app/messages.py`), including from numbers with no
-matching invite, and the webhook answers with a `<Response></Response>` carrying
-no `<Message>`. The carrier and Twilio send their own opt-out confirmation, and
-anything the app tried to send back would be rejected as Twilio error 21610.
+### Permanent opt-out (do-not-contact)
+
+Keywords / phrases (case-insensitive): carrier STOP set
+`stop`, `stopall`, `unsubscribe`, `cancel`, `end`, `quit`, plus explicit
+`stop forever` / `stopforever` / `stop all`.
+
+On any of these:
+
+1. Upsert a global `sms_opt_outs` row for the normalized phone (`source=keyword`)
+2. Decline the matched active invite when one exists (same as today)
+3. **No auto-reply** — `process_inbound_sms` returns `""`; webhook is empty
+   `<Response></Response>`. Carrier/Twilio already confirm STOP; an app reply
+   would bounce as Twilio 21610
+
+The DNC list is **global** (not workspace-scoped): one STOP protects the person
+on every tenant of this deployment. Survives restarts and new hangouts.
+
+`send_sms` refuses every outbound to a DNC number (invites, follow-ups,
+organizer digests/alerts). Setup / follow-up mark those invites `declined` so
+they are not retried. UI: invitee picker and hangout status show
+**won't be texted** for DNC phones. Platform admins manage the list at
+`/admin/opt-outs` (manual add/remove, `source=admin`).
+
+### Re-opt-in
+
+`START` / `UNSTOP` (and aliases above) clear the DNC row and get a short
+confirmation reply. Hangout-only declines are **not** cleared by START — only
+the permanent list is.
 
 ## Inbound processing
 
 1. Log inbound message
-2. Find the invite on an **active** hangout for the normalized phone, ranked by most recent `last_outbound_at` (never-messaged invites last, then newest invite id) so a reply lands on the hangout that actually texted them (fallback: last-10-digit match)
-3. No invite → unmatched thanks message
-4. `info` / `info2` return headcount or guest-list text without changing status
-5. confirm / decline update `status` + `responded_at`
+2. Permanent opt-out → record DNC; opt-in → clear DNC and return confirmation
+3. Find the invite on an **active** hangout for the normalized phone, ranked by most recent `last_outbound_at` (never-messaged invites last, then newest invite id) so a reply lands on the hangout that actually texted them (fallback: last-10-digit match)
+4. No invite → unmatched thanks message (opt-out still suppresses the reply)
+5. `info` / `info2` return headcount or guest-list text without changing status
+6. confirm / decline update `status` + `responded_at`
    (an opt-out body still records the decline, then suppresses the reply)
-6. Run organizer threshold evaluation for RSVP intents (see [organizer-notifications.md](./organizer-notifications.md))
+7. Run organizer threshold evaluation for RSVP intents (see [organizer-notifications.md](./organizer-notifications.md))

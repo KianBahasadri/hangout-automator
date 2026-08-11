@@ -16,8 +16,10 @@ from app.messages import (
     craft_info_detail,
     craft_info_summary,
     craft_invite_message,
+    craft_opt_in_reply,
     craft_organizer_digest,
     craft_unmatched_reply,
+    is_opt_in,
     is_opt_out,
     parse_reply_intent,
 )
@@ -29,15 +31,88 @@ from app.models import (
     MessageDirection,
     MessageLog,
     Profile,
+    SmsOptOut,
     Workspace,
 )
 from app.sms import get_sms_provider, is_valid_phone, normalize_phone
 
 logger = logging.getLogger(__name__)
 
+# Returned by send_sms when the destination is on the permanent DNC list.
+DNC_ERROR = "Number is on the do-not-contact list"
+
 
 def utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def is_sms_opted_out(db: Session, phone: str) -> bool:
+    """True when this normalized phone is on the global permanent DNC list."""
+    normalized = normalize_phone(phone)
+    if not normalized:
+        return False
+    return (
+        db.query(SmsOptOut.id).filter(SmsOptOut.phone == normalized).first() is not None
+    )
+
+
+def opted_out_phones(db: Session, phones: list[str] | set[str] | None = None) -> set[str]:
+    """Normalized phones currently on the DNC list.
+
+    When *phones* is given, only those candidates are checked (for invitee UI).
+    """
+    q = db.query(SmsOptOut.phone)
+    if phones is not None:
+        normalized = {normalize_phone(p) for p in phones if p}
+        normalized.discard("")
+        if not normalized:
+            return set()
+        q = q.filter(SmsOptOut.phone.in_(normalized))
+    return {row[0] for row in q.all()}
+
+
+def record_sms_opt_out(
+    db: Session,
+    phone: str,
+    *,
+    source: str = "keyword",
+    reason: str | None = None,
+) -> SmsOptOut:
+    """Upsert a permanent DNC row for *phone*. Idempotent on the same number."""
+    normalized = normalize_phone(phone)
+    existing = db.query(SmsOptOut).filter(SmsOptOut.phone == normalized).first()
+    if existing is not None:
+        if reason and not existing.reason:
+            existing.reason = reason
+        return existing
+    row = SmsOptOut(
+        phone=normalized,
+        source=source,
+        reason=reason,
+        opted_out_at=utcnow(),
+    )
+    db.add(row)
+    db.flush()
+    audit_event(
+        "sms.opt_out.recorded",
+        phone=normalized,
+        source=source,
+        reason=reason,
+        opt_out_id=row.id,
+    )
+    return row
+
+
+def clear_sms_opt_out(db: Session, phone: str) -> bool:
+    """Remove a DNC row. Returns True when a row was deleted."""
+    normalized = normalize_phone(phone)
+    row = db.query(SmsOptOut).filter(SmsOptOut.phone == normalized).first()
+    if row is None:
+        return False
+    db.delete(row)
+    db.flush()
+    audit_event("sms.opt_out.cleared", phone=normalized)
+    return True
 
 
 def normalize_tag_name(name: str) -> str:
@@ -287,6 +362,32 @@ def send_sms(
         )
         return False, error
 
+    # Permanent DNC (STOP / STOP FOREVER / admin): never call the provider.
+    if is_sms_opted_out(db, phone):
+        error = DNC_ERROR
+        log_message(
+            db,
+            phone=phone,
+            body=body,
+            direction=MessageDirection.outbound,
+            success=False,
+            error=error,
+            invite_id=invite_id,
+            hangout_id=hangout_id,
+            workspace_id=workspace_id,
+        )
+        audit_event(
+            "sms.outbound.rejected",
+            level=logging.WARNING,
+            to=phone,
+            body=body,
+            reason="do_not_contact",
+            error=error,
+            invite_id=invite_id,
+            hangout_id=hangout_id,
+        )
+        return False, error
+
     provider = get_sms_provider()
     provider_name = type(provider).__name__
     audit_event(
@@ -473,6 +574,13 @@ def setup_hangout(
         if ok:
             inv.status = InviteStatus.pending
             sms_successes += 1
+        elif err == DNC_ERROR:
+            # Permanent opt-out: do not retry; surface as declined so follow-ups
+            # leave this invite alone.
+            inv.status = InviteStatus.declined
+            inv.responded_at = now
+            sms_failures += 1
+            logger.info("Invite SMS skipped for opted-out profile %s", pid)
         else:
             inv.status = InviteStatus.failed_send
             sms_failures += 1
@@ -508,6 +616,7 @@ def process_inbound_sms(db: Session, from_phone: str, body: str) -> str:
         body=body,
         reply=reply,
         opt_out=opt_out,
+        opt_in=is_opt_in(body),
     )
     return reply
 
@@ -528,6 +637,25 @@ def _handle_inbound_sms(db: Session, from_phone: str, body: str) -> str:
         body=body,
         parsed_intent=intent,
     )
+
+    # Permanent opt-out always lands on the global DNC list, even with no
+    # matching invite. Carrier STOP gets no auto-reply (outer process_inbound).
+    if is_opt_out(body):
+        reason = (body or "").strip()[:120] or "stop"
+        record_sms_opt_out(db, phone, source="keyword", reason=reason)
+
+    # START / UNSTOP clears DNC before invite matching so re-opt-in works even
+    # without an active hangout.
+    if intent == "opt_in":
+        cleared = clear_sms_opt_out(db, phone)
+        db.commit()
+        audit_event(
+            "sms.inbound.opt_in",
+            from_phone=phone,
+            body=body,
+            cleared=cleared,
+        )
+        return craft_opt_in_reply()
     # A reply is almost always about the last text this person received, so rank
     # by most recent outbound before falling back to newest invite.
     recency = (
@@ -807,6 +935,10 @@ def process_followups(db: Session) -> int:
             # an outage would burn the budget and mark invitees no_response
             inv.followups_sent = attempt
             sent += 1
+        elif err == DNC_ERROR:
+            inv.status = InviteStatus.declined
+            inv.responded_at = now
+            logger.info("Follow-up skipped for opted-out invite %s", inv.id)
         elif _failed_send_count(db, inv.id) >= FOLLOWUP_FAILURE_LIMIT:
             # Retried across several delay windows and still failing — stop and
             # surface it instead of texting into the void forever.

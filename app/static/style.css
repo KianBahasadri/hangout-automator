@@ -497,6 +497,12 @@ th {
   background: var(--badge-info-bg);
   color: var(--badge-info-fg);
 }
+.badge-dnc {
+  background: var(--badge-bad-bg);
+  color: var(--badge-bad-fg);
+  font-size: 0.75rem;
+  vertical-align: middle;
+}
 
 .alert {
   background: var(--alert-bg);

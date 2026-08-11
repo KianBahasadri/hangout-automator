@@ -89,6 +89,9 @@
         <td>
           <strong>{{ inv.profile.name }}</strong><br />
           <span class="muted">{{ inv.profile.phone|phone }}</span>
+          {% if inv.profile.phone in (opted_out_phones|default([])) %}
+          <br /><span class="badge badge-dnc" title="Permanent SMS opt-out">won't be texted</span>
+          {% endif %}
         </td>
         <td><span class="badge badge-{{ inv.status.value }}">{{ inv.status.value }}</span></td>
         <td class="muted">

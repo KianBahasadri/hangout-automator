@@ -1,5 +1,7 @@
-{# Expects: profiles, tags, checked_ids (optional set/list of profile ids) #}
+{# Expects: profiles, tags, checked_ids (optional set/list of profile ids),
+   opted_out_phones (optional set of normalized phones on permanent DNC) #}
 {% set checked = checked_ids|default([]) %}
+{% set dnc = opted_out_phones|default([]) %}
 <div class="invitee-picker">
   <div class="invitee-toolbar">
     <input class="invitee-search" type="search" placeholder="Filter by name, phone, or tag…" autocomplete="off" />
@@ -51,6 +53,9 @@
       <span class="invitee-meta">
         <span class="invitee-name">{{ p.name }}</span>
         <span class="muted invitee-phone">({{ p.phone|phone }})</span>
+        {% if p.phone in dnc %}
+        <span class="badge badge-dnc" title="Permanent SMS opt-out — will not be texted">won't be texted</span>
+        {% endif %}
         {% if p.tags %}
         <span class="invitee-tag-badges">
           {% for t in p.tags %}<span class="tag-badge">{{ t.name }}</span>{% endfor %}

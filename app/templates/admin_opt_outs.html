@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}SMS opt-outs · Admin Panel · Hangout Automator{% endblock %}
+{% block content %}
+{% set notices = {
+  "added": "Phone added to the do-not-contact list.",
+  "removed": "Phone removed from the do-not-contact list.",
+  "already-listed": "That number is already opted out.",
+  "invalid-phone": "That does not look like a usable phone number.",
+  "not-found": "That entry no longer exists.",
+} %}
+<div style="display:flex;align-items:baseline;gap:1rem;flex-wrap:wrap;margin-bottom:1.25rem;">
+  <h1 style="margin:0;">SMS opt-outs</h1>
+  <a class="btn btn-secondary btn-sm" href="/admin">← Admin Panel</a>
+</div>
+
+{% if notice and notice in notices %}
+<div class="alert">{{ notices[notice] }}</div>
+{% endif %}
+
+<div class="card">
+  <h2 style="margin-top:0;">Do-not-contact list</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Phone</th>
+        <th>Source</th>
+        <th>Reason</th>
+        <th>Opted out</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in opt_outs %}
+      <tr>
+        <td>{{ row.phone|phone }}</td>
+        <td><span class="badge badge-pending">{{ row.source }}</span></td>
+        <td class="muted">{{ row.reason or "—" }}</td>
+        <td class="muted">{{ row.opted_out_at }}</td>
+        <td style="text-align:right;">
+          <form method="post" action="/admin/opt-outs/{{ row.id }}/delete"
+                data-confirm="Remove {{ row.phone|phone }} from the do-not-contact list?">
+            <button class="btn" type="submit">Remove</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="muted">Nobody is opted out.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="card">
+  <h2 style="margin-top:0;">Add a number</h2>
+  <form method="post" action="/admin/opt-outs" class="field-row" style="align-items:flex-end;">
+    <div style="flex:2;">
+      <label for="opt_out_phone">Phone</label>
+      <input id="opt_out_phone" name="phone" type="tel" required maxlength="32"
+             placeholder="+1 555 123 4567" style="margin-bottom:0;" />
+    </div>
+    <div>
+      <button class="btn" type="submit">Add to DNC</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

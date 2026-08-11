@@ -31,6 +31,7 @@ from app.models import (
     HangoutInvite,
     HangoutStatus,
     Profile,
+    SmsOptOut,
     Tag,
     User,
     Workspace,
@@ -44,11 +45,14 @@ from app.services import (
     CONFIRM_GOAL_OPTIONS,
     INTERVAL_HOUR_OPTIONS,
     clamp_choice,
+    clear_sms_opt_out,
     load_allergies_by_ids,
     load_hangout,
     load_tags_by_ids,
     normalize_allergy_name,
     normalize_tag_name,
+    opted_out_phones,
+    record_sms_opt_out,
     setup_hangout,
 )
 from app.sms import format_phone, is_valid_phone, normalize_phone
@@ -558,11 +562,13 @@ def _hangout_form_context(
         user_for_request(db, request)
         db.flush()
 
+    profiles = _profiles_with_tags(db, workspace)
     return {
         "hangout": hangout,
-        "profiles": _profiles_with_tags(db, workspace),
+        "profiles": profiles,
         "tags": _all_tags(db, workspace),
         "invited_ids": {invite.profile_id for invite in hangout.invites} if hangout else set(),
+        "opted_out_phones": opted_out_phones(db, {p.phone for p in profiles}),
         "error": error,
         "google_places_enabled": bool(get_settings().google_maps_api_key.strip()),
         "alcohol_opts": list(YesNo),
@@ -820,14 +826,21 @@ def hangout_detail(
         suffix = _setup_error_query(request.query_params.get("error"))
         return RedirectResponse(f"/hangouts/{hangout_id}/edit{suffix}", status_code=303)
     invited_ids = {i.profile_id for i in hangout.invites}
+    all_profiles = _profiles_with_tags(db, workspace)
+    dnc = opted_out_phones(
+        db,
+        {p.phone for p in all_profiles}
+        | {inv.profile.phone for inv in hangout.invites if inv.profile},
+    )
     return templates.TemplateResponse(
         request,
         "hangout_detail.html",
         {
             "hangout": hangout,
-            "all_profiles": _profiles_with_tags(db, workspace),
+            "all_profiles": all_profiles,
             "tags": _all_tags(db, workspace),
             "invited_ids": invited_ids,
+            "opted_out_phones": dnc,
             "error": request.query_params.get("error"),
         },
     )
@@ -967,6 +980,54 @@ def admin_panel(
         "admin.html",
         {"cost_cards": admin_cost_cards(db)},
     )
+
+
+@router.get("/admin/opt-outs", response_class=HTMLResponse)
+def admin_opt_outs(
+    request: Request,
+    db: Session = Depends(get_db),
+    _: None = Depends(require_admin),
+) -> HTMLResponse:
+    """Global SMS do-not-contact list (platform admin)."""
+    rows = db.query(SmsOptOut).order_by(SmsOptOut.opted_out_at.desc()).all()
+    return templates.TemplateResponse(
+        request,
+        "admin_opt_outs.html",
+        {
+            "opt_outs": rows,
+            "notice": request.query_params.get("notice"),
+        },
+    )
+
+
+@router.post("/admin/opt-outs")
+def admin_opt_outs_add(
+    phone: str = Form(""),
+    db: Session = Depends(get_db),
+    _: None = Depends(require_admin),
+) -> RedirectResponse:
+    normalized = normalize_phone(phone)
+    if not is_valid_phone(normalized):
+        return RedirectResponse("/admin/opt-outs?notice=invalid-phone", status_code=303)
+    if db.query(SmsOptOut).filter(SmsOptOut.phone == normalized).first():
+        return RedirectResponse("/admin/opt-outs?notice=already-listed", status_code=303)
+    record_sms_opt_out(db, normalized, source="admin", reason="admin")
+    db.commit()
+    return RedirectResponse("/admin/opt-outs?notice=added", status_code=303)
+
+
+@router.post("/admin/opt-outs/{opt_out_id}/delete")
+def admin_opt_outs_remove(
+    opt_out_id: RowIdPath,
+    db: Session = Depends(get_db),
+    _: None = Depends(require_admin),
+) -> RedirectResponse:
+    row = db.query(SmsOptOut).filter(SmsOptOut.id == opt_out_id).first()
+    if row is None:
+        return RedirectResponse("/admin/opt-outs?notice=not-found", status_code=303)
+    clear_sms_opt_out(db, row.phone)
+    db.commit()
+    return RedirectResponse("/admin/opt-outs?notice=removed", status_code=303)
 
 
 @router.get("/admin/access", response_class=HTMLResponse)

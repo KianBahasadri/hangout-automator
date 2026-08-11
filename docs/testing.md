@@ -19,7 +19,7 @@ sending a form as a form, say) turns a passing test into a test of nothing.
 | `test_route_surface.py` | Every route × blank and hostile input |
 | `test_ui_forms.py` | Every page, every button, form left untouched |
 | `test_api.py`, `test_profiles.py` (contacts), `test_web_ui.py`, `test_hangout_setup.py` | Endpoint behaviour |
-| `test_rsvp_flow.py`, `test_followups.py`, `test_sms_guard.py`, `test_webhook_security.py` | SMS in, invites/follow-ups out, webhook signatures |
+| `test_rsvp_flow.py`, `test_followups.py`, `test_sms_guard.py`, `test_sms_opt_out.py`, `test_webhook_security.py` | SMS in, permanent DNC (STOP FOREVER), invites/follow-ups out, webhook signatures |
 | `test_auth.py`, `test_access_control.py`, `test_tenant_isolation.py` | Clerk session verification, the email access list and who may edit it, workspace scoping |
 | `test_my_profile.py` | Settings → My Profile save/load, isolation by identity, hangout prefill and organizer phone stamp |
 | `test_admin_costs.py` | Admin Panel cost estimates from message_logs; admin-only gate |

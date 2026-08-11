@@ -73,6 +73,15 @@ constraint on `profile_id`.
 
 `invite_id` / `hangout_id` (nullable), `direction`, `phone`, `body`, `success`, `error`, `created_at`.
 
+### `sms_opt_outs`
+
+Global permanent SMS do-not-contact list (not workspace-scoped).
+
+- Unique `phone` (normalized E.164-ish)
+- `opted_out_at`, `source` (`keyword` | `admin`), optional `reason`
+- Written on carrier STOP / `STOP FOREVER` (and aliases) or by platform admin;
+  cleared by `START` / `UNSTOP` or admin remove — see [sms-and-rsvp.md](./sms-and-rsvp.md)
+
 ### `access_grants`
 
 `id`, unique `email` (255, stored normalized: stripped and lowercased), `role`,

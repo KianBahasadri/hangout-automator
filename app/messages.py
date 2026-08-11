@@ -530,21 +530,70 @@ def preview_message_catalog(
 # Twilio's carrier opt-out keywords. The number is blocked at the provider the
 # moment one of these arrives, so they count as a decline (an answer, not a
 # reason to keep retrying) and nothing may be sent back — see is_opt_out.
+# All of these also write a permanent do-not-contact row (sms_opt_outs).
 OPT_OUT_WORDS = {"stop", "stopall", "unsubscribe", "cancel", "end", "quit"}
+# Explicit permanent-opt-out phrases (first token is already "stop").
+OPT_OUT_PHRASES = {"stop forever", "stopforever", "stop all"}
+
+# Re-opt-in (clears sms_opt_outs). Carrier UNSTOP re-enables at Twilio; we
+# mirror that for our own DNC list. Safe to auto-reply a short confirmation.
+OPT_IN_WORDS = {"start", "unstop", "yesstart"}
+OPT_IN_PHRASES = {"start forever", "opt in", "optin"}
 
 
 def is_opt_out(body: str) -> bool:
-    """True when an inbound SMS is a carrier opt-out keyword."""
+    """True when an inbound SMS is a permanent opt-out / carrier STOP keyword."""
     text = (body or "").strip().lower()
-    token = text.replace(",", " ").split()[0] if text.split() else ""
-    return token in OPT_OUT_WORDS or text in OPT_OUT_WORDS
+    if not text:
+        return False
+    tokens = text.replace(",", " ").replace("-", " ").split()
+    token = tokens[0] if tokens else ""
+    if text in OPT_OUT_WORDS or token in OPT_OUT_WORDS:
+        return True
+    if text in OPT_OUT_PHRASES:
+        return True
+    if len(tokens) >= 2 and tokens[0] == "stop" and tokens[1] in {"forever", "all"}:
+        return True
+    return False
+
+
+def is_opt_in(body: str) -> bool:
+    """True when an inbound SMS requests re-opt-in (clear permanent DNC)."""
+    text = (body or "").strip().lower()
+    if not text:
+        return False
+    tokens = text.replace(",", " ").replace("-", " ").split()
+    token = tokens[0] if tokens else ""
+    if text in OPT_IN_WORDS or token in OPT_IN_WORDS:
+        return True
+    if text in OPT_IN_PHRASES:
+        return True
+    if len(tokens) >= 2 and tokens[0] == "opt" and tokens[1] == "in":
+        return True
+    if len(tokens) >= 2 and tokens[0] == "start" and tokens[1] == "forever":
+        return True
+    return False
+
+
+def craft_opt_in_reply() -> str:
+    """Short confirmation after START / UNSTOP clears the DNC list."""
+    return "You're opted back in. You may receive hangout invites again."
 
 
 def parse_reply_intent(body: str) -> str | None:
-    """Map free-text SMS to confirm | decline | info | info2 | None."""
+    """Map free-text SMS to confirm | decline | info | info2 | opt_in | None.
+
+    Permanent opt-out bodies (STOP, STOP FOREVER, carrier keywords) map to
+    decline so the matching invite stops retrying; process_inbound_sms also
+    records a global DNC row and suppresses any auto-reply.
+    """
     text = (body or "").strip().lower()
     tokens = text.replace(",", " ").replace("-", " ").split()
     token = tokens[0] if tokens else ""
+
+    # Re-opt-in before confirm (START must not mean "confirm attendance").
+    if is_opt_in(body):
+        return "opt_in"
 
     # INFO / MORE INFO (multi-token before single-token confirm/decline sets)
     # Legacy INFO 2 / info2 still accepted.
@@ -577,6 +626,6 @@ def parse_reply_intent(body: str) -> str | None:
     decline_words = {"no", "n", "decline", "can't", "cant", "out", "nope"} | OPT_OUT_WORDS
     if token in confirm_words or text in confirm_words:
         return "confirm"
-    if token in decline_words or text in decline_words:
+    if is_opt_out(body) or token in decline_words or text in decline_words:
         return "decline"
     return None
