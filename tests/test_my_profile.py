@@ -1,24 +1,37 @@
-"""My Profile (account-holder) settings and hangout prefill."""
+"""Account-holder profile on Settings and hangout prefill."""
 
 from app.models import Hangout, HangoutStatus, Profile, User
 from app.users import LOCAL_USER_ID, get_or_create_user
 
 
-def test_my_profile_page_loads(client):
-    response = client.get("/me")
+def test_settings_includes_my_profile(client):
+    response = client.get("/settings")
     assert response.status_code == 200
     assert "My Profile" in response.text
     assert "Display name" not in response.text
-    assert 'placeholder="Your name"' in response.text
+    assert "Your name" in response.text
+    assert 'placeholder="Your name"' not in response.text
+    assert 'placeholder="+1 (555) 123-4567"' not in response.text
     assert "Default organizer SMS" in response.text
+    assert 'action="/settings/profile"' in response.text
     # No instructional help paragraphs under headings.
     assert "personal account settings" not in response.text.lower()
     assert "prefills new hangouts" not in response.text.lower()
 
 
+def test_me_redirects_to_settings(client):
+    response = client.get("/me", follow_redirects=False)
+    assert response.status_code == 307
+    assert response.headers["location"] == "/settings"
+
+    with_notice = client.get("/me?notice=saved", follow_redirects=False)
+    assert with_notice.status_code == 307
+    assert with_notice.headers["location"] == "/settings?notice=saved"
+
+
 def test_my_profile_saves_name_phone_and_notify_defaults(client, db):
     response = client.post(
-        "/me",
+        "/settings/profile",
         data={
             "display_name": "Alex Organizer",
             "phone": "5551234567",
@@ -35,7 +48,7 @@ def test_my_profile_saves_name_phone_and_notify_defaults(client, db):
         follow_redirects=False,
     )
     assert response.status_code == 303
-    assert response.headers["location"] == "/me?notice=saved"
+    assert response.headers["location"] == "/settings?notice=saved"
 
     user = db.query(User).filter(User.clerk_user_id == LOCAL_USER_ID).one()
     assert user.display_name == "Alex Organizer"
@@ -52,12 +65,12 @@ def test_my_profile_saves_name_phone_and_notify_defaults(client, db):
 
 def test_my_profile_rejects_invalid_phone(client, db):
     client.post(
-        "/me",
+        "/settings/profile",
         data={"display_name": "Alex", "phone": "5551112222", "notify_interval_hours": "6"},
         follow_redirects=False,
     )
     response = client.post(
-        "/me",
+        "/settings/profile",
         data={"display_name": "Alex", "phone": "abc", "notify_interval_hours": "6"},
     )
     assert response.status_code == 400
@@ -75,7 +88,7 @@ def test_changing_phone_clears_verification(client, db):
     db.commit()
 
     client.post(
-        "/me",
+        "/settings/profile",
         data={
             "display_name": "Alex",
             "phone": "5559998888",
@@ -116,7 +129,7 @@ def test_new_hangout_page_has_no_organizer_sms_section(client, db):
 
 def test_creating_hangout_stamps_my_profile_defaults(client, db, workspace):
     client.post(
-        "/me",
+        "/settings/profile",
         data={
             "display_name": "Alex",
             "phone": "5551234567",
@@ -152,7 +165,7 @@ def test_creating_hangout_stamps_my_profile_defaults(client, db, workspace):
 
 def test_creating_hangout_stamps_phone_without_matching_contact(client, db):
     client.post(
-        "/me",
+        "/settings/profile",
         data={
             "display_name": "Alex",
             "phone": "5551234567",

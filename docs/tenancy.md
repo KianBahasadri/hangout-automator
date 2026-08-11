@@ -44,7 +44,8 @@ here is what the *no identity, so no workspace* rule means;
 
 ## My Profile vs workspace contacts
 
-- **My Profile** (`users`, `/me`) — personal account-holder settings for the
+- **My Profile** (`users`, under Settings at `/settings`, save via
+  `POST /settings/profile`) — personal account-holder settings for the
   signed-in identity (name, phone, default notify prefs). Instance-wide,
   keyed by Clerk subject (or `local-dev` with Clerk off). Not tenant data.
 - **Contacts** (`profiles` table, `/contacts`) — people you invite; workspace-scoped

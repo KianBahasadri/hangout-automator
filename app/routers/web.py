@@ -406,23 +406,32 @@ def contacts_delete(
     return RedirectResponse("/contacts", status_code=303)
 
 
-@router.get("/me", response_class=HTMLResponse)
-def my_profile(
-    request: Request,
-    db: Session = Depends(get_db),
-) -> HTMLResponse:
-    """Personal account settings — not the workspace contacts list."""
-    user = user_for_request(db, request)
-    db.commit()
-    return templates.TemplateResponse(
-        request,
-        "me.html",
-        _my_profile_context(user, notice=request.query_params.get("notice")),
-    )
+@router.get("/me")
+def my_profile_redirect(request: Request) -> RedirectResponse:
+    """Legacy My Profile URL → Settings (profile lives there now)."""
+    notice = request.query_params.get("notice")
+    target = "/settings?notice=" + notice if notice else "/settings"
+    return RedirectResponse(target, status_code=307)
 
 
-@router.post("/me")
-def my_profile_save(
+def _settings_profile_context(
+    user: User,
+    allergies: list[Allergy],
+    *,
+    notice: str | None = None,
+) -> dict:
+    return {
+        "user": user,
+        "allergies": allergies,
+        "notice": notice,
+        "interval_hour_opts": INTERVAL_HOUR_OPTIONS,
+        "cooldown_minute_opts": COOLDOWN_MINUTE_OPTIONS,
+        "confirm_goal_opts": CONFIRM_GOAL_OPTIONS,
+    }
+
+
+@router.post("/settings/profile")
+def settings_profile_save(
     request: Request,
     display_name: str = Form(""),
     phone: str = Form(""),
@@ -438,7 +447,9 @@ def my_profile_save(
     notify_confirm_goal: str = Form("0"),
     notify_threshold_cooldown_minutes: str = Form("0"),
     db: Session = Depends(get_db),
+    workspace: Workspace = Depends(current_workspace),
 ) -> Response:
+    """Save account-holder profile + default organizer SMS prefs (Settings)."""
     user = user_for_request(db, request)
     error = apply_user_form(
         user,
@@ -459,24 +470,56 @@ def my_profile_save(
     if error:
         return templates.TemplateResponse(
             request,
-            "me.html",
-            _my_profile_context(user, notice=error),
+            "settings.html",
+            _settings_profile_context(
+                user, _all_allergies(db, workspace), notice=error
+            ),
             status_code=400,
         )
     db.commit()
     if "application/json" in request.headers.get("accept", ""):
         return Response(status_code=204)
-    return RedirectResponse("/me?notice=saved", status_code=303)
+    return RedirectResponse("/settings?notice=saved", status_code=303)
 
 
-def _my_profile_context(user: User, *, notice: str | None = None) -> dict:
-    return {
-        "user": user,
-        "notice": notice,
-        "interval_hour_opts": INTERVAL_HOUR_OPTIONS,
-        "cooldown_minute_opts": COOLDOWN_MINUTE_OPTIONS,
-        "confirm_goal_opts": CONFIRM_GOAL_OPTIONS,
-    }
+@router.post("/me")
+def my_profile_save_legacy(
+    request: Request,
+    display_name: str = Form(""),
+    phone: str = Form(""),
+    notify_enabled: str | None = Form(None),
+    notify_interval: str | None = Form(None),
+    notify_threshold: str | None = Form(None),
+    notify_interval_hours: str = Form("6"),
+    notify_interval_only_if_changed: str | None = Form(None),
+    notify_on_new_confirm: str | None = Form(None),
+    notify_on_decline: str | None = Form(None),
+    notify_on_allergy: str | None = Form(None),
+    notify_on_ride_needed: str | None = Form(None),
+    notify_confirm_goal: str = Form("0"),
+    notify_threshold_cooldown_minutes: str = Form("0"),
+    db: Session = Depends(get_db),
+    workspace: Workspace = Depends(current_workspace),
+) -> Response:
+    """Legacy POST /me alias for Settings profile save."""
+    return settings_profile_save(
+        request,
+        display_name=display_name,
+        phone=phone,
+        notify_enabled=notify_enabled,
+        notify_interval=notify_interval,
+        notify_threshold=notify_threshold,
+        notify_interval_hours=notify_interval_hours,
+        notify_interval_only_if_changed=notify_interval_only_if_changed,
+        notify_on_new_confirm=notify_on_new_confirm,
+        notify_on_decline=notify_on_decline,
+        notify_on_allergy=notify_on_allergy,
+        notify_on_ride_needed=notify_on_ride_needed,
+        notify_confirm_goal=notify_confirm_goal,
+        notify_threshold_cooldown_minutes=notify_threshold_cooldown_minutes,
+        db=db,
+        workspace=workspace,
+    )
 
 
 @router.get("/hangouts/new", response_class=HTMLResponse)
@@ -853,10 +896,16 @@ def settings_page(
     db: Session = Depends(get_db),
     workspace: Workspace = Depends(current_workspace),
 ) -> HTMLResponse:
+    user = user_for_request(db, request)
+    db.commit()
     return templates.TemplateResponse(
         request,
         "settings.html",
-        {"allergies": _all_allergies(db, workspace)},
+        _settings_profile_context(
+            user,
+            _all_allergies(db, workspace),
+            notice=request.query_params.get("notice"),
+        ),
     )
 
 

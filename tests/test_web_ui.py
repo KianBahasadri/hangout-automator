@@ -142,7 +142,7 @@ def test_draft_hangout_opens_a_prefilled_edit_form(client, db):
     assert '<option value="no" selected>no</option>' in html
     assert "Bring a blanket" in html
     assert re.search(rf'name="contact_ids" value="{organizer.id}"\s+checked', html)
-    # Organizer SMS is configured on My Profile, not on this form.
+    # Organizer SMS is configured under Settings → My Profile, not on this form.
     assert "Organizer SMS" not in html
     assert 'name="notify_enabled"' not in html
     assert "Save changes" not in html

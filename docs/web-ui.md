@@ -4,7 +4,7 @@ HTML routes: `app/routers/web.py`. Templates: `app/templates/`. Styles/scripts: 
 
 ## UX principles (as implemented)
 
-- Minimal chrome: nav is Home, Contacts, **My Profile**, Settings, plus a light/dark theme toggle
+- Minimal chrome: nav is Home, Contacts, Settings, plus a light/dark theme toggle
 - **Labels and placeholders only** — no instructional help copy, lead paragraphs, or
   explainer text under headings. Bad examples (do not reintroduce):
   - “Your personal account settings. This is not the contacts list under Contacts…”
@@ -13,7 +13,9 @@ HTML routes: `app/routers/web.py`. Templates: `app/templates/`. Styles/scripts: 
   Empty states (“No tags yet”), flash alerts after an action, and field
   placeholders are fine; prose that teaches the product on the form is not.
 - Optional fields use a blank first option (or unchecked pills), not an “unknown” value
-- Multi-tenant: each authenticated user works in their own workspace; My Profile is personal (account-holder), while Contacts is the invitee directory for the active workspace
+- Multi-tenant: each authenticated user works in their own workspace; My Profile
+  (under Settings) is personal (account-holder), while Contacts is the invitee
+  directory for the active workspace
 
 ## Theme
 
@@ -45,7 +47,8 @@ string whatever characters it holds.
 | Method | Path | Page / action |
 |--------|------|----------------|
 | GET | `/` | Hangout list without database ID numbers; “New hangout” sits immediately beside the page heading |
-| GET/POST | `/me` | My Profile: account-holder name, phone, default organizer SMS prefs |
+| GET | `/me` | Legacy redirect (307) to `/settings` |
+| POST | `/me` | Legacy alias for `POST /settings/profile` |
 | GET | `/contacts` | Contacts page; tags and existing contacts (invitee directory for this workspace) |
 | GET | `/contacts/new` | Add one or more contacts, with optional phone contact import |
 | POST | `/contacts` | Validate and save the add-contacts batch |
@@ -54,14 +57,15 @@ string whatever characters it holds.
 | POST | `/profiles`, `/profiles/{id}/delete` | Legacy aliases for the contacts POST routes |
 | POST | `/tags` | Create tag → redirect `/contacts` |
 | POST | `/tags/{id}/delete` | Delete tag |
-| GET/POST | `/hangouts/new` | Create hangout (`action=draft` or `setup`); organizer SMS is not on this form — stamped from My Profile on create |
+| GET/POST | `/hangouts/new` | Create hangout (`action=draft` or `setup`); organizer SMS is not on this form — stamped from Settings → My Profile on create |
 | GET/POST | `/hangouts/{id}/edit` | Draft-only prefilled edit form (`action=draft` or `setup`) |
 | GET | `/hangouts/{id}` | Detail / status (`?error=need_contacts`) |
 | POST | `/hangouts/{id}/setup` | Activate / (re)send invites |
 | POST | `/hangouts/{id}/close` | End hangout |
 | POST | `/hangouts/{id}/delete` | Soft-delete (closed only) — sets `deleted_at`, hides from home |
 | POST | `/hangouts/{id}/restore` | Clear `deleted_at` so the hangout appears on home again |
-| GET | `/settings` | Dietary-restriction catalog, access, deleted hangouts, SMS simulator, log download |
+| GET | `/settings` | My Profile (name, phone, default organizer SMS), dietary-restriction catalog, access, deleted hangouts, SMS simulator, log download |
+| POST | `/settings/profile` | Save My Profile fields → `/settings?notice=saved` |
 | GET | `/settings/access` | Admin-only: the email access list (`?notice=` feedback) |
 | POST | `/settings/access` | Admin-only: add an email or change its role → `/settings/access` |
 | POST | `/settings/access/{id}/delete` | Admin-only: revoke an email |
@@ -103,7 +107,7 @@ Partial `_invitee_picker.html` + `invitee_picker.js` (new/edit hangout form and 
 - Header includes an **All hangouts** back button to return to the hangout list without submitting
 - Location uses Google Places (New) suggestions when configured; if the service is unavailable, the field remains free-text and shows an inline status message
 - Submitting setup without invitees keeps the hangout as a draft and returns the create/edit form with a contact-selection error
-- Organizer SMS is **not** on this form — stamped from My Profile at create (matching contact by phone when one exists)
+- Organizer SMS is **not** on this form — stamped from Settings → My Profile at create (matching contact by phone when one exists)
 - **Preview invite SMS** button (left of “Set up hangout”) opens a dialog; body from `POST /api/sms/preview-invite` using the current form fields and the first selected invitee’s name (or “Alex”)
 
 ## Draft editing
@@ -128,6 +132,11 @@ Home list, hangout detail, and deleted-hangouts list humanize `day_date` /
 Home list and `GET /api/hangouts` omit rows with `deleted_at` set.
 
 ## Settings
+
+**My Profile** is the first card: account-holder name, phone, and default
+organizer SMS prefs (`POST /settings/profile`). Personal (`users` table), not
+workspace-scoped. Legacy `GET/POST /me` redirect/alias to these routes.
+Flash notices use `?notice=` (`saved`, `invalid-phone`).
 
 Dietary Restrictions catalog (same pill list pattern as tags; defaults
 `meat` and `pork` are seeded once into an empty catalog — deletions persist).

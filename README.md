@@ -48,7 +48,7 @@ curl -X POST http://127.0.0.1:8000/webhooks/sms \
 | Hangouts | All detail fields optional; draft or set up immediately |
 | Invites | Individual SMS per contact; CONFIRM / NO / INFO / MORE INFO; bulk-select by tag or field |
 | Follow-ups | Up to 2 automated follow-ups if no response, then stop |
-| Organizer SMS | Optional; defaults from My Profile; customize interval cadence + threshold events |
+| Organizer SMS | Optional; defaults from Settings → My Profile; customize interval cadence + threshold events |
 | Status | Full invitee picture on the hangout page |
 
 ## Configuration

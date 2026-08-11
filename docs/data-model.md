@@ -97,7 +97,8 @@ workspace-scoped invitee directory (Contacts / `profiles` table).
 - Default organizer-SMS prefs: `default_notify_*` mirrors hangout notify
   columns and prefills **new** hangouts (overridable per hangout)
 
-Helpers: `app/users.py`. UI: `GET/POST /me`.
+Helpers: `app/users.py`. UI: Settings → My Profile (`GET /settings`,
+`POST /settings/profile`; legacy `/me` redirect/alias).
 
 ### `app_settings`
 

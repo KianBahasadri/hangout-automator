@@ -13,11 +13,12 @@ Configured per hangout (web new-hangout form or API). Phone resolution and send 
 If none resolve, notifications cannot send (web create leaves notify off; API
 returns 400 when enabling notify without a resolvable phone).
 
-Account-holder defaults live on **My Profile** (`/me`, `users` table): phone
-and default notify toggles. On hangout **create**, those defaults are stamped
-onto the hangout (matching contact profile by phone when one exists). The new
-hangout form does not expose per-hangout organizer SMS controls. Defaults are
-personal, not workspace-scoped — two users never share a My Profile row.
+Account-holder defaults live under **Settings → My Profile** (`users` table,
+`POST /settings/profile`): phone and default notify toggles. On hangout
+**create**, those defaults are stamped onto the hangout (matching contact
+profile by phone when one exists). The new hangout form does not expose
+per-hangout organizer SMS controls. Defaults are personal, not
+workspace-scoped — two users never share a My Profile row.
 
 ## Interval digests
 
