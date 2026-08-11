@@ -166,12 +166,13 @@ nav a:hover {
   color: var(--text);
 }
 
+/* Mounted on Settings → Account (not the header nav). */
 .clerk-user-button {
   min-width: 2.25rem;
   min-height: 2.25rem;
   display: inline-flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
 }
 
 .auth-page {

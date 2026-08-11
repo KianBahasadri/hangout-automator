@@ -154,9 +154,9 @@ access list is not consulted at all, so local development is unaffected. See
 [tenancy.md](./tenancy.md).
 
 The sign-in page mounts Clerk's browser component and safely returns to the
-original internal path after login. Authenticated pages mount Clerk's user
-button, which supplies the sign-out action; no application-specific password or
-logout endpoint is stored in this repo.
+original internal path after login. **Settings → Account** mounts Clerk's user
+button (profile / sign-out); it is not in the header nav. No
+application-specific password or logout endpoint is stored in this repo.
 
 `.env` and `.env.*`, `*.db`, `.venv`, and Terraform state are gitignored — do
 not put secrets in docs or commits.

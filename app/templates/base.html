@@ -64,9 +64,6 @@
         {% if is_admin(request) %}
         <a href="/admin">Admin Panel</a>
         {% endif %}
-        {% if clerk_enabled() %}
-        <div id="clerk-user-button" class="clerk-user-button" aria-label="Account"></div>
-        {% endif %}
         <button
           type="button"
           class="theme-toggle"

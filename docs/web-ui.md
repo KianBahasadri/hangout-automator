@@ -5,7 +5,8 @@ HTML routes: `app/routers/web.py`. Templates: `app/templates/`. Styles/scripts: 
 ## UX principles (as implemented)
 
 - Minimal chrome: nav is Home, Contacts, Settings, **Admin Panel** (admins only),
-  plus a light/dark theme toggle
+  plus a light/dark theme toggle. Clerk account / sign-out lives under Settings,
+  not the header
 - **Labels and placeholders only** — no instructional help copy, lead paragraphs, or
   explainer text under headings. Bad examples (do not reintroduce):
   - “Your personal account settings. This is not the contacts list under Contacts…”
@@ -22,7 +23,7 @@ HTML routes: `app/routers/web.py`. Templates: `app/templates/`. Styles/scripts: 
 
 `base.html` (inline script) + CSS tokens in `static/style.css`.
 
-- Toggle sits immediately right of **Settings** in the header nav
+- Toggle sits at the right end of the header nav (after Admin Panel when shown)
 - Preference is stored in `localStorage` key `theme` (`light` | `dark`)
 - Default is dark (`data-theme="dark"` on `<html>`, also the unscoped token set)
 - Head script applies the stored theme before paint; the button calls
@@ -138,10 +139,14 @@ Home list and `GET /api/hangouts` omit rows with `deleted_at` set.
 
 ## Settings
 
-**My Profile** is the first card: account-holder name, phone, and default
-organizer SMS prefs (`POST /settings/profile`). Personal (`users` table), not
-workspace-scoped. Legacy `GET/POST /me` redirect/alias to these routes.
-Flash notices use `?notice=` (`saved`, `invalid-phone`).
+**Account** (only when `CLERK_ENABLED`): mounts Clerk’s user button
+(`#clerk-user-button` via `clerk_auth.js`) for profile management and sign-out.
+Not shown in the header nav.
+
+**My Profile**: account-holder name, phone, and default organizer SMS prefs
+(`POST /settings/profile`). Personal (`users` table), not workspace-scoped.
+Legacy `GET/POST /me` redirect/alias to these routes. Flash notices use
+`?notice=` (`saved`, `invalid-phone`).
 
 Dietary Restrictions catalog (same pill list pattern as tags; defaults
 `meat` and `pork` are seeded once into an empty catalog — deletions persist).

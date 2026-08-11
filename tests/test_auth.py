@@ -108,9 +108,14 @@ def test_authenticated_clerk_request_reaches_app(client, monkeypatch):
 
     assert response.status_code == 200
     assert 'data-clerk-publishable-key="pk_test_example"' in response.text
-    assert 'id="clerk-user-button"' in response.text
+    assert 'id="clerk-user-button"' not in response.text
     assert "sk_test_example" not in response.text
     assert "user_test" not in response.text
+
+    settings_page = client.get("/settings")
+    assert settings_page.status_code == 200
+    assert 'id="clerk-user-button"' in settings_page.text
+    assert "Account" in settings_page.text
 
 
 def test_clerk_jwt_key_authentication_reaches_app(client, monkeypatch):
@@ -145,10 +150,15 @@ def test_clerk_jwt_key_authentication_reaches_app(client, monkeypatch):
         algorithm="RS256",
     )
 
-    response = client.get("/", headers={"Authorization": f"Bearer {token}"})
+    headers = {"Authorization": f"Bearer {token}"}
+    response = client.get("/", headers=headers)
 
     assert response.status_code == 200
-    assert 'id="clerk-user-button"' in response.text
+    assert 'id="clerk-user-button"' not in response.text
+
+    settings_page = client.get("/settings", headers=headers)
+    assert settings_page.status_code == 200
+    assert 'id="clerk-user-button"' in settings_page.text
 
 
 def test_sign_in_rejects_external_redirect_destination(client, monkeypatch):

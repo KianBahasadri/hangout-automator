@@ -11,6 +11,13 @@
 <div class="alert">{{ notices[notice] }}</div>
 {% endif %}
 
+{% if clerk_enabled() %}
+<section class="card">
+  <h2 style="margin-top:0;">Account</h2>
+  <div id="clerk-user-button" class="clerk-user-button" aria-label="Account"></div>
+</section>
+{% endif %}
+
 <form method="post" action="/settings/profile" class="card">
   <h2 style="margin-top:0;">My Profile</h2>
   <div class="field-row" style="margin-top:0;">
