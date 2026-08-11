@@ -1,11 +1,16 @@
 from __future__ import annotations
 
+import logging
 import math
 from datetime import datetime
 from types import SimpleNamespace
 from typing import Any
+from urllib.parse import urlsplit
 
+from app.config import get_settings
 from app.models import Hangout, HangoutInvite, InviteStatus, Profile, YesNo
+
+logger = logging.getLogger(__name__)
 
 
 def _yn(value: YesNo | None) -> str | None:
@@ -95,6 +100,39 @@ def _reply_options_footer(*, include_info: bool = True) -> str:
     return "\n".join(lines)
 
 
+def public_site_url() -> str | None:
+    """Canonical site URL for SMS footers from PUBLIC_BASE_URL, or None if unusable.
+
+    Strips a trailing slash. Omits empty values and anything that is not an
+    absolute http(s) URL (so SMS never gets a bare `http://` or relative junk).
+    """
+    raw = (get_settings().public_base_url or "").strip().rstrip("/")
+    if not raw:
+        return None
+    parts = urlsplit(raw)
+    if parts.scheme not in {"http", "https"} or not parts.netloc:
+        logger.warning(
+            "PUBLIC_BASE_URL is not a usable absolute URL for SMS footers: %r",
+            get_settings().public_base_url,
+        )
+        return None
+    return raw
+
+
+def web_link_footer() -> str | None:
+    """One-line `Web: <url>` footer, or None when the base URL is missing/invalid."""
+    url = public_site_url()
+    return f"Web: {url}" if url else None
+
+
+def _with_web_link(body: str) -> str:
+    """Append the public site footer when configured; otherwise return *body* unchanged."""
+    footer = web_link_footer()
+    if not footer:
+        return body
+    return f"{body.rstrip()}\n\n{footer}"
+
+
 def format_hangout_summary(hangout: Hangout) -> str:
     """Multi-line hangout details for SMS. Falls back to a short phrase if empty."""
     lines: list[str] = []
@@ -132,29 +170,33 @@ def format_hangout_summary(hangout: Hangout) -> str:
 
 def craft_invite_message(hangout: Hangout, profile: Profile) -> str:
     summary = format_hangout_summary(hangout)
-    return "\n".join(
-        [
-            f"Hey {profile.name}!",
-            "",
-            "You're invited:",
-            summary,
-            "",
-            _reply_options_footer(),
-        ]
+    return _with_web_link(
+        "\n".join(
+            [
+                f"Hey {profile.name}!",
+                "",
+                "You're invited:",
+                summary,
+                "",
+                _reply_options_footer(),
+            ]
+        )
     )
 
 
 def craft_followup_message(hangout: Hangout, profile: Profile, attempt: int) -> str:
     summary = format_hangout_summary(hangout)
-    return "\n".join(
-        [
-            f"Hey {profile.name}, reminder ({attempt}):",
-            "",
-            "Still free for:",
-            summary,
-            "",
-            _reply_options_footer(),
-        ]
+    return _with_web_link(
+        "\n".join(
+            [
+                f"Hey {profile.name}, reminder ({attempt}):",
+                "",
+                "Still free for:",
+                summary,
+                "",
+                _reply_options_footer(),
+            ]
+        )
     )
 
 
@@ -219,7 +261,7 @@ def craft_organizer_digest(hangout: Hangout) -> str:
         lines.append("Needs ride: " + ", ".join(rides_needed))
     if can_drive:
         lines.append("Can drive: " + ", ".join(can_drive))
-    return "\n".join(lines)
+    return _with_web_link("\n".join(lines))
 
 
 def craft_info_summary(hangout: Hangout, invite: HangoutInvite) -> str:
@@ -238,7 +280,7 @@ def craft_info_summary(hangout: Hangout, invite: HangoutInvite) -> str:
         "",
         "Reply MORE INFO.",
     ]
-    return "\n".join(lines)
+    return _with_web_link("\n".join(lines))
 
 
 def craft_info_detail(hangout: Hangout, invite: HangoutInvite) -> str:
@@ -265,26 +307,30 @@ def craft_info_detail(hangout: Hangout, invite: HangoutInvite) -> str:
             f"Your RSVP: {_status_label(invite.status)}",
         ]
     )
-    return "\n".join(lines)
+    return _with_web_link("\n".join(lines))
 
 
 def craft_confirm_reply(hangout: Hangout) -> str:
-    return "\n".join(
-        [
-            f"You're confirmed for hangout #{hangout.id}.",
-            "See you!",
-            "",
-            "Reply INFO or MORE INFO.",
-        ]
+    return _with_web_link(
+        "\n".join(
+            [
+                f"You're confirmed for hangout #{hangout.id}.",
+                "See you!",
+                "",
+                "Reply INFO or MORE INFO.",
+            ]
+        )
     )
 
 
 def craft_decline_reply(hangout: Hangout) -> str:
-    return "\n".join(
-        [
-            f"You're marked as not coming for hangout #{hangout.id}.",
-            "Thanks for letting us know.",
-        ]
+    return _with_web_link(
+        "\n".join(
+            [
+                f"You're marked as not coming for hangout #{hangout.id}.",
+                "Thanks for letting us know.",
+            ]
+        )
     )
 
 

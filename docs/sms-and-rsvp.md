@@ -50,6 +50,26 @@ Messages use short multi-line layout (labels + blank lines) so they read clearly
 - **MORE INFO** — named lists for coming / pending / declined, plus confirmed logistics (restrictions, rides, drivers) + requester’s RSVP
 - **Organizer digest** — same named coming / pending / declined layout as MORE INFO; dietary restrictions for confirmed; Needs ride / Can drive for confirmed with `drive` no/yes
 
+### Website footer
+
+When `PUBLIC_BASE_URL` is a usable absolute `http(s)` URL, invite, follow-up,
+confirm/decline acks, INFO / MORE INFO, and organizer digests append a short
+footer:
+
+```text
+Web: https://hangout.example.com
+```
+
+Source: `public_site_url()` / `web_link_footer()` in `app/messages.py` (trailing
+slash stripped). Empty, relative, or malformed base URLs omit the line entirely
+(and log a warning) — no broken `http://` stubs. SMS simulator and
+`preview-invite` use the same craft helpers, so previews match real sends.
+
+This is the **canonical app root**, not a hangout-specific guest link. If the
+deployment sits behind Cloudflare Access (or similar), invitees who open the
+URL still need Access approval or a future public guest RSVP path; the footer
+remains useful for organizers and Access-approved users.
+
 ## Inbound webhook
 
 `POST /webhooks/sms`
