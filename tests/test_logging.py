@@ -2,11 +2,44 @@ import json
 from pathlib import Path
 
 from app.config import Settings
-from app.event_logging import configure_logging
+from app.event_logging import configure_logging, flush_audit_log_handlers, read_audit_log_snapshot
 
 
 def _json_lines(path: Path) -> list[dict]:
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+
+
+def test_read_audit_log_snapshot_static_file(tmp_path):
+    path = tmp_path / "server.log"
+    path.write_bytes(b'{"event":"a"}\n{"event":"b"}\n')
+    assert read_audit_log_snapshot(path) == b'{"event":"a"}\n{"event":"b"}\n'
+
+
+def test_read_audit_log_snapshot_missing_returns_none(tmp_path):
+    assert read_audit_log_snapshot(tmp_path / "nope.log") is None
+
+
+def test_read_audit_log_snapshot_empty_file(tmp_path):
+    path = tmp_path / "empty.log"
+    path.write_bytes(b"")
+    assert read_audit_log_snapshot(path) == b""
+
+
+def test_read_audit_log_snapshot_caps_to_tail(tmp_path):
+    path = tmp_path / "server.log"
+    # 3 full lines; max_bytes lands mid-file so the first partial line is dropped.
+    path.write_bytes(b'{"event":"1"}\n{"event":"2"}\n{"event":"3"}\n')
+    data = read_audit_log_snapshot(path, max_bytes=20)
+    assert data is not None
+    assert len(data) <= 20
+    # Remaining content should be complete JSONL lines only.
+    for line in data.splitlines():
+        assert line.startswith(b"{")
+        json.loads(line)
+
+
+def test_flush_audit_log_handlers_is_safe_without_handlers():
+    flush_audit_log_handlers()
 
 
 def test_http_trace_writes_source_body_and_correlation_id(client, tmp_path):

@@ -529,6 +529,10 @@ def test_admin_logs_download_returns_file(client, tmp_path, monkeypatch):
     assert "attachment" in response.headers.get("content-disposition", "").lower()
     assert "download-me.log" in response.headers.get("content-disposition", "")
     assert response.content == b'{"event":"test"}\n'
+    # Content-Length must match body exactly — a mismatch is what made browsers
+    # abort the live FileResponse stream with “source file could not be read.”
+    assert response.headers.get("content-length") == str(len(response.content))
+    assert response.headers.get("cache-control") == "no-store"
 
 
 def test_admin_logs_download_missing_file_is_404(client, tmp_path, monkeypatch):
@@ -541,6 +545,59 @@ def test_admin_logs_download_missing_file_is_404(client, tmp_path, monkeypatch):
     response = client.get("/admin/logs")
 
     assert response.status_code == 404
+
+
+def test_admin_logs_download_stable_under_concurrent_append(client, tmp_path, monkeypatch):
+    """Snapshot freezes length; appends after open must not change the body."""
+    log_path = tmp_path / "growing.log"
+    frozen = (b'{"event":"early"}\n') * 50
+    log_path.write_bytes(frozen)
+
+    from app import event_logging
+
+    real_snapshot = event_logging.read_audit_log_snapshot
+
+    def snapshot_then_append(path, *, max_bytes=None):
+        data = real_snapshot(path, max_bytes=max_bytes)
+        # Simulate request logging that continues after the snapshot is taken.
+        with open(path, "ab") as fh:
+            fh.write(b'{"event":"late"}\n' * 100)
+        return data
+
+    monkeypatch.setattr(
+        "app.routers.web.get_settings",
+        lambda: Settings(log_file=str(log_path), log_max_bytes=50_000_000, _env_file=None),
+    )
+    monkeypatch.setattr("app.routers.web.read_audit_log_snapshot", snapshot_then_append)
+
+    response = client.get("/admin/logs")
+
+    assert response.status_code == 200
+    assert response.content == frozen
+    assert response.headers.get("content-length") == str(len(frozen))
+    # Live file grew; download must not include the late lines.
+    assert log_path.stat().st_size > len(frozen)
+    assert b'"late"' not in response.content
+
+
+def test_admin_logs_download_multi_mb_file(client, tmp_path, monkeypatch):
+    log_path = tmp_path / "big.log"
+    # ~2 MiB of valid JSONL lines (under default rotation size).
+    line = b'{"event":"bulk","n":12345}\n'
+    repeats = (2 * 1024 * 1024) // len(line)
+    payload = line * repeats
+    log_path.write_bytes(payload)
+    monkeypatch.setattr(
+        "app.routers.web.get_settings",
+        lambda: Settings(log_file=str(log_path), log_max_bytes=50_000_000, _env_file=None),
+    )
+
+    response = client.get("/admin/logs")
+
+    assert response.status_code == 200
+    assert response.content == payload
+    assert response.headers.get("content-length") == str(len(payload))
+    assert len(response.content) >= 2 * 1024 * 1024 - len(line)
 
 
 def test_settings_logs_legacy_redirects_to_admin(client):

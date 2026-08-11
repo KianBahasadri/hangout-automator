@@ -11,6 +11,44 @@ Dates are UTC.
 
 ---
 
+## 2026-08-11 — App release to main via Azure Run Command
+
+Commit: `162631e` (Include public site URL in outbound SMS, KIAN-533)  
+Previous: `33d818a` (Clerk production cutover era)
+
+Command path: Azure Run Command on `hangout-vm` (no SSH; not a Terraform
+apply). Sequence: `git pull --ff-only origin main` → `pip install` → add missing
+env keys → `alembic upgrade head` → `systemctl restart hangout-automator
+hangout-worker`.
+
+Migrations applied: `db04909245fd` → `7c4be1d90a52` (access grants) →
+`a8f3c2e19b04` (users / my profile) → `c3e8f1a92b04` (SMS opt-outs). Head is
+`c3e8f1a92b04`.
+
+Env gap on the long-lived VM (cloud-init only runs at first boot; Terraform
+`ignore_changes` on `custom_data` does not refresh `/etc/hangout-automator.env`):
+
+- Added `HANGOUT_ENV=production` — without it the new config code defaults to
+  development and refuses live `pk_live_` Clerk keys, so `alembic` and the app
+  both fail at import.
+- Added `ACCESS_BOOTSTRAP_ADMINS` (value from operator `.env.production`, not
+  recorded here). Startup logged `access.bootstrap_admins_granted` and
+  `access.bootstrap_complete`.
+
+First Run Command attempt failed immediately on `set -o pipefail` because the
+agent executes scripts with `sh` (dash), not bash. Retried with POSIX `set -e`.
+
+Verified after restart:
+
+- Units: `hangout-automator`, `hangout-worker`, `cloudflared` all `active`
+- Local: `/` → 303, `/webhooks/sms` → 405, `/api/hangouts` → 401
+- External (`https://hangout.bahasadri.com`): same codes; `/sign-in` → 200
+
+Notable code included in this jump (not an exhaustive list): app-owned access
+list, multi-tenant workspace scoping already on main, My Profile / Settings,
+Admin Panel + costs, SMS opt-out, public site URL in outbound SMS, contacts
+rename, SMS simulator.
+
 ## 2026-08-09 — Cloudflare Access removed; Clerk is the only auth boundary
 
 Command: `./scripts/deploy/terraform.sh apply`

@@ -169,8 +169,9 @@ Admin-only (`require_admin`). Nav link sits to the right of Settings and is
 hidden from members. Local dev with Clerk off treats everyone as admin.
 
 **Tools** include SMS simulator (still under `/settings/…` for now) and
-**Download logs** → `GET /admin/logs` (active `LOG_FILE` as attachment; 404 if
-missing; legacy `/settings/logs` redirects). See [logging.md](./logging.md).
+**Download logs** → `GET /admin/logs` (length-stable snapshot of active
+`LOG_FILE` as attachment; 404 if missing; legacy `/settings/logs` redirects).
+See [logging.md](./logging.md).
 
 **Costs** (KIAN-535 Phase A): cards for Twilio, Azure, Cloudflare.
 

@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-import logging
 import re
 from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session, joinedload
 
@@ -21,6 +20,7 @@ from app.access import (
 from app.config import get_settings
 from app.costs import admin_cost_cards
 from app.database import get_db
+from app.event_logging import flush_audit_log_handlers, read_audit_log_snapshot
 from app.ids import RowId, RowIdPath, parse_row_id
 from app.models import (
     AccessGrant,
@@ -1141,22 +1141,33 @@ def access_grant_delete_legacy(
     return access_grant_delete(grant_id, db=db, _=None)
 
 
-@router.get("/admin/logs", response_class=FileResponse)
-def download_logs(_: None = Depends(require_admin)) -> FileResponse:
-    """Serve the active JSONL audit log as a downloadable file (admins only)."""
-    log_path = Path(get_settings().log_file).expanduser()
-    # Flush so the download includes events still buffered in handlers.
-    for handler in logging.root.handlers:
-        try:
-            handler.flush()
-        except OSError:
-            pass
-    if not log_path.is_file():
+@router.get("/admin/logs")
+def download_logs(_: None = Depends(require_admin)) -> Response:
+    """Serve a length-stable snapshot of the active JSONL audit log (admins only).
+
+    The live file is continuously appended (and may rotate). Streaming it with
+    Starlette ``FileResponse`` advertises a Content-Length from ``stat`` then
+    reads until EOF, so growth or rotation mid-transfer leaves browsers with a
+    truncated ``.part`` and “source file could not be read.” Snapshotting a
+    fixed byte range after flush keeps Content-Length and body in lockstep.
+    """
+    settings = get_settings()
+    log_path = Path(settings.log_file).expanduser()
+    flush_audit_log_handlers()
+    # Cap at one rotation-sized chunk so a runaway file cannot OOM the process.
+    data = read_audit_log_snapshot(
+        log_path,
+        max_bytes=max(1, int(settings.log_max_bytes)),
+    )
+    if data is None:
         raise HTTPException(404, "Log file not found")
-    return FileResponse(
-        path=log_path,
-        filename=log_path.name,
+    return Response(
+        content=data,
         media_type="application/x-ndjson",
+        headers={
+            "Content-Disposition": f'attachment; filename="{log_path.name}"',
+            "Cache-Control": "no-store",
+        },
     )
 
 

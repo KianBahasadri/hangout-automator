@@ -75,11 +75,25 @@ Domain events additionally cover:
 
 ## Download from Admin Panel
 
-`GET /admin/logs` (Admin Panel → Tools; admins only) returns the active
-`LOG_FILE` as a downloadable attachment (`Content-Disposition: attachment`).
-Handlers are flushed before the file is served so recent events are included.
-Rotated backups (`server.log.1`, …) are not included. A missing file yields 404.
-Legacy `GET /settings/logs` redirects (307) to `/admin/logs`.
+`GET /admin/logs` (Admin Panel → Tools; admins only) returns a **length-stable
+snapshot** of the active `LOG_FILE` as a downloadable attachment
+(`Content-Disposition: attachment`, `Cache-Control: no-store`, media type
+`application/x-ndjson`).
+
+Handlers are flushed first so recent buffered events are included. The handler
+then opens the file, measures its size, and reads that many bytes (or a tail of
+at most `LOG_MAX_BYTES` if the file has grown past the rotation size). Serving
+a frozen byte range keeps `Content-Length` equal to the body even while the live
+file is still being appended or rotated — streaming the live path with
+`FileResponse` used to advertise one length and then read past it (or stop
+early after rotation), which made browsers abort with a truncated `.part` and
+“source file could not be read.”
+
+When the active file is larger than `LOG_MAX_BYTES`, only the last
+`LOG_MAX_BYTES` are returned (partial first line dropped so remaining lines are
+clean JSONL). Rotated backups (`server.log.1`, …) are not included. A missing
+or unreadable file yields 404. Legacy `GET /settings/logs` redirects (307) to
+`/admin/logs`.
 
 ## Finding events
 

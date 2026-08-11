@@ -143,6 +143,67 @@ def _owned_handlers() -> set[logging.Handler]:
     return handlers
 
 
+def flush_audit_log_handlers() -> None:
+    """Flush owned audit handlers (and root) so a download includes recent events."""
+
+    for handler in _owned_handlers():
+        try:
+            handler.flush()
+        except OSError:
+            pass
+    for handler in logging.root.handlers:
+        try:
+            handler.flush()
+        except OSError:
+            pass
+
+
+def read_audit_log_snapshot(
+    path: str | Path,
+    *,
+    max_bytes: int | None = None,
+) -> bytes | None:
+    """Return a length-stable byte snapshot of the active audit log.
+
+    Opens the path first so concurrent rotation (rename of the active file)
+    still serves the open inode. Reads only the byte length observed after
+    open (optionally capped to a tail of ``max_bytes``), so concurrent
+    appends cannot change the response body size mid-transfer. That avoids
+    Content-Length mismatches that make browsers abort with “source file
+    could not be read.”
+
+    Returns ``None`` if the file is missing or unreadable. An empty file
+    yields ``b""``.
+    """
+
+    log_path = Path(path).expanduser()
+    try:
+        fh = log_path.open("rb")
+    except FileNotFoundError:
+        return None
+    except OSError:
+        return None
+
+    with fh:
+        size = fh.seek(0, os.SEEK_END)
+        if size <= 0:
+            return b""
+        if max_bytes is not None and max_bytes > 0 and size > max_bytes:
+            # Most recent events live at the end of the active file.
+            start = size - max_bytes
+            fh.seek(start)
+            data = fh.read(max_bytes)
+            # If we landed mid-line, drop the partial first line so the rest
+            # is clean JSONL when possible.
+            if start > 0:
+                newline = data.find(b"\n")
+                if newline != -1:
+                    data = data[newline + 1 :]
+            return data
+        fh.seek(0)
+        return fh.read(size)
+
+
 def configure_logging(settings: Any) -> None:
     """Configure console/journal and rotating JSONL file logging.
 
