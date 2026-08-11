@@ -9,6 +9,7 @@
 - [sms-and-rsvp.md](./sms-and-rsvp.md) — SMS providers, message copy, inbound webhook, reply parsing
 - [invites-and-followups.md](./invites-and-followups.md) — Hangout activation, invite sends, follow-up scheduler
 - [organizer-notifications.md](./organizer-notifications.md) — Interval digests and threshold alerts
+- [location-and-carpool.md](./location-and-carpool.md) — Product model for structured place + carpool (KIAN-498); v1 cut line
 - [testing.md](./testing.md) — Test suite layout, the generated smoke matrix, running it
 - [tenancy.md](./tenancy.md) — Workspaces, how requests resolve, inbound-SMS routing ambiguity
 - [admin-costs.md](./admin-costs.md) — Admin Panel cost cards (Twilio estimate, Azure/Cloudflare links)
