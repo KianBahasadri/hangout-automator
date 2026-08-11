@@ -489,7 +489,7 @@ Clerk sign-*up* is open and cannot be narrowed on this plan (Clerk's allowlist
 and blocklist are paid features), so strangers can still create accounts
 against the instance. The app refuses them: without an `access_grants` row for
 their verified email they get a 403 on every route and no workspace. Adding
-someone is Settings → Access, by an admin. `ACCESS_BOOTSTRAP_ADMINS` seeds the
+someone is Admin → Access, by an admin. `ACCESS_BOOTSTRAP_ADMINS` seeds the
 first admins at startup and is the recovery path if the last one is lost.
 
 Defense in depth beyond Clerk:

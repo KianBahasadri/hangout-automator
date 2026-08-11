@@ -198,9 +198,9 @@ def test_member_cannot_read_or_change_the_access_list(client, monkeypatch, db):
     _signed_in_as(monkeypatch, "user_member", "member@example.test")
     grant_access("member@example.test", role=AccessRole.member)
 
-    read = client.get("/settings/access")
+    read = client.get("/admin/access")
     write = client.post(
-        "/settings/access",
+        "/admin/access",
         data={"email": "sneak@example.test", "role": "admin"},
         follow_redirects=False,
     )
@@ -215,7 +215,7 @@ def test_admin_can_add_and_remove_emails(client, monkeypatch, db):
     grant_access("admin@example.test", role=AccessRole.admin)
 
     added = client.post(
-        "/settings/access",
+        "/admin/access",
         data={"email": "  NewPerson@Example.Test ", "role": "member"},
         follow_redirects=False,
     )
@@ -226,11 +226,11 @@ def test_admin_can_add_and_remove_emails(client, monkeypatch, db):
     # Attribution: who let them in.
     assert grant.created_by == "admin@example.test"
 
-    listing = client.get("/settings/access")
+    listing = client.get("/admin/access")
     assert "newperson@example.test" in listing.text
     assert "not signed in yet" in listing.text
 
-    removed = client.post(f"/settings/access/{grant.id}/delete", follow_redirects=False)
+    removed = client.post(f"/admin/access/{grant.id}/delete", follow_redirects=False)
     assert removed.status_code == 303
     assert db.query(AccessGrant).filter(AccessGrant.id == grant.id).count() == 0
 
@@ -240,13 +240,13 @@ def test_admin_form_rejects_a_non_email(client, monkeypatch, db):
     grant_access("admin@example.test", role=AccessRole.admin)
 
     response = client.post(
-        "/settings/access",
+        "/admin/access",
         data={"email": "not-an-email", "role": "member"},
         follow_redirects=False,
     )
 
     assert response.status_code == 303
-    assert response.headers["location"] == "/settings/access?notice=invalid-email"
+    assert response.headers["location"] == "/admin/access?notice=invalid-email"
     assert db.query(AccessGrant).count() == 1
 
 
@@ -256,15 +256,15 @@ def test_the_last_admin_cannot_be_removed_or_demoted(client, monkeypatch, db):
     grant_access("admin@example.test", role=AccessRole.admin)
     only_admin = db.query(AccessGrant).filter(AccessGrant.email == "admin@example.test").one()
 
-    removed = client.post(f"/settings/access/{only_admin.id}/delete", follow_redirects=False)
+    removed = client.post(f"/admin/access/{only_admin.id}/delete", follow_redirects=False)
     demoted = client.post(
-        "/settings/access",
+        "/admin/access",
         data={"email": "admin@example.test", "role": "member"},
         follow_redirects=False,
     )
 
-    assert removed.headers["location"] == "/settings/access?notice=last-admin"
-    assert demoted.headers["location"] == "/settings/access?notice=last-admin"
+    assert removed.headers["location"] == "/admin/access?notice=last-admin"
+    assert demoted.headers["location"] == "/admin/access?notice=last-admin"
     db.expire_all()
     assert db.query(AccessGrant).filter(AccessGrant.email == "admin@example.test").one().role is (
         AccessRole.admin
@@ -277,16 +277,16 @@ def test_a_second_admin_makes_the_first_removable(client, monkeypatch, db):
     grant_access("admin2@example.test", role=AccessRole.admin)
     first = db.query(AccessGrant).filter(AccessGrant.email == "admin@example.test").one()
 
-    response = client.post(f"/settings/access/{first.id}/delete", follow_redirects=False)
+    response = client.post(f"/admin/access/{first.id}/delete", follow_redirects=False)
 
-    assert response.headers["location"] == "/settings/access?notice=removed"
+    assert response.headers["location"] == "/admin/access?notice=removed"
     assert db.query(AccessGrant).filter(AccessGrant.email == "admin@example.test").count() == 0
 
 
 def test_access_pages_stay_open_when_clerk_is_disabled(client, db):
     """Local development has no identity at all; the page must not 403 into
     being unreachable."""
-    assert client.get("/settings/access").status_code == 200
+    assert client.get("/admin/access").status_code == 200
 
 
 # --- Bootstrap --------------------------------------------------------------

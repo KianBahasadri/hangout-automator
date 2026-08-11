@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Admin Panel · Hangout Automator{% endblock %}
+{% block content %}
+<div style="display:flex;align-items:baseline;gap:1rem;flex-wrap:wrap;margin-bottom:1.25rem;">
+  <h1 style="margin:0;">Admin Panel</h1>
+</div>
+
+<section class="card">
+  <h2 style="margin-top:0;">Costs</h2>
+  <div class="cost-grid">
+    {% for card in cost_cards %}
+    <article class="cost-card">
+      <header class="cost-card-head">
+        <h3 style="margin:0;">{{ card.name }}</h3>
+        <span class="badge {% if card.source == 'estimate' %}badge-info{% elif card.source == 'link' %}badge-pending{% else %}badge-draft{% endif %}">
+          {{ card.source }}
+        </span>
+      </header>
+      <p style="margin:0.5rem 0 0.75rem;">{{ card.summary }}</p>
+      {% if card.periods %}
+      <table class="cost-table">
+        <thead>
+          <tr>
+            <th>Window</th>
+            <th>Out OK</th>
+            <th>Out fail</th>
+            <th>In</th>
+            <th>Billable</th>
+            <th>Est. $</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in card.periods %}
+          <tr>
+            <td>{{ p.label }}</td>
+            <td>{{ p.outbound_ok }}</td>
+            <td>{{ p.outbound_fail }}</td>
+            <td>{{ p.inbound }}</td>
+            <td>{{ p.billable }}</td>
+            <td>{% if p.estimated_usd is not none %}${{ '%.2f'|format(p.estimated_usd) }}{% else %}—{% endif %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% endif %}
+      <ul class="muted cost-detail">
+        {% for line in card.detail_lines %}
+        <li>{{ line }}</li>
+        {% endfor %}
+      </ul>
+      {% if card.link_url %}
+      <a class="btn btn-secondary btn-sm" href="{{ card.link_url }}" target="_blank" rel="noopener noreferrer">
+        {{ card.link_label or "Open console" }}
+      </a>
+      {% endif %}
+    </article>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="card">
+  <h2 style="margin-top:0;">Access</h2>
+  <p class="muted" style="margin-top:0;">Who may sign in to this deployment, and who is admin.</p>
+  <a class="btn" href="/admin/access">Manage access</a>
+</section>
+
+<section class="card">
+  <h2 style="margin-top:0;">Tools</h2>
+  <div class="actions" style="flex-wrap:wrap;">
+    <a class="btn btn-secondary" href="/settings/sms-simulator">SMS simulator</a>
+    <a class="btn btn-secondary" href="/settings/logs">Download logs</a>
+  </div>
+</section>
+{% endblock %}

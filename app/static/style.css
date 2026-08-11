@@ -1340,3 +1340,48 @@ html[data-theme="light"] .sms-phone-bezel {
     padding-top: 0;
   }
 }
+
+/* Admin Panel → Costs */
+.cost-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1rem;
+  margin-top: 0.75rem;
+}
+
+.cost-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface2);
+  padding: 0.9rem 1rem 1rem;
+}
+
+.cost-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.cost-table {
+  width: 100%;
+  font-size: 0.9rem;
+  margin: 0 0 0.75rem;
+}
+
+.cost-table th,
+.cost-table td {
+  padding: 0.25rem 0.35rem;
+  text-align: left;
+}
+
+.cost-table th {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.cost-detail {
+  margin: 0 0 0.75rem;
+  padding-left: 1.1rem;
+  font-size: 0.85rem;
+}

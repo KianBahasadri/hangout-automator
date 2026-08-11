@@ -61,6 +61,9 @@
         <a href="/">Home</a>
         <a href="/contacts">Contacts</a>
         <a href="/settings">Settings</a>
+        {% if is_admin(request) %}
+        <a href="/admin">Admin Panel</a>
+        {% endif %}
         {% if clerk_enabled() %}
         <div id="clerk-user-button" class="clerk-user-button" aria-label="Account"></div>
         {% endif %}

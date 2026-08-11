@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Access · Hangout Automator{% endblock %}
+{% block title %}Access · Admin Panel · Hangout Automator{% endblock %}
 {% block content %}
 {% set notices = {
   "added": "Email added to the access list.",
@@ -10,11 +10,10 @@
   "last-admin": "Refused: that is the only admin left. Add another admin first.",
   "not-found": "That entry no longer exists.",
 } %}
-<h1>Access</h1>
-<p class="muted">
-  Only these email addresses can sign in. Anyone else who creates a Clerk
-  account is refused before reaching the app. Admins can edit this list.
-</p>
+<div style="display:flex;align-items:baseline;gap:1rem;flex-wrap:wrap;margin-bottom:1.25rem;">
+  <h1 style="margin:0;">Access</h1>
+  <a class="btn btn-secondary btn-sm" href="/admin">← Admin Panel</a>
+</div>
 
 {% if notice and notice in notices %}
 <div class="alert">{{ notices[notice] }}</div>
@@ -52,7 +51,7 @@
           {% if grant.role.value == 'admin' and admin_total <= 1 %}
           <span class="muted" title="The last admin cannot be removed">—</span>
           {% else %}
-          <form method="post" action="/settings/access/{{ grant.id }}/delete"
+          <form method="post" action="/admin/access/{{ grant.id }}/delete"
                 data-confirm="Remove access for {{ grant.email }}?">
             <button class="btn" type="submit">Remove</button>
           </form>
@@ -72,11 +71,11 @@
     They still have to create their own Clerk account with this exact address.
     Adding it here does not send an invitation.
   </p>
-  <form method="post" action="/settings/access" class="field-row" style="align-items:flex-end;">
+  <form method="post" action="/admin/access" class="field-row" style="align-items:flex-end;">
     <div style="flex:2;">
       <label for="access_email">Email</label>
       <input id="access_email" name="email" type="email" required maxlength="255"
-             placeholder="someone@example.com" style="margin-bottom:0;" />
+             style="margin-bottom:0;" />
     </div>
     <div style="flex:1;">
       <label for="access_role">Role</label>

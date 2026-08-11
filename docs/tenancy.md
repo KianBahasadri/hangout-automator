@@ -66,8 +66,9 @@ removed on 2026-08-09. `access_grants` closes it in the app.
 - **One row per allowed email**, with a role of `admin` or `member`. Anyone
   else is refused after authenticating, whether or not they have a Clerk
   account.
-- **`member`** may use the app. **`admin`** may additionally edit the list, at
-  Settings → Access. Nothing else distinguishes them.
+- **`member`** may use the app. **`admin`** may additionally open the Admin
+  Panel (cost estimates, access list, ops tools). Access list editing is at
+  Admin → Access. Nothing else distinguishes them.
 - Matching is on the **verified primary** email Clerk holds for the user. An
   unverified address never matches, or sign-up would let anyone claim an
   allowed address and inherit its grant.

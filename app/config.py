@@ -6,7 +6,7 @@ import logging
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from pydantic import model_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
@@ -84,6 +84,13 @@ class Settings(BaseSettings):
     twilio_account_sid: str = ""
     twilio_auth_token: str = ""
     twilio_from_number: str = ""
+    # Rough $/message for Admin cost estimates from local message_logs.
+    # Leave empty to show counts only. Not a live Twilio Usage API pull.
+    twilio_sms_price_estimate: float | None = None
+
+    # Optional labels + portal deep-links for Admin → Costs (no live billing API).
+    azure_resource_group: str = ""
+    azure_subscription_id: str = ""
 
     # Optional server-side key for Places API (New) location autocomplete.
     # Keeping this empty preserves the free-text location field.
@@ -100,6 +107,13 @@ class Settings(BaseSettings):
     # at the cheaper check.
     sms_rate_limit_per_phone_per_minute: int = 30
     sms_rate_limit_global_per_minute: int = 300
+
+    @field_validator("twilio_sms_price_estimate", mode="before")
+    @classmethod
+    def _empty_price_is_none(cls, value: object) -> object:
+        if value is None or value == "":
+            return None
+        return value
 
     @model_validator(mode="after")
     def _validate_sms_config(self) -> "Settings":

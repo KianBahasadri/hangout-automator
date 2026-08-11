@@ -12,12 +12,14 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.access import (
     admin_count,
+    current_access_role,
     grant_for_email,
     is_valid_email,
     normalize_email,
     require_admin,
 )
 from app.config import get_settings
+from app.costs import admin_cost_cards
 from app.database import get_db
 from app.ids import RowId, RowIdPath, parse_row_id
 from app.models import (
@@ -73,12 +75,20 @@ def _clerk_frontend_api_url() -> str:
     return get_settings().clerk_frontend_api_url.strip().rstrip("/")
 
 
+def _is_admin(request: Request) -> bool:
+    """True for platform admins (or any local user when Clerk is off)."""
+    if not get_settings().clerk_enabled:
+        return True
+    return current_access_role(request) == AccessRole.admin.value
+
+
 # These globals keep the shared base template consistent without requiring
 # every existing route to repeat auth configuration in its context dict.
 templates.env.globals.update(
     clerk_enabled=_clerk_enabled,
     clerk_publishable_key=_clerk_publishable_key,
     clerk_frontend_api_url=_clerk_frontend_api_url,
+    is_admin=_is_admin,
 )
 
 
@@ -942,7 +952,21 @@ def sms_simulator_page(request: Request) -> HTMLResponse:
     )
 
 
-@router.get("/settings/access", response_class=HTMLResponse)
+@router.get("/admin", response_class=HTMLResponse)
+def admin_panel(
+    request: Request,
+    db: Session = Depends(get_db),
+    _: None = Depends(require_admin),
+) -> HTMLResponse:
+    """Platform admin hub: cost estimates + links to access and ops tools."""
+    return templates.TemplateResponse(
+        request,
+        "admin.html",
+        {"cost_cards": admin_cost_cards(db)},
+    )
+
+
+@router.get("/admin/access", response_class=HTMLResponse)
 def access_page(
     request: Request,
     notice: str = "",
@@ -969,7 +993,7 @@ def access_page(
     )
 
 
-@router.post("/settings/access")
+@router.post("/admin/access")
 def access_grant_create(
     request: Request,
     email: str = Form(..., max_length=255),
@@ -979,7 +1003,7 @@ def access_grant_create(
 ) -> RedirectResponse:
     cleaned = normalize_email(email)
     if not is_valid_email(cleaned):
-        return RedirectResponse("/settings/access?notice=invalid-email", status_code=303)
+        return RedirectResponse("/admin/access?notice=invalid-email", status_code=303)
 
     try:
         new_role = AccessRole(role)
@@ -989,13 +1013,13 @@ def access_grant_create(
     existing = grant_for_email(db, cleaned)
     if existing is not None:
         if existing.role is new_role:
-            return RedirectResponse("/settings/access?notice=already-listed", status_code=303)
+            return RedirectResponse("/admin/access?notice=already-listed", status_code=303)
         # Demoting the last admin would leave the list uneditable by anyone.
         if existing.role is AccessRole.admin and admin_count(db) <= 1:
-            return RedirectResponse("/settings/access?notice=last-admin", status_code=303)
+            return RedirectResponse("/admin/access?notice=last-admin", status_code=303)
         existing.role = new_role
         db.commit()
-        return RedirectResponse("/settings/access?notice=role-updated", status_code=303)
+        return RedirectResponse("/admin/access?notice=role-updated", status_code=303)
 
     db.add(
         AccessGrant(
@@ -1005,10 +1029,10 @@ def access_grant_create(
         )
     )
     db.commit()
-    return RedirectResponse("/settings/access?notice=added", status_code=303)
+    return RedirectResponse("/admin/access?notice=added", status_code=303)
 
 
-@router.post("/settings/access/{grant_id}/delete")
+@router.post("/admin/access/{grant_id}/delete")
 def access_grant_delete(
     grant_id: RowIdPath,
     db: Session = Depends(get_db),
@@ -1016,14 +1040,41 @@ def access_grant_delete(
 ) -> RedirectResponse:
     grant = db.get(AccessGrant, grant_id)
     if grant is None:
-        return RedirectResponse("/settings/access?notice=not-found", status_code=303)
+        return RedirectResponse("/admin/access?notice=not-found", status_code=303)
     # Removing the final admin would leave nobody able to grant access again —
     # only an operator with database or ACCESS_BOOTSTRAP_ADMINS access.
     if grant.role is AccessRole.admin and admin_count(db) <= 1:
-        return RedirectResponse("/settings/access?notice=last-admin", status_code=303)
+        return RedirectResponse("/admin/access?notice=last-admin", status_code=303)
     db.delete(grant)
     db.commit()
-    return RedirectResponse("/settings/access?notice=removed", status_code=303)
+    return RedirectResponse("/admin/access?notice=removed", status_code=303)
+
+
+@router.get("/settings/access")
+def access_page_legacy_redirect(request: Request) -> RedirectResponse:
+    notice = request.query_params.get("notice")
+    target = "/admin/access?notice=" + notice if notice else "/admin/access"
+    return RedirectResponse(target, status_code=307)
+
+
+@router.post("/settings/access")
+def access_grant_create_legacy(
+    request: Request,
+    email: str = Form(..., max_length=255),
+    role: str = Form("member"),
+    db: Session = Depends(get_db),
+    _: None = Depends(require_admin),
+) -> RedirectResponse:
+    return access_grant_create(request, email=email, role=role, db=db, _=None)
+
+
+@router.post("/settings/access/{grant_id}/delete")
+def access_grant_delete_legacy(
+    grant_id: RowIdPath,
+    db: Session = Depends(get_db),
+    _: None = Depends(require_admin),
+) -> RedirectResponse:
+    return access_grant_delete(grant_id, db=db, _=None)
 
 
 @router.get("/settings/logs", response_class=FileResponse)

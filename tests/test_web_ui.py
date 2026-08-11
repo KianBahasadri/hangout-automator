@@ -473,7 +473,7 @@ def test_new_hangout_enables_places_when_configured(client, monkeypatch):
     assert "location_autocomplete.js" in response.text
 
 
-def test_header_has_theme_toggle_after_settings(client):
+def test_header_has_theme_toggle_after_nav(client):
     response = client.get("/")
     assert response.status_code == 200
     html = response.text
@@ -481,12 +481,23 @@ def test_header_has_theme_toggle_after_settings(client):
     assert "__hangoutTheme" in html
     assert 'data-theme="dark"' in html
     assert 'html[data-theme="light"]' in client.get("/static/style.css").text
-    # Toggle is the control immediately after the Settings link.
+    # Local (Clerk off) is admin: Admin Panel sits after Settings; toggle follows.
     assert re.search(
         r'href="/settings">Settings</a>\s*'
+        r'<a href="/admin">Admin Panel</a>\s*'
         r"<button\b[^>]*\bid=\"theme-toggle\"",
         html,
     )
+
+
+def test_admin_panel_shows_cost_cards(client):
+    response = client.get("/admin")
+    assert response.status_code == 200
+    assert "Admin Panel" in response.text
+    assert "Twilio" in response.text
+    assert "Azure" in response.text
+    assert "Cloudflare" in response.text
+    assert 'href="/admin/access"' in response.text
 
 
 def test_settings_logs_download_returns_file(client, tmp_path, monkeypatch):

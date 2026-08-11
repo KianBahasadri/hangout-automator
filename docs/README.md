@@ -11,6 +11,7 @@
 - [organizer-notifications.md](./organizer-notifications.md) — Interval digests and threshold alerts
 - [testing.md](./testing.md) — Test suite layout, the generated smoke matrix, running it
 - [tenancy.md](./tenancy.md) — Workspaces, how requests resolve, inbound-SMS routing ambiguity
+- [admin-costs.md](./admin-costs.md) — Admin Panel cost cards (Twilio estimate, Azure/Cloudflare links)
 - [background-jobs.md](./background-jobs.md) — Worker process, sweep intervals, two-layer send locking
 - [deploy.md](./deploy.md) — Azure Terraform + rsync deploy scripts
 - [deployment-history.md](./deployment-history.md) — Log of what was actually deployed, when, and what broke

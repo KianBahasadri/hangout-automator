@@ -130,7 +130,7 @@ def sample_data(db, workspace):
     )
 
     # Not workspace-scoped (the access list is instance-wide), but the id-taking
-    # routes under /settings/access need a real row to be driven against.
+    # routes under /admin/access need a real row to be driven against.
     grant = AccessGrant(email="sample@example.test", role=AccessRole.member)
     db.add(grant)
 

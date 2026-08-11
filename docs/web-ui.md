@@ -4,7 +4,8 @@ HTML routes: `app/routers/web.py`. Templates: `app/templates/`. Styles/scripts: 
 
 ## UX principles (as implemented)
 
-- Minimal chrome: nav is Home, Contacts, Settings, plus a light/dark theme toggle
+- Minimal chrome: nav is Home, Contacts, Settings, **Admin Panel** (admins only),
+  plus a light/dark theme toggle
 - **Labels and placeholders only** — no instructional help copy, lead paragraphs, or
   explainer text under headings. Bad examples (do not reintroduce):
   - “Your personal account settings. This is not the contacts list under Contacts…”
@@ -64,11 +65,14 @@ string whatever characters it holds.
 | POST | `/hangouts/{id}/close` | End hangout |
 | POST | `/hangouts/{id}/delete` | Soft-delete (closed only) — sets `deleted_at`, hides from home |
 | POST | `/hangouts/{id}/restore` | Clear `deleted_at` so the hangout appears on home again |
-| GET | `/settings` | My Profile (name, phone, default organizer SMS), dietary-restriction catalog, access, deleted hangouts, SMS simulator, log download |
+| GET | `/settings` | My Profile (name, phone, default organizer SMS), dietary-restriction catalog, deleted hangouts, SMS simulator, log download |
 | POST | `/settings/profile` | Save My Profile fields → `/settings?notice=saved` |
-| GET | `/settings/access` | Admin-only: the email access list (`?notice=` feedback) |
-| POST | `/settings/access` | Admin-only: add an email or change its role → `/settings/access` |
-| POST | `/settings/access/{id}/delete` | Admin-only: revoke an email |
+| GET | `/admin` | Admin-only: cost monitoring cards + links to access and ops tools |
+| GET | `/admin/access` | Admin-only: the email access list (`?notice=` feedback) |
+| POST | `/admin/access` | Admin-only: add an email or change its role → `/admin/access` |
+| POST | `/admin/access/{id}/delete` | Admin-only: revoke an email |
+| GET | `/settings/access` | Legacy redirect (307) to `/admin/access` |
+| POST | `/settings/access`, `/settings/access/{id}/delete` | Legacy aliases for the admin access POST routes |
 | GET | `/settings/deleted-hangouts` | Soft-deleted hangouts; optional `?q=` motive search |
 | GET | `/settings/sms-simulator` | Preview sample outbound / auto-reply SMS layouts (not sent) |
 | GET | `/settings/logs` | Download the active JSONL audit log (`LOG_FILE`) |
@@ -140,18 +144,6 @@ Flash notices use `?notice=` (`saved`, `invalid-phone`).
 
 Dietary Restrictions catalog (same pill list pattern as tags; defaults
 `meat` and `pork` are seeded once into an empty catalog — deletions persist).
-**Access** card links to `GET /settings/access`, which lists every allowed
-email with its role, whether that person has signed in yet, and who added
-them, plus a form to add one. Non-admins get a 403 on all three routes; the
-card is still shown to them. Outcomes come back as `?notice=` codes
-(`added`, `removed`, `role-updated`, `already-listed`, `invalid-email`,
-`last-admin`, `not-found`) rendered as an `.alert`. Removing or demoting the
-last admin is refused. What the list means lives in
-[tenancy.md](./tenancy.md).
-
-A signed-in user with no grant never reaches any of these pages: the auth
-middleware answers 403 with the standalone `no_access.html`, which extends
-nothing so it renders without the app nav or Clerk widgets.
 
 **Deleted hangouts** lists soft-deleted rows with motive search (`?q=`).
 **SMS simulator** card links to `GET /settings/sms-simulator`, which renders
@@ -160,3 +152,29 @@ bubbles (nothing is sent).
 Logs card links to `GET /settings/logs`, which returns the active
 `LOG_FILE` as an attachment (404 if the file does not exist yet). See
 [logging.md](./logging.md).
+
+## Admin Panel
+
+Admin-only (`require_admin`). Nav link sits to the right of Settings and is
+hidden from members. Local dev with Clerk off treats everyone as admin.
+
+**Costs** (KIAN-535 Phase A): cards for Twilio, Azure, Cloudflare.
+
+- **Twilio:** MTD / 7d / 30d counts from `message_logs` (outbound success,
+  outbound fail, inbound). Optional `TWILIO_SMS_PRICE_ESTIMATE` multiplies
+  billable (outbound OK + inbound) for a rough `$` labeled **estimate**.
+  Live Twilio Usage API is not required.
+- **Azure:** label from `AZURE_RESOURCE_GROUP` (+ optional
+  `AZURE_SUBSCRIPTION_ID` for a portal deep link). No live Cost Management
+  API yet.
+- **Cloudflare:** unavailable note + dashboard billing link.
+
+**Access** lives at `GET /admin/access` (legacy `/settings/access` redirects).
+Lists allowed emails with role, signed-in status, and who added them; form to
+add/change role. Outcomes use `?notice=` (`added`, `removed`, `role-updated`,
+`already-listed`, `invalid-email`, `last-admin`, `not-found`). Removing or
+demoting the last admin is refused. Meaning of the list:
+[tenancy.md](./tenancy.md).
+
+A signed-in user with no grant never reaches these pages: the auth middleware
+answers 403 with standalone `no_access.html` (no app nav).
