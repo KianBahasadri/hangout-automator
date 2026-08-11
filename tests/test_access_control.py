@@ -74,11 +74,11 @@ def test_signed_in_stranger_is_refused_and_gets_no_workspace(client, monkeypatch
 
 
 def test_refusal_covers_routes_that_never_resolve_a_workspace(client, monkeypatch):
-    """`/settings/logs` has no workspace dependency, so a check living in
+    """`/admin/logs` has no workspace dependency, so a check living in
     `current_workspace` would hand the whole audit stream to a stranger."""
     _signed_in_as(monkeypatch, "user_stranger", "stranger@example.test")
 
-    assert client.get("/settings/logs").status_code == 403
+    assert client.get("/admin/logs").status_code == 403
     assert client.get("/settings/sms-simulator", follow_redirects=False).status_code == 403
 
 

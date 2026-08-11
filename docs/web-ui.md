@@ -65,17 +65,18 @@ string whatever characters it holds.
 | POST | `/hangouts/{id}/close` | End hangout |
 | POST | `/hangouts/{id}/delete` | Soft-delete (closed only) — sets `deleted_at`, hides from home |
 | POST | `/hangouts/{id}/restore` | Clear `deleted_at` so the hangout appears on home again |
-| GET | `/settings` | My Profile (name, phone, default organizer SMS), dietary-restriction catalog, deleted hangouts, SMS simulator, log download |
+| GET | `/settings` | My Profile (name, phone, default organizer SMS), dietary-restriction catalog, deleted hangouts, SMS simulator |
 | POST | `/settings/profile` | Save My Profile fields → `/settings?notice=saved` |
-| GET | `/admin` | Admin-only: cost monitoring cards + links to access and ops tools |
+| GET | `/admin` | Admin-only: cost monitoring cards + links to access, log download, ops tools |
 | GET | `/admin/access` | Admin-only: the email access list (`?notice=` feedback) |
 | POST | `/admin/access` | Admin-only: add an email or change its role → `/admin/access` |
 | POST | `/admin/access/{id}/delete` | Admin-only: revoke an email |
+| GET | `/admin/logs` | Admin-only: download the active JSONL audit log (`LOG_FILE`) |
 | GET | `/settings/access` | Legacy redirect (307) to `/admin/access` |
 | POST | `/settings/access`, `/settings/access/{id}/delete` | Legacy aliases for the admin access POST routes |
+| GET | `/settings/logs` | Legacy redirect (307) to `/admin/logs` |
 | GET | `/settings/deleted-hangouts` | Soft-deleted hangouts; optional `?q=` motive search |
 | GET | `/settings/sms-simulator` | Preview sample outbound / auto-reply SMS layouts (not sent) |
-| GET | `/settings/logs` | Download the active JSONL audit log (`LOG_FILE`) |
 | POST | `/allergies` | Create dietary restriction → `/settings` |
 | POST | `/allergies/{id}/delete` | Delete dietary restriction |
 
@@ -149,14 +150,15 @@ Dietary Restrictions catalog (same pill list pattern as tags; defaults
 **SMS simulator** card links to `GET /settings/sms-simulator`, which renders
 sample invite / follow-up / RSVP / INFO / organizer copy in phone-style
 bubbles (nothing is sent).
-Logs card links to `GET /settings/logs`, which returns the active
-`LOG_FILE` as an attachment (404 if the file does not exist yet). See
-[logging.md](./logging.md).
 
 ## Admin Panel
 
 Admin-only (`require_admin`). Nav link sits to the right of Settings and is
 hidden from members. Local dev with Clerk off treats everyone as admin.
+
+**Tools** include SMS simulator (still under `/settings/…` for now) and
+**Download logs** → `GET /admin/logs` (active `LOG_FILE` as attachment; 404 if
+missing; legacy `/settings/logs` redirects). See [logging.md](./logging.md).
 
 **Costs** (KIAN-535 Phase A): cards for Twilio, Azure, Cloudflare.
 

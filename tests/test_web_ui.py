@@ -411,10 +411,11 @@ def test_existing_hangout_without_invitees_redirects_instead_of_500(client, db):
     assert f'action="/hangouts/{hangout.id}/edit"' in edit.text
 
 
-def test_settings_links_to_log_download(client):
+def test_settings_links_without_log_download(client):
     response = client.get("/settings")
     assert response.status_code == 200
-    assert 'href="/settings/logs"' in response.text
+    assert 'href="/settings/logs"' not in response.text
+    assert 'href="/admin/logs"' not in response.text
     assert 'href="/settings/sms-simulator"' in response.text
     assert 'href="/settings/deleted-hangouts"' in response.text
     assert "Dietary Restrictions" in response.text
@@ -498,9 +499,10 @@ def test_admin_panel_shows_cost_cards(client):
     assert "Azure" in response.text
     assert "Cloudflare" in response.text
     assert 'href="/admin/access"' in response.text
+    assert 'href="/admin/logs"' in response.text
 
 
-def test_settings_logs_download_returns_file(client, tmp_path, monkeypatch):
+def test_admin_logs_download_returns_file(client, tmp_path, monkeypatch):
     # Point at a standalone file (not the live audit stream) so concurrent
     # request logging does not append extra lines mid-assertion.
     log_path = tmp_path / "download-me.log"
@@ -510,7 +512,7 @@ def test_settings_logs_download_returns_file(client, tmp_path, monkeypatch):
         lambda: Settings(log_file=str(log_path), _env_file=None),
     )
 
-    response = client.get("/settings/logs")
+    response = client.get("/admin/logs")
 
     assert response.status_code == 200
     assert "attachment" in response.headers.get("content-disposition", "").lower()
@@ -518,16 +520,22 @@ def test_settings_logs_download_returns_file(client, tmp_path, monkeypatch):
     assert response.content == b'{"event":"test"}\n'
 
 
-def test_settings_logs_download_missing_file_is_404(client, tmp_path, monkeypatch):
+def test_admin_logs_download_missing_file_is_404(client, tmp_path, monkeypatch):
     missing = tmp_path / "no-such" / "server.log"
     monkeypatch.setattr(
         "app.routers.web.get_settings",
         lambda: Settings(log_file=str(missing), _env_file=None),
     )
 
-    response = client.get("/settings/logs")
+    response = client.get("/admin/logs")
 
     assert response.status_code == 404
+
+
+def test_settings_logs_legacy_redirects_to_admin(client):
+    response = client.get("/settings/logs", follow_redirects=False)
+    assert response.status_code == 307
+    assert response.headers["location"] == "/admin/logs"
 
 
 def test_delete_confirmations_survive_an_apostrophe(client, db):

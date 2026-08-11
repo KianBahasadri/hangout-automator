@@ -89,7 +89,7 @@ editable by exactly the three people who should edit it.
 ### Where it is enforced
 
 In `ClerkAuthMiddleware` (`app/auth.py`), not in `current_workspace`. Some
-protected routes — `/settings/logs`, `/settings/sms-simulator` — never resolve
+protected routes — `/admin/logs`, `/settings/sms-simulator` — never resolve
 a workspace, so a check living in the dependency would hand a signed-in
 stranger the audit log. The middleware resolves the Clerk user id to an email
 (Backend API, cached in-process for 5 minutes) and looks the grant up in the

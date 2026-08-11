@@ -73,12 +73,13 @@ Domain events additionally cover:
 - RSVP status changes, unmatched/unrecognized replies, hangout setup, and
   follow-up/organizer scans.
 
-## Download from Settings
+## Download from Admin Panel
 
-`GET /settings/logs` (linked from the Settings page) returns the active
+`GET /admin/logs` (Admin Panel → Tools; admins only) returns the active
 `LOG_FILE` as a downloadable attachment (`Content-Disposition: attachment`).
 Handlers are flushed before the file is served so recent events are included.
 Rotated backups (`server.log.1`, …) are not included. A missing file yields 404.
+Legacy `GET /settings/logs` redirects (307) to `/admin/logs`.
 
 ## Finding events
 

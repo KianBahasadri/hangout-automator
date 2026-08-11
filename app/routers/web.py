@@ -1077,9 +1077,9 @@ def access_grant_delete_legacy(
     return access_grant_delete(grant_id, db=db, _=None)
 
 
-@router.get("/settings/logs", response_class=FileResponse)
-def download_logs() -> FileResponse:
-    """Serve the active JSONL audit log as a downloadable file."""
+@router.get("/admin/logs", response_class=FileResponse)
+def download_logs(_: None = Depends(require_admin)) -> FileResponse:
+    """Serve the active JSONL audit log as a downloadable file (admins only)."""
     log_path = Path(get_settings().log_file).expanduser()
     # Flush so the download includes events still buffered in handlers.
     for handler in logging.root.handlers:
@@ -1094,6 +1094,11 @@ def download_logs() -> FileResponse:
         filename=log_path.name,
         media_type="application/x-ndjson",
     )
+
+
+@router.get("/settings/logs")
+def download_logs_legacy() -> RedirectResponse:
+    return RedirectResponse("/admin/logs", status_code=307)
 
 
 @router.post("/allergies")

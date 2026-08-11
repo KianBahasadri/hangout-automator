@@ -8,7 +8,7 @@ neither be used nor audited. The list therefore lives here, as one
 `access_grants` row per allowed email.
 
 Enforcement is in the auth middleware rather than in `current_workspace`,
-because some protected routes (`/settings/logs`, `/settings/sms-simulator`)
+because some protected routes (`/admin/logs`, `/settings/sms-simulator`)
 never resolve a workspace and would otherwise be reachable by any signed-in
 stranger.
 """
