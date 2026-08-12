@@ -25,6 +25,21 @@ app:
 uv run alembic upgrade head
 ```
 
+### Seed sample contacts
+
+After migrations, load a variety of contacts into **your** workspace (by Clerk
+email) for filter / invitee / SMS UI testing — not the legacy shared
+`default` workspace:
+
+```bash
+./scripts/seed_dev_contacts.sh --email you@example.com
+./scripts/seed_dev_contacts.sh --email you@example.com --reset
+```
+
+Looks up the Clerk user, ensures workspace + owner membership (and an access
+grant if missing), then upserts contacts. Phones under `+15551001…` (fake 555
+range). Refuses `HANGOUT_ENV=production` unless `--force`.
+
 ### Without Docker (native Postgres)
 
 Some dev machines have no Docker — the shared `.venv-box` checkout is one. Any
