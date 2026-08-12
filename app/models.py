@@ -9,6 +9,7 @@ from sqlalchemy import (
     Column,
     DateTime,
     Enum,
+    Float,
     ForeignKey,
     Integer,
     String,
@@ -344,7 +345,11 @@ class Hangout(Base):
     day_date: Mapped[str | None] = mapped_column(String(64), nullable=True)
     time: Mapped[str | None] = mapped_column(String(64), nullable=True)
     duration: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # Location display string (SMS/list/detail Where:). Optional Places structure below.
     location: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    location_place_id: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    location_latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    location_longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
     motive: Mapped[str | None] = mapped_column(String(255), nullable=True)
     alcohol_involved: Mapped[YesNo | None] = mapped_column(
         _optional_enum_column(YesNo), nullable=True

@@ -135,6 +135,9 @@ class HangoutCreate(BaseModel):
     time: Optional[str] = None
     duration: Optional[str] = None
     location: Optional[str] = None
+    location_place_id: Optional[str] = Field(default=None, max_length=512)
+    location_latitude: Optional[float] = Field(default=None, ge=-90, le=90)
+    location_longitude: Optional[float] = Field(default=None, ge=-180, le=180)
     motive: Optional[str] = None
     alcohol_involved: Optional[YesNo] = None
     weed_involved: Optional[YesNo] = None
@@ -162,6 +165,9 @@ class HangoutUpdate(BaseModel):
     time: Optional[str] = None
     duration: Optional[str] = None
     location: Optional[str] = None
+    location_place_id: Optional[str] = Field(default=None, max_length=512)
+    location_latitude: Optional[float] = Field(default=None, ge=-90, le=90)
+    location_longitude: Optional[float] = Field(default=None, ge=-180, le=180)
     motive: Optional[str] = None
     alcohol_involved: Optional[YesNo] = None
     weed_involved: Optional[YesNo] = None
@@ -201,6 +207,9 @@ class HangoutOut(BaseModel):
     time: Optional[str]
     duration: Optional[str]
     location: Optional[str]
+    location_place_id: Optional[str] = None
+    location_latitude: Optional[float] = None
+    location_longitude: Optional[float] = None
     motive: Optional[str]
     alcohol_involved: Optional[YesNo]
     weed_involved: Optional[YesNo]

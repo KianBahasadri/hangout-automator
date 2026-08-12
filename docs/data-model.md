@@ -45,7 +45,15 @@ Workspace invitee directory. Product language is **Contacts**; table/ORM name re
 
 ### `hangouts`
 
-Optional details: `day_date`, `time`, `duration`, `location`, `motive`, `alcohol_involved`, `weed_involved`, `notes`.
+Optional details: `day_date`, `time`, `duration`, `motive`, `alcohol_involved`, `weed_involved`, `notes`.
+
+**Location** (product: a hangout location, not only a label — see [location-and-carpool.md](./location-and-carpool.md)):
+
+- `location` — human display string (255); used for list/detail headers and SMS `Where:`
+- `location_place_id` — optional Google Places id (512) when chosen via autocomplete
+- `location_latitude` / `location_longitude` — optional coords from Place Details (pair; incomplete pairs stored as null)
+
+Text-only locations (no Places key or free-typed nickname) leave the structured columns null. Empty `location` clears structure too.
 
 `status` defaults to `draft`.
 

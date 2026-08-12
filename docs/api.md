@@ -37,6 +37,8 @@ Create/update accept optional `drinks`, `smokes`, `drive`, `tag_ids`, `allergy_i
 
 Create defaults mirror the model/UI notify defaults (interval hours 6, skip-if-unchanged true, confirm/allergy/ride alerts on, decline off, goal 0, cooldown 0). Schema ranges are wider; service layer clamps to the option tuples in [data-model.md](./data-model.md). Invitee id lists accept `profile_ids` or `contact_ids`.
 
+**Location:** `location` (display string) plus optional `location_place_id`, `location_latitude`, `location_longitude`. Create applies all four through `apply_hangout_location`. On PATCH, sending only `location` clears structured fields; sending any structured field updates the full location merge (display defaults to the existing value when omitted). Incomplete lat/lng pairs are stored as both null. Responses include the same fields on `HangoutOut`.
+
 Enabling `notify_enabled` without a resolvable organizer phone (selected contact or My Profile) returns **400** on API create/update.
 
 ## Row ids

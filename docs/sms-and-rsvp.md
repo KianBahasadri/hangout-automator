@@ -39,7 +39,7 @@ emit `sms.outbound.rejected`.
 
 Messages use short multi-line layout (labels + blank lines) so they read clearly on phones.
 
-- **Hangout summary** — motive; `When:` long-form date (e.g. `August 8, 2026`) / 12-hour time (e.g. `7:00 PM`) / duration with hours unit (e.g. `(3 hours)`); `Where:` location; `Alcohol:` / `Weed:` only if set to yes/no; `Notes:`; fallback phrase `"a hangout"`. Storage stays ISO (`YYYY-MM-DD`, `HH:MM`) and raw duration; the same formatters humanize both SMS and the hangout list/detail UI.
+- **Hangout summary** — motive; `When:` long-form date (e.g. `August 8, 2026`) / 12-hour time (e.g. `7:00 PM`) / duration with hours unit (e.g. `(3 hours)`); `Where:` hangout location **display string** only (`location_display` / `hangouts.location` — never place ids or coordinates); `Alcohol:` / `Weed:` only if set to yes/no; `Notes:`; fallback phrase `"a hangout"`. Storage stays ISO (`YYYY-MM-DD`, `HH:MM`) and raw duration; the same formatters humanize both SMS and the hangout list/detail UI.
 - **Invite / follow-up** — greeting + summary + reply menu (keywords only, no explanations):
   - **CONFIRM**
   - **NO**

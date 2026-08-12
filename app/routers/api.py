@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.config import get_settings
 from app.database import get_db
 from app.ids import RowIdPath
+from app.location import apply_hangout_location
 from app.models import (
     Allergy,
     Hangout,
@@ -626,7 +627,6 @@ def create_hangout(
         day_date=payload.day_date or None,
         time=payload.time or None,
         duration=payload.duration or None,
-        location=(payload.location.strip() if payload.location else None) or None,
         motive=payload.motive or None,
         alcohol_involved=payload.alcohol_involved,
         weed_involved=payload.weed_involved,
@@ -648,6 +648,13 @@ def create_hangout(
         notify_threshold_cooldown_minutes=clamp_choice(
             payload.notify_threshold_cooldown_minutes, COOLDOWN_MINUTE_OPTIONS, 0
         ),
+    )
+    apply_hangout_location(
+        hangout,
+        location=payload.location,
+        location_place_id=payload.location_place_id,
+        location_latitude=payload.location_latitude,
+        location_longitude=payload.location_longitude,
     )
     db.add(hangout)
     db.flush()
@@ -697,6 +704,43 @@ def update_hangout(
                 raise HTTPException(400, "Organizer contact not found")
             hangout.organizer_profile_id = org_profile.id
             hangout.organizer_phone = org_profile.phone
+    _LOC_KEYS = (
+        "location",
+        "location_place_id",
+        "location_latitude",
+        "location_longitude",
+    )
+    _STRUCT_KEYS = frozenset(
+        {"location_place_id", "location_latitude", "location_longitude"}
+    )
+    loc_present = {k for k in _LOC_KEYS if k in data}
+    if loc_present:
+        # Text-only location update clears Places structure unless structure is
+        # also in the payload (same as form free-text edit).
+        if loc_present == {"location"} or not (loc_present & _STRUCT_KEYS):
+            apply_hangout_location(
+                hangout,
+                location=data.pop("location", hangout.location),
+                location_place_id=None,
+                location_latitude=None,
+                location_longitude=None,
+            )
+            for k in _STRUCT_KEYS:
+                data.pop(k, None)
+        else:
+            apply_hangout_location(
+                hangout,
+                location=data.pop("location", hangout.location),
+                location_place_id=data.pop(
+                    "location_place_id", hangout.location_place_id
+                ),
+                location_latitude=data.pop(
+                    "location_latitude", hangout.location_latitude
+                ),
+                location_longitude=data.pop(
+                    "location_longitude", hangout.location_longitude
+                ),
+            )
     if "notify_interval_hours" in data and data["notify_interval_hours"] is not None:
         data["notify_interval_hours"] = clamp_choice(
             data["notify_interval_hours"], INTERVAL_HOUR_OPTIONS, hangout.notify_interval_hours or 6

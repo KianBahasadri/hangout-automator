@@ -5,9 +5,37 @@
   const input = root.querySelector("#location");
   const list = root.querySelector("#location-suggestions");
   const status = root.querySelector("#location-status");
+  const placeIdInput = root.querySelector("#location_place_id");
+  const latInput = root.querySelector("#location_latitude");
+  const lngInput = root.querySelector("#location_longitude");
   if (!input || !list) return;
 
   const MIN_QUERY_LENGTH = 3;
+
+  function clearStructuredLocation() {
+    if (placeIdInput) placeIdInput.value = "";
+    if (latInput) latInput.value = "";
+    if (lngInput) lngInput.value = "";
+  }
+
+  function setStructuredLocation(placeId, latitude, longitude) {
+    if (placeIdInput) {
+      placeIdInput.value =
+        typeof placeId === "string" && placeId ? placeId.slice(0, 512) : "";
+    }
+    if (latInput) {
+      latInput.value =
+        typeof latitude === "number" && Number.isFinite(latitude)
+          ? String(latitude)
+          : "";
+    }
+    if (lngInput) {
+      lngInput.value =
+        typeof longitude === "number" && Number.isFinite(longitude)
+          ? String(longitude)
+          : "";
+    }
+  }
   let sessionToken = null;
   let debounceTimer = null;
   let requestController = null;
@@ -176,6 +204,8 @@
     sessionToken = null; // Place Details terminates this session.
     const suggestionText = typeof suggestion.text === "string" ? suggestion.text : "";
     input.value = suggestionText.slice(0, 255);
+    // Keep place_id even if details fail; coords fill in when details succeed.
+    setStructuredLocation(suggestion.place_id, null, null);
     input.setAttribute("aria-busy", "true");
 
     const params = new URLSearchParams({ place_id: suggestion.place_id });
@@ -192,6 +222,13 @@
           data.formatted_address
         ) {
           input.value = String(data.formatted_address).slice(0, 255);
+        }
+        if (selectionSequence === requestSequence) {
+          const placeId =
+            typeof data.place_id === "string" && data.place_id
+              ? data.place_id
+              : suggestion.place_id;
+          setStructuredLocation(placeId, data.latitude, data.longitude);
         }
       } else if (!response.ok && selectionSequence === requestSequence) {
         showStatus("Location details are unavailable; using the selected suggestion.");
@@ -213,6 +250,8 @@
     closeList();
     clearStatus();
     input.removeAttribute("aria-busy");
+    // Manual typing means structure no longer matches the display string.
+    clearStructuredLocation();
 
     const query = input.value.trim();
     if (query.length < MIN_QUERY_LENGTH) return;

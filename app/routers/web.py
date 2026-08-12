@@ -22,6 +22,7 @@ from app.costs import admin_cost_cards
 from app.database import get_db
 from app.event_logging import flush_audit_log_handlers, read_audit_log_snapshot
 from app.ids import RowId, RowIdPath, parse_row_id
+from app.location import apply_hangout_location
 from app.models import (
     AccessGrant,
     AccessRole,
@@ -587,12 +588,21 @@ def _apply_hangout_details(
     alcohol_involved: str,
     weed_involved: str,
     notes: str,
+    location_place_id: str = "",
+    location_latitude: str = "",
+    location_longitude: str = "",
 ) -> None:
     """Apply hangout detail fields from the create/edit form."""
     hangout.day_date = day_date.strip() or None
     hangout.time = time.strip() or None
     hangout.duration = duration.strip() or None
-    hangout.location = location.strip() or None
+    apply_hangout_location(
+        hangout,
+        location=location,
+        location_place_id=location_place_id,
+        location_latitude=location_latitude,
+        location_longitude=location_longitude,
+    )
     hangout.motive = motive.strip() or None
     hangout.alcohol_involved = _optional_enum_form(alcohol_involved, YesNo)
     hangout.weed_involved = _optional_enum_form(weed_involved, YesNo)
@@ -692,6 +702,9 @@ def hangout_create(
     time: str = Form(""),
     duration: str = Form(""),
     location: str = Form(""),
+    location_place_id: str = Form(""),
+    location_latitude: str = Form(""),
+    location_longitude: str = Form(""),
     motive: str = Form(""),
     alcohol_involved: str = Form(""),
     weed_involved: str = Form(""),
@@ -710,6 +723,9 @@ def hangout_create(
         time=time,
         duration=duration,
         location=location,
+        location_place_id=location_place_id,
+        location_latitude=location_latitude,
+        location_longitude=location_longitude,
         motive=motive,
         alcohol_involved=alcohol_involved,
         weed_involved=weed_involved,
@@ -764,6 +780,9 @@ def hangout_update_draft(
     time: str = Form(""),
     duration: str = Form(""),
     location: str = Form(""),
+    location_place_id: str = Form(""),
+    location_latitude: str = Form(""),
+    location_longitude: str = Form(""),
     motive: str = Form(""),
     alcohol_involved: str = Form(""),
     weed_involved: str = Form(""),
@@ -788,6 +807,9 @@ def hangout_update_draft(
         time=time,
         duration=duration,
         location=location,
+        location_place_id=location_place_id,
+        location_latitude=location_latitude,
+        location_longitude=location_longitude,
         motive=motive,
         alcohol_involved=alcohol_involved,
         weed_involved=weed_involved,

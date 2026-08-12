@@ -8,6 +8,7 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from app.config import get_settings
+from app.location import location_display
 from app.models import Hangout, HangoutInvite, InviteStatus, Profile, YesNo
 
 logger = logging.getLogger(__name__)
@@ -152,8 +153,9 @@ def format_hangout_summary(hangout: Hangout) -> str:
     if when_parts:
         lines.append("When: " + " ".join(when_parts))
 
-    if hangout.location:
-        lines.append(f"Where: {hangout.location}")
+    where = location_display(hangout)
+    if where:
+        lines.append(f"Where: {where}")
 
     alcohol = _yn(hangout.alcohol_involved)
     if alcohol is not None:

@@ -34,6 +34,25 @@
         aria-expanded="false"
         value="{{ hangout.location if hangout and hangout.location else '' }}"
       />
+      {# Structured Places fields; cleared when the display text is typed manually. #}
+      <input
+        type="hidden"
+        id="location_place_id"
+        name="location_place_id"
+        value="{{ hangout.location_place_id if hangout and hangout.location_place_id else '' }}"
+      />
+      <input
+        type="hidden"
+        id="location_latitude"
+        name="location_latitude"
+        value="{{ hangout.location_latitude if hangout and hangout.location_latitude is not none else '' }}"
+      />
+      <input
+        type="hidden"
+        id="location_longitude"
+        name="location_longitude"
+        value="{{ hangout.location_longitude if hangout and hangout.location_longitude is not none else '' }}"
+      />
       <p class="places-status" id="location-status" role="status" aria-live="polite" hidden></p>
       <ul class="places-list" id="location-suggestions" role="listbox" hidden></ul>
     </div>
