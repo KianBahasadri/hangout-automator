@@ -5,12 +5,55 @@
   const input = root.querySelector("#location");
   const list = root.querySelector("#location-suggestions");
   const status = root.querySelector("#location-status");
+  const spinner = root.querySelector("#location-spinner");
   const placeIdInput = root.querySelector("#location_place_id");
   const latInput = root.querySelector("#location_latitude");
   const lngInput = root.querySelector("#location_longitude");
+  const form = root.closest("form");
   if (!input || !list) return;
 
   const MIN_QUERY_LENGTH = 3;
+  const PICK_HINT = "Choose a place from the Google Maps list (free text is not saved).";
+
+  // Last Maps-backed selection (or empty). Free-typed text is never committed.
+  let committed = {
+    display: "",
+    placeId: "",
+    latitude: "",
+    longitude: "",
+  };
+
+  let sessionToken = null;
+  let debounceTimer = null;
+  let requestController = null;
+  let requestSequence = 0;
+  let activeIndex = -1;
+  let options = [];
+  let loadingCount = 0;
+
+  function hasPlaceId() {
+    return !!(placeIdInput && placeIdInput.value && placeIdInput.value.trim());
+  }
+
+  function readStructured() {
+    return {
+      display: (input.value || "").trim(),
+      placeId: placeIdInput ? placeIdInput.value.trim() : "",
+      latitude: latInput ? latInput.value.trim() : "",
+      longitude: lngInput ? lngInput.value.trim() : "",
+    };
+  }
+
+  function applyCommittedToFields() {
+    input.value = committed.display;
+    if (placeIdInput) placeIdInput.value = committed.placeId;
+    if (latInput) latInput.value = committed.latitude;
+    if (lngInput) lngInput.value = committed.longitude;
+  }
+
+  function commitFromFields() {
+    committed = readStructured();
+  }
 
   function clearStructuredLocation() {
     if (placeIdInput) placeIdInput.value = "";
@@ -36,12 +79,19 @@
           : "";
     }
   }
-  let sessionToken = null;
-  let debounceTimer = null;
-  let requestController = null;
-  let requestSequence = 0;
-  let activeIndex = -1;
-  let options = [];
+
+  function setLoading(on) {
+    if (on) {
+      loadingCount += 1;
+    } else {
+      loadingCount = Math.max(0, loadingCount - 1);
+    }
+    const busy = loadingCount > 0;
+    if (spinner) spinner.hidden = !busy;
+    root.classList.toggle("is-loading", busy);
+    if (busy) input.setAttribute("aria-busy", "true");
+    else input.removeAttribute("aria-busy");
+  }
 
   function clearStatus() {
     if (!status) return;
@@ -152,13 +202,16 @@
     };
     if (requestController) request.signal = requestController.signal;
 
+    setLoading(true);
     try {
       const response = await fetch("/api/places/autocomplete?" + params.toString(), request);
       if (sequence !== requestSequence) return;
       if (!response.ok) {
         closeList();
         if (response.status === 503) {
-          showStatus("Location suggestions are unavailable. Check that Places API (New) is enabled for this key.");
+          showStatus(
+            "Location suggestions are unavailable. Check that Places API (New) is enabled for this key."
+          );
         } else if (response.status === 404) {
           showStatus("Location suggestions are not configured.");
         } else {
@@ -170,12 +223,17 @@
       if (sequence !== requestSequence) return;
       clearStatus();
       renderSuggestions(Array.isArray(data.suggestions) ? data.suggestions : []);
+      if (!Array.isArray(data.suggestions) || !data.suggestions.length) {
+        showStatus("No matching places. Pick from the list when results appear.");
+      }
     } catch (error) {
       if (error && error.name === "AbortError") return;
       if (sequence === requestSequence) {
         closeList();
         showStatus("Could not load location suggestions.");
       }
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -192,7 +250,41 @@
     requestSequence += 1;
     cancelAutocomplete();
     closeList();
+    // Drop in-flight spinner for cancelled autocomplete.
+    loadingCount = 0;
+    if (spinner) spinner.hidden = true;
+    root.classList.remove("is-loading");
     input.removeAttribute("aria-busy");
+  }
+
+  /** Revert free-typed text that was never chosen from Maps. */
+  function rejectNonMapsLocation() {
+    const text = (input.value || "").trim();
+    if (!text) {
+      // Empty location is allowed.
+      clearStructuredLocation();
+      committed = { display: "", placeId: "", latitude: "", longitude: "" };
+      clearStatus();
+      input.value = "";
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+      return;
+    }
+    if (hasPlaceId()) {
+      // Keep selection; normalize display if needed.
+      commitFromFields();
+      clearStatus();
+      return;
+    }
+    // Typed without selecting a suggestion — restore last Maps pick or clear.
+    applyCommittedToFields();
+    if (committed.placeId) {
+      showStatus(PICK_HINT);
+    } else {
+      input.value = "";
+      clearStructuredLocation();
+      showStatus(PICK_HINT);
+    }
+    input.dispatchEvent(new Event("change", { bubbles: true }));
   }
 
   async function selectSuggestion(suggestion) {
@@ -204,12 +296,13 @@
     sessionToken = null; // Place Details terminates this session.
     const suggestionText = typeof suggestion.text === "string" ? suggestion.text : "";
     input.value = suggestionText.slice(0, 255);
-    // Keep place_id even if details fail; coords fill in when details succeed.
+    // place_id is required for a valid Maps location (coords optional if details fail).
     setStructuredLocation(suggestion.place_id, null, null);
-    input.setAttribute("aria-busy", "true");
+    clearStatus();
 
     const params = new URLSearchParams({ place_id: suggestion.place_id });
     if (token) params.set("session_token", token);
+    setLoading(true);
     try {
       const response = await fetch("/api/places/details?" + params.toString(), {
         headers: { Accept: "application/json" },
@@ -231,16 +324,41 @@
           setStructuredLocation(placeId, data.latitude, data.longitude);
         }
       } else if (!response.ok && selectionSequence === requestSequence) {
-        showStatus("Location details are unavailable; using the selected suggestion.");
+        showStatus("Location details incomplete; using the selected Maps place.");
       }
     } catch (error) {
-      // The prediction text remains a useful fallback when details fail.
+      // Prediction text + place_id remain a valid Maps selection.
     } finally {
       if (selectionSequence === requestSequence) {
-        input.removeAttribute("aria-busy");
+        setLoading(false);
+        if (hasPlaceId()) {
+          commitFromFields();
+          clearStatus();
+        }
         input.dispatchEvent(new Event("change", { bubbles: true }));
       }
     }
+  }
+
+  // Seed committed state: only Maps-backed rows count as selected.
+  if (hasPlaceId()) {
+    commitFromFields();
+  } else if ((input.value || "").trim()) {
+    // Legacy free-text without place_id — not a valid Maps location.
+    showStatus(PICK_HINT);
+    committed = { display: "", placeId: "", latitude: "", longitude: "" };
+  }
+
+  // Never submit free-typed location text; use last Maps commit or empty.
+  if (form) {
+    form.addEventListener("formdata", function (event) {
+      if (hasPlaceId()) return;
+      const fd = event.formData;
+      fd.set("location", committed.placeId ? committed.display : "");
+      fd.set("location_place_id", committed.placeId || "");
+      fd.set("location_latitude", committed.latitude || "");
+      fd.set("location_longitude", committed.longitude || "");
+    });
   }
 
   input.addEventListener("input", function () {
@@ -249,12 +367,21 @@
     cancelAutocomplete();
     closeList();
     clearStatus();
-    input.removeAttribute("aria-busy");
-    // Manual typing means structure no longer matches the display string.
+    // Manual typing invalidates the previous Maps selection until a new pick.
     clearStructuredLocation();
 
     const query = input.value.trim();
-    if (query.length < MIN_QUERY_LENGTH) return;
+    if (!query) {
+      loadingCount = 0;
+      if (spinner) spinner.hidden = true;
+      root.classList.remove("is-loading");
+      input.removeAttribute("aria-busy");
+      return;
+    }
+    if (query.length < MIN_QUERY_LENGTH) {
+      showStatus("Type at least " + MIN_QUERY_LENGTH + " characters, then pick from the list.");
+      return;
+    }
     debounceTimer = setTimeout(function () {
       fetchSuggestions(query, sequence);
     }, 280);
@@ -269,28 +396,41 @@
       event.preventDefault();
       if (list.hidden) openList();
       setActive(activeIndex < 0 ? options.length - 1 : activeIndex - 1);
-    } else if (event.key === "Enter" && !list.hidden && activeIndex >= 0) {
-      event.preventDefault();
-      const suggestion = options[activeIndex];
-      if (suggestion) {
-        selectSuggestion({
-          place_id: suggestion.dataset.placeId,
-          text: suggestion.dataset.label,
-        });
+    } else if (event.key === "Enter") {
+      if (!list.hidden && activeIndex >= 0) {
+        event.preventDefault();
+        const suggestion = options[activeIndex];
+        if (suggestion) {
+          selectSuggestion({
+            place_id: suggestion.dataset.placeId,
+            text: suggestion.dataset.label,
+          });
+        }
+      } else if (!hasPlaceId() && (input.value || "").trim()) {
+        // Block form submit with free text; force list selection.
+        event.preventDefault();
+        showStatus(PICK_HINT);
       }
     } else if (event.key === "Escape") {
       dismissSuggestions();
+      rejectNonMapsLocation();
     }
   });
 
   input.addEventListener("blur", function () {
     window.setTimeout(function () {
-      if (!root.contains(document.activeElement)) dismissSuggestions();
-      else closeList();
+      if (root.contains(document.activeElement)) {
+        closeList();
+        return;
+      }
+      dismissSuggestions();
+      rejectNonMapsLocation();
     }, 120);
   });
 
   document.addEventListener("click", function (event) {
-    if (!root.contains(event.target)) dismissSuggestions();
+    if (!root.contains(event.target)) {
+      dismissSuggestions();
+    }
   });
 })();

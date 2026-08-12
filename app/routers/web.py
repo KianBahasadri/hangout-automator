@@ -596,12 +596,21 @@ def _apply_hangout_details(
     hangout.day_date = day_date.strip() or None
     hangout.time = time.strip() or None
     hangout.duration = duration.strip() or None
+    # When Places is configured, only Maps-backed locations (place_id) stick;
+    # free-typed labels are dropped (client also enforces this).
+    places_on = bool(get_settings().google_maps_api_key.strip())
+    loc_text = location
+    pid = location_place_id
+    lat = location_latitude
+    lng = location_longitude
+    if places_on and (loc_text or "").strip() and not (pid or "").strip():
+        loc_text, pid, lat, lng = "", "", "", ""
     apply_hangout_location(
         hangout,
-        location=location,
-        location_place_id=location_place_id,
-        location_latitude=location_latitude,
-        location_longitude=location_longitude,
+        location=loc_text,
+        location_place_id=pid,
+        location_latitude=lat,
+        location_longitude=lng,
     )
     hangout.motive = motive.strip() or None
     hangout.alcohol_involved = _optional_enum_form(alcohol_involved, YesNo)

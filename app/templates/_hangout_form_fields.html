@@ -23,18 +23,27 @@
       id="location-autocomplete"
       data-places-enabled="{{ 'true' if google_places_enabled else 'false' }}"
     >
-      <input
-        id="location"
-        name="location"
-        type="text"
-        maxlength="255"
-        autocomplete="off"
-        aria-autocomplete="list"
-        aria-controls="location-suggestions"
-        aria-expanded="false"
-        value="{{ hangout.location if hangout and hangout.location else '' }}"
-      />
-      {# Structured Places fields; cleared when the display text is typed manually. #}
+      <div class="places-input-wrap">
+        <input
+          id="location"
+          name="location"
+          type="text"
+          maxlength="255"
+          autocomplete="off"
+          aria-autocomplete="list"
+          aria-controls="location-suggestions"
+          aria-expanded="false"
+          {% if google_places_enabled %}placeholder="Search Google Maps…"{% endif %}
+          value="{{ hangout.location if hangout and hangout.location else '' }}"
+        />
+        <span
+          class="places-spinner"
+          id="location-spinner"
+          hidden
+          aria-hidden="true"
+        ></span>
+      </div>
+      {# Structured Places fields; only set when a Maps suggestion is chosen. #}
       <input
         type="hidden"
         id="location_place_id"

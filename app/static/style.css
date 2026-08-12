@@ -647,8 +647,38 @@ th {
   min-width: min(240px, 100%);
 }
 
+.places-input-wrap {
+  position: relative;
+  display: block;
+}
+
 .places-autocomplete input {
   margin-bottom: 0 !important;
+  padding-right: 2.25rem;
+}
+
+.places-spinner {
+  position: absolute;
+  top: 50%;
+  right: 0.65rem;
+  width: 1rem;
+  height: 1rem;
+  margin-top: -0.5rem;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent, var(--text));
+  border-radius: 50%;
+  animation: places-spin 0.7s linear infinite;
+  pointer-events: none;
+}
+
+.places-spinner[hidden] {
+  display: none !important;
+}
+
+@keyframes places-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .places-status {

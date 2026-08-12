@@ -114,7 +114,7 @@ Partial `_invitee_picker.html` + `invitee_picker.js` (new/edit hangout form and 
 
 - All hangout detail fields optional (day, time, duration, location, motive, alcohol, weed, notes)
 - Header includes an **All hangouts** back button to return to the hangout list without submitting
-- **Location** uses Google Places (New) suggestions when configured; selecting a suggestion stores display text plus hidden `location_place_id` / lat / lng. Manual typing clears the structured fields (text-only location). Without a key, the field is free-text only and shows an inline status when suggestions fail
+- **Location** uses Google Places (New) when configured: type to search, pick a suggestion (required). Free-typed text is **not** saved — blur/submit restores the last Maps pick or clears the field. A small spinner shows while autocomplete/details load. Selecting a suggestion stores display text plus `location_place_id` / lat / lng. Without a key, the field is free-text only
 - Submitting setup without invitees keeps the hangout as a draft and returns the create/edit form with a contact-selection error
 - Organizer SMS is **not** on this form — stamped from Settings → My Profile at create (matching contact by phone when one exists)
 - **Preview invite SMS** button (left of “Set up hangout”) opens a dialog; body from `POST /api/sms/preview-invite` using the current form fields and the first selected invitee’s name (or “Alex”)

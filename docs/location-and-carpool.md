@@ -49,7 +49,8 @@ this hangout?” — suitable for maps, carpool distance, and SMS `Where:`.
 | **Must** | Model hangout place as a **location**: at minimum a human **label/display string** plus optional structured fields (`place_id`, `latitude`, `longitude`). Empty location remains allowed (draft / TBD). |
 | **Must** | Prefer entering location via **Places autocomplete** when `GOOGLE_MAPS_API_KEY` is set so the hangout gets a real place (formatted address + coords), not only a typed nickname. |
 | **Must** | When the organizer picks a Places suggestion, **persist** label/address text, Google `place_id`, and `lat`/`lng` from Place Details when details succeed. |
-| **Must** | Without a key (or details failure), allow a **text-only location** (label with no coords / place id) so create hangout never hard-blocks. That is a degraded location, not a separate product mode. |
+| **Must** | When Places is **configured**, the UI only accepts a location **chosen from Maps suggestions** (requires `place_id`). Free-typed text is not saved; blur/submit restore the last Maps pick or clear the field. A spinner shows while autocomplete/details load. |
+| **Must** | Without a key, allow a **text-only location** (label with no coords / place id) so create hangout never hard-blocks. That is a degraded location when Places is unavailable. |
 | **Should** | UI copy and API field names lean **location** (not “place name only”); list/detail headers and SMS `Where:` use the location’s display string. |
 | **Should** | Maps deep links (see §7) are first-class uses of location coords/address, not afterthoughts. |
 | **Could** | Separate short **nickname** vs full **address** on the same location (e.g. “Kian’s place” + street). |

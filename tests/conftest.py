@@ -13,6 +13,9 @@ os.environ["FOLLOWUP_HOURS"] = "1,2"
 # Auth-specific tests construct their own enabled Settings and monkeypatch the
 # middleware verifier explicitly.
 os.environ["CLERK_ENABLED"] = "false"
+# Do not pick up a real Maps key from .env.development during tests (free-text
+# location path must stay available unless a test opts in).
+os.environ["GOOGLE_MAPS_API_KEY"] = ""
 
 import pytest
 from alembic import command

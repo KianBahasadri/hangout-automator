@@ -44,7 +44,7 @@
   <link rel="icon" type="image/png" href="/static/favicon-16.png" sizes="16x16" />
   <link rel="apple-touch-icon" href="/static/apple-touch-icon.png" />
   {# Cache-bust when theme tokens change so browsers pick up new CSS. #}
-  <link rel="stylesheet" href="/static/style.css?v=theme3" />
+  <link rel="stylesheet" href="/static/style.css?v=theme4" />
   {% if clerk_enabled() %}
   <script defer crossorigin="anonymous" src="{{ clerk_frontend_api_url() }}/npm/@clerk/ui@1/dist/ui.browser.js"></script>
   <script defer crossorigin="anonymous" data-clerk-publishable-key="{{ clerk_publishable_key() }}" src="{{ clerk_frontend_api_url() }}/npm/@clerk/clerk-js@6/dist/clerk.browser.js"></script>
