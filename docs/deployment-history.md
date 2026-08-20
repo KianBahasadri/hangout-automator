@@ -11,6 +11,53 @@ Dates are UTC.
 
 ---
 
+## 2026-08-20 — Postgres moved from a private endpoint to VNet integration
+
+Terraform apply: `5 added, 0 changed, 5 destroyed`. Replaced
+`azurerm_postgresql_flexible_server.main` and its database, replaced the private
+DNS zone (`privatelink.` -> `hangout.private.`), deleted
+`azurerm_private_endpoint.postgres`, and added `azurerm_subnet.postgres`
+(`10.20.2.0/24`, delegated to `Microsoft.DBforPostgreSQL/flexibleServers`). The
+VM, tunnel, DNS records, and disks were untouched.
+
+Why: the private endpoint billed about CA$7/month for reachability that
+delegated-subnet VNet integration provides for free. It had been chosen because
+integration needs a subnet dedicated to the database and the app VM occupies
+`10.20.1.0/24`; giving the database its own subnet removes that constraint.
+`prevent_destroy` was removed from the server deliberately — the mode is fixed
+at creation, so this could only be done by replacing the server.
+
+**Data.** Dumped first with `pg_dump -Fc` (postgresql-client-17 installed from
+PGDG; Ubuntu 24.04 ships 16, which refuses to dump a 17 server). Verified the
+dump off the box: uploaded to the `dbbackup` container in
+`hangoutstate37d24562` via a short-lived user-delegation SAS, downloaded to
+`~/hangout-backups/`, sha256 matched, `pg_restore -l` listed 30 objects. The
+database was nearly empty — 3 access grants, 1 user, 2 workspaces, 2 allergies,
+every other table 0 rows, 62 KB dump. Row counts after restore matched the
+pre-migration manifest exactly. **Deleting a Flexible Server deletes its
+backups**, so the 35-day retention window restarted at zero on the new server.
+
+Two things that were expected to break and did not:
+
+- **`DATABASE_URL` needed no change.** Azure registers the server in the
+  private zone under a generated label (`c339107ca9ef`), not the server name,
+  and CNAMEs the ordinary public FQDN at it, so
+  `hangout-postgres.postgres.database.azure.com` still resolves inside the
+  VNet — now to `10.20.2.4`. An earlier edit that constructed a
+  `<server>.<zone>` host was wrong and was reverted; that name does not exist.
+- **`/etc/hangout-automator.env` needed no edit**, so the usual cloud-init
+  staleness trap did not apply. Only a `systemctl restart` of
+  `hangout-automator` and `hangout-worker` was needed.
+
+Follow-up drift: Azure adds a `Microsoft.Storage` service endpoint to its own
+delegated subnet at creation, which Terraform then plans to strip. Pinned in
+config, same as the server's `zone` attribute, so the plan is clean.
+
+Combined with the NAT Gateway removal earlier the same day, `hangout-rg`
+networking went from about CA$59/month to about CA$0.50/month.
+
+---
+
 ## 2026-08-20 — Removed the NAT Gateway; egress moved to default outbound access
 
 Terraform apply: `0 added, 1 changed, 4 destroyed`. Destroyed

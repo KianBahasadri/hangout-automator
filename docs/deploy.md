@@ -20,9 +20,10 @@ The VM has no public IP; the subnet's `default_outbound_access_enabled = true`
 supplies outbound-only access for first-boot package installation and
 `cloudflared` (see [Outbound internet access](#outbound-internet-access-egress)).
 A separate managed disk holds the audit log. The database is an Azure Database for PostgreSQL Flexible
-Server (`B_Standard_B1ms`, 35-day backup retention) with `prevent_destroy =
-true`, reachable only through a private endpoint in the `10.20.1.0/24` subnet
-plus a private DNS zone; the server has no public network access. The admin
+Server (`B_Standard_B1ms`, 35-day backup retention), VNet-integrated into its
+own delegated subnet `10.20.2.0/24` plus a private DNS zone; the server has no
+public network access at all. See
+[Database networking](#database-networking-vnet-integration). The admin
 password comes from `POSTGRES_ADMIN_PASSWORD` in the ignored `.env.production` and has no
 Terraform default (`terraform/postgres.tf`).
 
@@ -281,6 +282,32 @@ things make that more than a normal replace:
 The Cloudflare resources are unaffected by a region change — the tunnel keeps
 its ID and token, so the DNS record and Access policies stay in place.
 
+### Database networking (VNet integration)
+
+Postgres Flexible Server is reachable only from inside the VNet. It uses
+delegated-subnet VNet integration: `azurerm_subnet.postgres` (`10.20.2.0/24`)
+is delegated to `Microsoft.DBforPostgreSQL/flexibleServers` and used by nothing
+else, which is the mode's requirement and the reason the app's own
+`10.20.1.0/24` could not be reused.
+
+This replaced a private endpoint on 2026-08-20. The endpoint billed about
+CA$7/month for reachability that integration provides for free.
+
+**The mode is fixed at creation.** `az postgres flexible-server update` has
+`--public-access` and `--private-dns-zone` but no `--subnet`, so switching
+between private-endpoint and VNet-integrated networking is not an in-place
+operation — it replaces the server, and **deleting a Flexible Server deletes
+its backups with it**. Take a dump first and verify it off the box; the
+35-day retention window restarts at zero on the new server.
+
+**`DATABASE_URL` does not change between the two modes.** Azure registers the
+server in the private zone under a generated label (for example
+`c339107ca9ef`), not under the server name, and points the server's ordinary
+public FQDN at it through a CNAME chain. Inside the VNet
+`hangout-postgres.postgres.database.azure.com` therefore still resolves — now
+to a `10.20.2.0/24` address. Do not try to construct a
+`<server>.<zone>` hostname; that name does not exist.
+
 ### Outbound internet access (egress)
 
 The Tunnel removes the need for *inbound* connectivity, not outbound.
@@ -308,7 +335,7 @@ Two constraints follow from depending on implicit outbound access:
 
 - **The egress IP is not stable.** It comes from a shared Azure pool and can
   change without notice, so nothing may depend on a fixed source address. In
-  particular, keep Postgres on its private endpoint rather than moving it to
+  particular, keep Postgres on VNet integration rather than moving it to
   public access with IP firewall rules.
 - **Microsoft deprecates this path** and advises against it for production. It
   works today. If it stops, the replacement is a Standard public IP on the NIC
@@ -373,9 +400,10 @@ resources exist, not when they work together, and `postgres_host`
 dependency edge forces the check. Verify by observation, not by plan output:
 
 ```bash
-# The private endpoint's zone must actually hold the A record...
+# The private zone must actually hold the A record. Note the record is
+# registered under an Azure-generated label, not the server name.
 az network private-dns record-set a list -g hangout-rg \
-  -z privatelink.postgres.database.azure.com \
+  -z hangout.private.postgres.database.azure.com \
   --query '[].{name:name, ips:aRecords[].ipv4Address}' -o json
 
 # ...and the hardcoded host must resolve to that private IP from the VM,
@@ -639,8 +667,8 @@ remaining external or operator-controlled steps:
    `Connectivity Directory` entry also mentions tunnels but is Magic WAN and
    grants nothing here.
 5. **Azure**: `az login`, then review `./scripts/deploy/terraform.sh plan` and run `./scripts/deploy/terraform.sh apply`.
-6. **Postgres**: after the server exists (the flexible server, private DNS
-   zone, and private endpoint are Terraform resources), `POSTGRES_ADMIN_PASSWORD`
+6. **Postgres**: after the server exists (the flexible server, its delegated
+   subnet, and private DNS zone are Terraform resources), `POSTGRES_ADMIN_PASSWORD`
    must be in the ignored `.env.production` before any plan/apply. cloud-init runs
    `alembic upgrade head` during bootstrap, so the schema is already applied by
    the time the app starts.

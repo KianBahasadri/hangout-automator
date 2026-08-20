@@ -1,22 +1,51 @@
 # Azure Database for PostgreSQL Flexible Server, private-only. The VM has no
-# public IP, so the database must be reachable inside the VNet: a private
-# endpoint in the existing 10.20.1.0/24 subnet plus a private DNS zone.
-# (Flexible Server's delegated-subnet VNet integration needs an *empty*
-# subnet; the app VM already occupies this one, so a private endpoint is the
-# right mechanism here.)
+# public IP, so the database must be reachable inside the VNet. This uses
+# Flexible Server's delegated-subnet VNet integration.
+#
+# It used to use a private endpoint in the app's own 10.20.1.0/24 instead,
+# because VNet integration needs a subnet dedicated to the database and that
+# one already holds the VM. The endpoint billed about CA$7/month for
+# reachability that integration provides for free, so the database now gets its
+# own subnet below. Switching modes is not an in-place operation: Flexible
+# Server fixes its networking at creation, so this change replaces the server.
+
+# VNet integration requires a subnet delegated to the database service and used
+# by nothing else. 10.20.2.0/24 is free space in the VNet's 10.20.0.0/16.
+resource "azurerm_subnet" "postgres" {
+  name                 = "${local.name}-pg-subnet"
+  resource_group_name  = azurerm_resource_group.main.name
+  virtual_network_name = azurerm_virtual_network.main.name
+  address_prefixes     = ["10.20.2.0/24"]
+  # Flexible Server adds this endpoint to its own delegated subnet at creation.
+  # Pinning the assigned value keeps it out of every subsequent plan as a
+  # phantom "1 to change"; without it Terraform perpetually tries to strip it.
+  service_endpoints = ["Microsoft.Storage"]
+
+  delegation {
+    name = "postgres"
+
+    service_delegation {
+      name    = "Microsoft.DBforPostgreSQL/flexibleServers"
+      actions = ["Microsoft.Network/virtualNetworks/subnets/join/action"]
+    }
+  }
+}
 
 # Private DNS resolution for the server's FQDN inside the VNet.
 #
-# This name is not a free choice. Azure resolves the server's public FQDN to a
-# CNAME at <server>.privatelink.postgres.database.azure.com, and the private
-# endpoint's zone group registers its A record there. Any other zone name (for
-# example "private.", which is the convention for the *delegated-subnet* VNet
-# integration mode this deployment does not use) leaves the CNAME target
-# unresolvable inside the VNet, so lookups fall through to public DNS and
-# return the public IP — which then refuses the connection, because
-# public_network_access_enabled is false below.
+# This name is not a free choice, and it is deliberately not the "privatelink."
+# zone a private endpoint would use: delegated-subnet integration requires a
+# zone whose name ends in ".private.postgres.database.azure.com".
+#
+# It does not change how the app connects. Azure registers the server in this
+# zone under a *generated* label (not the server name) and points the server's
+# ordinary public FQDN at it through a CNAME chain, so inside the VNet
+# "<server>-postgres.postgres.database.azure.com" still resolves -- now to the
+# private 10.20.2.0/24 address. DATABASE_URL is therefore identical in
+# private-endpoint and VNet-integrated modes, which is why the 2026-08-20
+# migration needed no change to /etc/hangout-automator.env.
 resource "azurerm_private_dns_zone" "postgres" {
-  name                = "privatelink.postgres.database.azure.com"
+  name                = "${local.name}.private.postgres.database.azure.com"
   resource_group_name = azurerm_resource_group.main.name
 }
 
@@ -45,16 +74,14 @@ resource "azurerm_postgresql_flexible_server" "main" {
   # No default: sourced from POSTGRES_ADMIN_PASSWORD in the ignored .env.
   administrator_login    = var.postgres_admin_user
   administrator_password = var.postgres_admin_password
-  # Private-only: no public endpoint, no "allow all" firewall rules. Only the
-  # private endpoint inside the VNet can reach it.
+  # Private-only. VNet integration has no public endpoint at all, so there is
+  # no firewall rule surface to get wrong.
   public_network_access_enabled = false
+  delegated_subnet_id           = azurerm_subnet.postgres.id
+  private_dns_zone_id           = azurerm_private_dns_zone.postgres.id
 
-  lifecycle {
-    # The database is the source of truth after migration; Terraform must
-    # never replace or delete it. Remove this only after deliberately
-    # standing up a replacement and migrating data.
-    prevent_destroy = true
-  }
+  # The zone must be linked to the VNet before the server registers into it.
+  depends_on = [azurerm_private_dns_zone_virtual_network_link.postgres]
 }
 
 resource "azurerm_postgresql_flexible_server_database" "main" {
@@ -62,23 +89,4 @@ resource "azurerm_postgresql_flexible_server_database" "main" {
   server_id = azurerm_postgresql_flexible_server.main.id
   charset   = "UTF8"
   collation = "en_US.utf8"
-}
-
-resource "azurerm_private_endpoint" "postgres" {
-  name                = "${local.name}-pg-endpoint"
-  location            = azurerm_resource_group.main.location
-  resource_group_name = azurerm_resource_group.main.name
-  subnet_id           = azurerm_subnet.main.id
-
-  private_service_connection {
-    name                           = "${local.name}-pg-conn"
-    private_connection_resource_id = azurerm_postgresql_flexible_server.main.id
-    is_manual_connection           = false
-    subresource_names              = ["postgresqlServer"]
-  }
-
-  private_dns_zone_group {
-    name                 = "postgres"
-    private_dns_zone_ids = [azurerm_private_dns_zone.postgres.id]
-  }
 }
