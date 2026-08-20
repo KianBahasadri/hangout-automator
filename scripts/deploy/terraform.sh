@@ -129,4 +129,18 @@ if [[ "${COMMAND}" == "apply" && ( ! -f "${BACKEND_FILE}" || ! -f "${BACKEND_DEC
   exit 1
 fi
 
+# An apply that changes how the subnet gets egress (default outbound access, a
+# NAT Gateway, a public IP on the NIC) does not reach the already-placed VM,
+# and Terraform still exits 0 -- the public hostname goes dark behind a green
+# apply. Verify egress instead of exec'ing away from it. Every other command
+# keeps the plain exec.
+if [[ "${COMMAND}" == "apply" ]]; then
+  terraform -chdir="${REPO_DIR}/terraform" "$@"
+  if [[ "${HANGOUT_SKIP_EGRESS_CHECK:-}" == "1" ]]; then
+    echo "HANGOUT_SKIP_EGRESS_CHECK=1; skipping the post-apply egress check." >&2
+    exit 0
+  fi
+  exec "${REPO_DIR}/scripts/deploy/verify_egress.sh"
+fi
+
 exec terraform -chdir="${REPO_DIR}/terraform" "$@"

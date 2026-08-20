@@ -14,41 +14,23 @@ resource "azurerm_virtual_network" "main" {
   resource_group_name = azurerm_resource_group.main.name
 }
 
+# Azure's implicit outbound access is the egress path. cloudflared, apt, git,
+# and pip all need to reach the internet; the Tunnel only removes the need for
+# *inbound*. A NAT Gateway filled this role until it turned out to bill ~CA$46
+# a month in idle gateway hours to carry under 2 GB, so this uses the platform's
+# shared SNAT instead. The trade-off is that the source address comes from a
+# shared Azure pool and can change without notice, so nothing may depend on a
+# stable egress IP: keep Postgres on its Private Endpoint rather than public
+# access with IP firewall rules. This is also a deprecated path Microsoft
+# advises against for production; if it ever stops working, the fix is a public
+# IP on the NIC (~CA$5/mo). The VM still has no public IP and the NSG still has
+# no inbound allow rules, so there is no inbound path either way.
 resource "azurerm_subnet" "main" {
   name                            = "${local.name}-subnet"
   resource_group_name             = azurerm_resource_group.main.name
   virtual_network_name            = azurerm_virtual_network.main.name
   address_prefixes                = ["10.20.1.0/24"]
-  default_outbound_access_enabled = false
-}
-
-# New Azure subnets do not receive implicit outbound internet access. A NAT
-# Gateway provides egress for apt, git, pip, and cloudflared without assigning
-# a public IP to the VM or allowing inbound connections.
-resource "azurerm_public_ip" "nat" {
-  name                = "${local.name}-nat-pip"
-  location            = azurerm_resource_group.main.location
-  resource_group_name = azurerm_resource_group.main.name
-  allocation_method   = "Static"
-  sku                 = "Standard"
-}
-
-resource "azurerm_nat_gateway" "main" {
-  name                    = "${local.name}-nat"
-  location                = azurerm_resource_group.main.location
-  resource_group_name     = azurerm_resource_group.main.name
-  sku_name                = "Standard"
-  idle_timeout_in_minutes = 10
-}
-
-resource "azurerm_nat_gateway_public_ip_association" "main" {
-  nat_gateway_id       = azurerm_nat_gateway.main.id
-  public_ip_address_id = azurerm_public_ip.nat.id
-}
-
-resource "azurerm_subnet_nat_gateway_association" "main" {
-  subnet_id      = azurerm_subnet.main.id
-  nat_gateway_id = azurerm_nat_gateway.main.id
+  default_outbound_access_enabled = true
 }
 
 # The VM has no public IP and the NSG intentionally has no inbound allow rules.
@@ -95,9 +77,6 @@ resource "azurerm_linux_virtual_machine" "main" {
   resource_group_name = azurerm_resource_group.main.name
   size                = var.vm_size
   admin_username      = var.admin_username
-
-  # Ensure cloud-init has NAT-backed egress before it tries apt, git, or pip.
-  depends_on = [azurerm_subnet_nat_gateway_association.main]
 
   network_interface_ids = [
     azurerm_network_interface.main.id,

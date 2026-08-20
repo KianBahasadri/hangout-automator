@@ -11,6 +11,52 @@ Dates are UTC.
 
 ---
 
+## 2026-08-20 — Removed the NAT Gateway; egress moved to default outbound access
+
+Terraform apply: `0 added, 1 changed, 4 destroyed`. Destroyed
+`azurerm_nat_gateway.main`, `azurerm_public_ip.nat`, and both associations;
+changed `azurerm_subnet.main` in place to
+`default_outbound_access_enabled = true`. No VM, database, or DNS record was
+touched.
+
+Why: the NAT Gateway was 58.7% of the month's Azure spend — CA$20.11 of
+CA$34.24 — and its meter is per hour of existence, not per byte. Metrics showed
+it had carried 1.8 GB in 13 days, worth CA$0.11 at the data-processing rate.
+The subscription had spent 25.58% of the student credit, nearly all of it after
+`hangout-rg` was created on 2026-08-06: daily spend went from CA$0.24 to
+CA$2.57 that day. Run rate is now roughly CA$25/month, down from roughly
+CA$76/month, moving credit runway from about 42 days to about 4 months.
+
+The NAT Gateway existed because of a wrong premise recorded in a `main.tf`
+comment: that new Azure subnets receive no implicit outbound access. A test VM
+created in a throwaway subnet with `default_outbound_access_enabled = true`
+reached the internet, Cloudflare's edge on 7844, and the Ubuntu archives,
+disproving it. The throwaway subnet and VM were deleted.
+
+**What went wrong.** The apply succeeded and left the site down. Azure programs
+a VM's outbound SNAT at placement, so flipping the subnet flag under the
+already-running VM never reached it: egress stopped entirely and `cloudflared`
+looped on `failed to dial to edge with quic: timeout: no recent network
+activity`. Nothing in the apply output indicated this. A guest reboot would not
+have helped — `az vm deallocate` then `az vm start` fixed it, after which
+cloudflared re-registered all four edge connections (dfw06/07/08/11) and
+`https://hangout.bahasadri.com/` returned 303 again. The egress address is now
+`158.23.144.8` from Azure's shared pool, replacing the NAT's static
+`68.155.154.48`; nothing may depend on it staying that value.
+
+Guard added so this cannot recur silently: `scripts/deploy/verify_egress.sh`
+runs after every `terraform.sh apply` and fails the deploy with the deallocate
+commands when the VM cannot reach the internet. See
+[deploy.md](./deploy.md#outbound-internet-access-egress).
+
+Left undone: the orphaned OS disk
+`hangout-vm_OsDisk_1_c13d8d4ff57b4ccaaa322333c537a3ab` (unattached, not in
+Terraform state, ~CA$0.40/month). The Postgres private endpoint (~CA$7/month)
+is now the largest remaining networking line; VNet integration would make it
+free but forces a server replacement against `prevent_destroy = true`.
+
+---
+
 ## 2026-08-11 — App release to main via Azure Run Command
 
 Commit: `162631e` (Include public site URL in outbound SMS, KIAN-533)  

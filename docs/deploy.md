@@ -16,9 +16,10 @@ Provisions roughly: resource group, VNet `10.20.0.0/16`, private subnet
 `10.20.1.0/24`, an NSG with no inbound allow rules, an Ubuntu 24.04 LTS Gen2
 VM (default size `Standard_B2ats_v2`, admin user `hangout`), a remotely managed
 Cloudflare Tunnel, its hostname route, and the app hostname's CNAME.
-The VM has no public IP; an Azure NAT Gateway supplies outbound-only access for
-first-boot package installation and `cloudflared`. A separate managed disk
-holds the audit log. The database is an Azure Database for PostgreSQL Flexible
+The VM has no public IP; the subnet's `default_outbound_access_enabled = true`
+supplies outbound-only access for first-boot package installation and
+`cloudflared` (see [Outbound internet access](#outbound-internet-access-egress)).
+A separate managed disk holds the audit log. The database is an Azure Database for PostgreSQL Flexible
 Server (`B_Standard_B1ms`, 35-day backup retention) with `prevent_destroy =
 true`, reachable only through a private endpoint in the `10.20.1.0/24` subnet
 plus a private DNS zone; the server has no public network access. The admin
@@ -66,7 +67,7 @@ app's zone and one Tunnel only. It is not the application runtime,
 database, Workers/Pages host, WAF, or identity layer. Terraform should own the
 complete boundary:
 
-- Azure VM, NAT-backed private connectivity, network security group, systemd,
+- Azure VM, egress-only private connectivity, network security group, systemd,
   and the persistent application disk
 - a Cloudflare Tunnel from the VM to `http://127.0.0.1:${APP_PORT}`
 - the Tunnel hostname route and DNS record for the configured zone and
@@ -210,7 +211,7 @@ az policy assignment list --disable-scope-strict-match \
 
 For this subscription that is `centralus`, `eastus`, `canadacentral`,
 `eastus2`, `mexicocentral`. A region outside it fails at *every* resource, not
-just the VM — the resource group is created, then the NAT gateway, NSG, and
+just the VM — the resource group is created, then the VNet, NSG, and
 disk all 403 together.
 
 **2. Within the allowlist, capacity still varies by size.** The entire
@@ -279,6 +280,62 @@ things make that more than a normal replace:
 
 The Cloudflare resources are unaffected by a region change — the tunnel keeps
 its ID and token, so the DNS record and Access policies stay in place.
+
+### Outbound internet access (egress)
+
+The Tunnel removes the need for *inbound* connectivity, not outbound.
+`cloudflared` works by dialing out to the Cloudflare edge, and cloud-init needs
+`apt`, `git`, and `pip`, so the subnet must have an egress path. It gets one
+from Azure's implicit outbound access:
+
+```hcl
+default_outbound_access_enabled = true
+```
+
+This replaced an Azure NAT Gateway on 2026-08-20. The gateway billed roughly
+CA$46/month in idle gateway hours — about 60% of all subscription spend — to
+carry under 2 GB of traffic, because the meter is per hour of existence rather
+than per byte. A single VM never needed the SNAT-port pooling a NAT Gateway
+exists to provide. Removing it and its static public IP cut the subscription
+run rate from about CA$76/month to about CA$25/month.
+
+The comment that had justified the NAT Gateway claimed new Azure subnets
+receive no implicit outbound access. That is not true for this subscription: a
+VM created into a subnet with the flag set reaches the internet, Cloudflare's
+edge on 7844, and the Ubuntu archives.
+
+Two constraints follow from depending on implicit outbound access:
+
+- **The egress IP is not stable.** It comes from a shared Azure pool and can
+  change without notice, so nothing may depend on a fixed source address. In
+  particular, keep Postgres on its private endpoint rather than moving it to
+  public access with IP firewall rules.
+- **Microsoft deprecates this path** and advises against it for production. It
+  works today. If it stops, the replacement is a Standard public IP on the NIC
+  (about CA$5/month), which leaves the NSG as the only inbound gate.
+
+#### Changing the egress method requires a deallocate, not a reboot
+
+Azure programs a VM's outbound SNAT when the VM is placed on a host. Changing
+how the subnet gets egress therefore does **not** reach a VM that is already
+running. Terraform reports success and the subnet reports the new setting, but
+the VM has no egress at all: `cloudflared` fails with `failed to dial to edge
+with quic: timeout` and the public hostname goes dark behind a completely green
+apply. A guest reboot does not fix it. The VM has to be deallocated and started
+so the platform re-provisions its networking:
+
+```bash
+az vm deallocate -g hangout-rg -n hangout-vm
+az vm start -g hangout-rg -n hangout-vm
+```
+
+`scripts/deploy/verify_egress.sh` runs automatically after
+`scripts/deploy/terraform.sh apply` and fails the deploy with exactly those
+commands when the VM cannot reach the internet. It is safe to run by hand at
+any time; `HANGOUT_SKIP_EGRESS_CHECK=1` bypasses it.
+
+A VM *created* into a subnet that already has the flag set needs none of this.
+Only flipping it under a live VM does.
 
 ### VM `custom_data` and accidental replacement
 
