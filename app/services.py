@@ -51,9 +51,7 @@ def is_sms_opted_out(db: Session, phone: str) -> bool:
     normalized = normalize_phone(phone)
     if not normalized:
         return False
-    return (
-        db.query(SmsOptOut.id).filter(SmsOptOut.phone == normalized).first() is not None
-    )
+    return db.query(SmsOptOut.id).filter(SmsOptOut.phone == normalized).first() is not None
 
 
 def opted_out_phones(db: Session, phones: list[str] | set[str] | None = None) -> set[str]:

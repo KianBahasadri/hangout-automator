@@ -121,9 +121,7 @@ def sms_period_stats(
     outbound_fail = int(row[1] or 0)
     inbound = int(row[2] or 0)
     billable = outbound_ok + inbound
-    estimated = (
-        round(billable * price_per_message, 4) if price_per_message is not None else None
-    )
+    estimated = round(billable * price_per_message, 4) if price_per_message is not None else None
     return SmsPeriodStats(
         key=key,
         label=label,

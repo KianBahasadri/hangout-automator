@@ -710,9 +710,7 @@ def update_hangout(
         "location_latitude",
         "location_longitude",
     )
-    _STRUCT_KEYS = frozenset(
-        {"location_place_id", "location_latitude", "location_longitude"}
-    )
+    _STRUCT_KEYS = frozenset({"location_place_id", "location_latitude", "location_longitude"})
     loc_present = {k for k in _LOC_KEYS if k in data}
     if loc_present:
         # Text-only location update clears Places structure unless structure is
@@ -731,15 +729,9 @@ def update_hangout(
             apply_hangout_location(
                 hangout,
                 location=data.pop("location", hangout.location),
-                location_place_id=data.pop(
-                    "location_place_id", hangout.location_place_id
-                ),
-                location_latitude=data.pop(
-                    "location_latitude", hangout.location_latitude
-                ),
-                location_longitude=data.pop(
-                    "location_longitude", hangout.location_longitude
-                ),
+                location_place_id=data.pop("location_place_id", hangout.location_place_id),
+                location_latitude=data.pop("location_latitude", hangout.location_latitude),
+                location_longitude=data.pop("location_longitude", hangout.location_longitude),
             )
     if "notify_interval_hours" in data and data["notify_interval_hours"] is not None:
         data["notify_interval_hours"] = clamp_choice(

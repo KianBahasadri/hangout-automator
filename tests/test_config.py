@@ -20,7 +20,8 @@ def test_app_port_loads_from_env_file(tmp_path, monkeypatch):
     assert settings.app_port == 9123
 
 
-def test_google_maps_api_key_loads_from_env_file(tmp_path):
+def test_google_maps_api_key_loads_from_env_file(tmp_path, monkeypatch):
+    monkeypatch.delenv("GOOGLE_MAPS_API_KEY", raising=False)
     env_file = tmp_path / ".env"
     env_file.write_text("GOOGLE_MAPS_API_KEY=places-test-key\n", encoding="utf-8")
 

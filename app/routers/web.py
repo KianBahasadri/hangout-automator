@@ -486,9 +486,7 @@ def settings_profile_save(
         return templates.TemplateResponse(
             request,
             "settings.html",
-            _settings_profile_context(
-                user, _all_allergies(db, workspace), notice=error
-            ),
+            _settings_profile_context(user, _all_allergies(db, workspace), notice=error),
             status_code=400,
         )
     db.commit()
@@ -627,9 +625,7 @@ def _apply_organizer_from_user(
     """Stamp organizer SMS settings from My Profile defaults (no per-hangout UI)."""
     org_profile: Profile | None = None
     if user.phone:
-        org_profile = (
-            scoped(db, Profile, workspace).filter(Profile.phone == user.phone).first()
-        )
+        org_profile = scoped(db, Profile, workspace).filter(Profile.phone == user.phone).first()
     organizer_phone = (org_profile.phone if org_profile else None) or user.phone
     notify = bool(user.default_notify_enabled and organizer_phone)
 

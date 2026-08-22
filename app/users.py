@@ -100,12 +100,8 @@ def apply_user_form(
     user.phone = new_phone
 
     user.default_notify_enabled = notify_enabled is not None
-    user.default_notify_interval = (
-        user.default_notify_enabled and notify_interval is not None
-    )
-    user.default_notify_threshold = (
-        user.default_notify_enabled and notify_threshold is not None
-    )
+    user.default_notify_interval = user.default_notify_enabled and notify_interval is not None
+    user.default_notify_threshold = user.default_notify_enabled and notify_threshold is not None
     user.default_notify_interval_hours = clamp_choice(
         notify_interval_hours, INTERVAL_HOUR_OPTIONS, 6
     )
@@ -114,9 +110,7 @@ def apply_user_form(
     user.default_notify_on_decline = notify_on_decline is not None
     user.default_notify_on_allergy = notify_on_allergy is not None
     user.default_notify_on_ride_needed = notify_on_ride_needed is not None
-    user.default_notify_confirm_goal = clamp_choice(
-        notify_confirm_goal, CONFIRM_GOAL_OPTIONS, 0
-    )
+    user.default_notify_confirm_goal = clamp_choice(notify_confirm_goal, CONFIRM_GOAL_OPTIONS, 0)
     user.default_notify_threshold_cooldown_minutes = clamp_choice(
         notify_threshold_cooldown_minutes, COOLDOWN_MINUTE_OPTIONS, 0
     )

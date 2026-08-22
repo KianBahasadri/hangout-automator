@@ -72,12 +72,8 @@ def apply_hangout_location(
         return
 
     hangout.location_place_id = normalize_place_id(location_place_id)
-    hangout.location_latitude = _parse_coord(
-        location_latitude, lo=_LAT_MIN, hi=_LAT_MAX
-    )
-    hangout.location_longitude = _parse_coord(
-        location_longitude, lo=_LNG_MIN, hi=_LNG_MAX
-    )
+    hangout.location_latitude = _parse_coord(location_latitude, lo=_LAT_MIN, hi=_LAT_MAX)
+    hangout.location_longitude = _parse_coord(location_longitude, lo=_LNG_MIN, hi=_LNG_MAX)
     # Coords are only useful as a pair for maps later; drop incomplete pairs.
     if hangout.location_latitude is None or hangout.location_longitude is None:
         hangout.location_latitude = None

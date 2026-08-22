@@ -178,6 +178,19 @@ def sample_data(db, workspace):
         hangouts[state.value] = hangout.id
     db.commit()
 
+    opt_out = None
+    try:
+        from app.models import SmsOptOut
+
+        opt_out = SmsOptOut(phone="+15551110900", source="test", reason="test")
+        db.add(opt_out)
+        db.flush()
+        db.commit()
+        opt_out_id = opt_out.id
+    except Exception:
+        db.rollback()
+        opt_out_id = 999999
+
     return {
         "workspace_id": workspace.id,
         "workspace": workspace,
@@ -188,4 +201,5 @@ def sample_data(db, workspace):
         "hangout_id": hangouts["draft"],
         "hangouts": hangouts,
         "grant_id": grant.id,
+        "opt_out_id": opt_out_id,
     }
